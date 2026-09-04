@@ -20,7 +20,7 @@ public class BlackBoxSprite
     /// <summary>Width and height of black-box.png.</summary>
     private const int TextureSize = 128;
 
-    /// <summary>The art is authored small and blown up by a whole number to stay crisp.</summary>
+    /// <summary>The art is small and blown up by a whole number to stay crisp.</summary>
     public const float DrawScale = 4f;
 
     // The box hangs in the air rather than sitting still.
@@ -30,7 +30,7 @@ public class BlackBoxSprite
     /// <summary>How far a deep eye wanders, in texture pixels. Near ones barely move at all.</summary>
     private const float DriftAmplitude = 1.6f;
 
-    // Wandering gaze.
+    // Wandering gaze for eyes.
     private const double MinGazeHold = 1.3;
     private const double MaxGazeHold = 2.9;
     private const float GazeEase = 3.2f;
@@ -59,10 +59,7 @@ public class BlackBoxSprite
     /// Hand-placed, in three depth bands.
     /// </summary>
     /// <remarks>
-    /// Depth is not just a dimmer switch -- it decides where an eye is allowed to sit. Things
-    /// further away crowd toward the vanishing point, so the deep eyes cluster in the middle
-    /// of the aperture while the near ones spread out toward its mouth. That one rule is what
-    /// turns a flat scatter of sprites into an opening with something living down it.
+    /// Eyes are manually positioned to create a sense of depth and life within the box.
     /// </remarks>
     private static readonly EyeSlot[] EyeSlots =
     {
@@ -79,7 +76,7 @@ public class BlackBoxSprite
         new(66, 76, 0.19f, 0.88f), new(54, 72, 0.18f, 0.92f), new(74, 62, 0.17f, 0.90f),
     };
 
-    private readonly Random _random;
+
     private readonly EyeSprite[] _eyes;
 
     private Texture2D _texture;
@@ -89,8 +86,14 @@ public class BlackBoxSprite
     private Vector2 _gazeTarget;
     private double _gazeHold;
 
+
+    // How the box tracks the mouse and decides where to look.
     private Point _lastMousePosition;
+
+    // Whether the box has a recent mouse position sample.
     private bool _hasMouseSample;
+
+    // How much attention the box is paying to the mouse, decays over time.
     private double _mouseAttention;
 
     private double _blinkWaveTimer = MinBlinkWaveDelay;
@@ -101,14 +104,12 @@ public class BlackBoxSprite
     /// <summary>
     /// Builds the box and one eye per slot.
     /// </summary>
-    /// <param name="random">Shared source of randomness, handed down to every eye.</param>
-    public BlackBoxSprite(Random random)
+    public BlackBoxSprite()
     {
-        _random = random;
         _eyes = new EyeSprite[EyeSlots.Length];
         for (int i = 0; i < _eyes.Length; i++)
         {
-            _eyes[i] = new EyeSprite(random)
+            _eyes[i] = new EyeSprite()
             {
                 Scale = DrawScale * EyeSlots[i].Size,
                 Depth = EyeSlots[i].Depth,
@@ -139,8 +140,9 @@ public class BlackBoxSprite
         UpdateGaze(elapsed, viewport);
         UpdateBlinkWave(elapsed);
 
-        // Re-anchor the eyes to the box before they animate, so they ride the bob with it.
+        // Anchor eyes to the box's current position before updating them.
         Vector2 topLeft = DrawPosition - new Vector2(TextureSize * DrawScale / 2f);
+
         for (int i = 0; i < _eyes.Length; i++)
         {
             EyeSlot slot = EyeSlots[i];
@@ -150,7 +152,7 @@ public class BlackBoxSprite
     }
 
     /// <summary>
-    /// Draws the shell and the void inside it, with no eyes in it yet.
+    /// Draws the shell and the void inside it, with no eyes in it yet. (The Box's Body)
     /// </summary>
     /// <param name="gameTime">The game time.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
@@ -218,8 +220,8 @@ public class BlackBoxSprite
     }
 
     /// <summary>
-    /// Moves the point every eye is watching. The cursor wins while the player is moving it;
-    /// otherwise the box picks somewhere in the room and stares at it for a second or two.
+    /// Moves the point every eye is watching. Cursor movement takes priority, then after 2.5s it moves back.
+    /// Similar to the input tutorial
     /// </summary>
     private void UpdateGaze(double elapsed, Viewport viewport)
     {
@@ -227,32 +229,36 @@ public class BlackBoxSprite
 
         // Seed the sample instead of treating the very first frame as a mouse movement,
         // which would otherwise yank every eye toward wherever the cursor happened to be.
+
+        // If we haven't sampled the mouse yet, treat this as the first frame and center the gaze.
         if (!_hasMouseSample)
         {
             _hasMouseSample = true;
             _lastMousePosition = mousePosition;
             _gazePoint = _gazeTarget = new Vector2(viewport.Width / 2f, viewport.Height / 2f);
         }
+        // If the mouse has moved, reset the attention timer.
         else if (mousePosition != _lastMousePosition)
         {
             _lastMousePosition = mousePosition;
             _mouseAttention = MouseAttentionDuration;
         }
-
+        // Update the gaze target based on whether the mouse is being attended to.
         if (_mouseAttention > 0)
         {
             _mouseAttention -= elapsed;
             _gazeTarget = mousePosition.ToVector2();
         }
+        // If the mouse is not being attended to, the box eventually picks a random point to look at.
         else
         {
             _gazeHold -= elapsed;
             if (_gazeHold <= 0)
             {
-                _gazeHold = MinGazeHold + _random.NextDouble() * (MaxGazeHold - MinGazeHold);
+                _gazeHold = MinGazeHold + Random.Shared.NextDouble() * (MaxGazeHold - MinGazeHold);
                 _gazeTarget = new Vector2(
-                    (float)_random.NextDouble() * viewport.Width,
-                    (float)_random.NextDouble() * viewport.Height);
+                    (float)Random.Shared.NextDouble() * viewport.Width,
+                    (float)Random.Shared.NextDouble() * viewport.Height);
             }
         }
 
@@ -269,7 +275,7 @@ public class BlackBoxSprite
         _blinkWaveTimer -= elapsed;
         if (_blinkWaveTimer > 0) return;
 
-        _blinkWaveTimer = MinBlinkWaveDelay + _random.NextDouble() * (MaxBlinkWaveDelay - MinBlinkWaveDelay);
+        _blinkWaveTimer = MinBlinkWaveDelay + Random.Shared.NextDouble() * (MaxBlinkWaveDelay - MinBlinkWaveDelay);
 
         // Delay each eye by its horizontal position, so the blink rolls left to right.
         for (int i = 0; i < _eyes.Length; i++)

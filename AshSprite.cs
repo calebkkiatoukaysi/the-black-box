@@ -30,8 +30,6 @@ public class AshSprite
     /// <summary>Extra pull that builds as a mote closes on the mouth. The void does not let go.</summary>
     private const float PullGain = 43f;
 
-    private readonly Random _random;
-
     private Texture2D _texture;
     private Vector2 _position;
     private float _angle;
@@ -47,12 +45,10 @@ public class AshSprite
     /// <summary>
     /// Creates a mote already somewhere along its way in, so the field starts full.
     /// </summary>
-    /// <param name="random">Shared source of randomness, owned by the game.</param>
-    public AshSprite(Random random)
+    public AshSprite()
     {
-        _random = random;
         Respawn();
-        _radius = ConsumeRadius + (float)random.NextDouble() * (SpawnRadius - ConsumeRadius);
+        _radius = ConsumeRadius + (float)Random.Shared.NextDouble() * (SpawnRadius - ConsumeRadius);
     }
 
     /// <summary>
@@ -119,15 +115,15 @@ public class AshSprite
     /// <summary>Throws the mote back out to the edge of the field with fresh properties.</summary>
     private void Respawn()
     {
-        _radius = SpawnRadius * (0.92f + (float)_random.NextDouble() * 0.16f);
-        _angle = (float)_random.NextDouble() * MathHelper.TwoPi;
-        _size = 1.0f + (float)_random.NextDouble() * 1.6f;
+        _radius = SpawnRadius * (0.92f + (float)Random.Shared.NextDouble() * 0.16f);
+        _angle = (float)Random.Shared.NextDouble() * MathHelper.TwoPi;
+        _size = 1.0f + (float)Random.Shared.NextDouble() * 1.6f;
 
         // Half the field drifts one way around the mouth and half the other.
-        _spin = (0.25f + (float)_random.NextDouble() * 0.35f) * (_random.NextDouble() < 0.5 ? -1f : 1f);
+        _spin = (0.25f + (float)Random.Shared.NextDouble() * 0.35f) * (Random.Shared.NextDouble() < 0.5 ? -1f : 1f);
 
         // Mostly cold grit, with the occasional ember still burning on its way down.
-        _tint = _random.NextDouble() < 0.12
+        _tint = Random.Shared.NextDouble() < 0.12
             ? new Color(228, 120, 62)
             : new Color(196, 192, 190);
     }

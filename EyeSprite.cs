@@ -54,8 +54,6 @@ public class EyeSprite
     /// <summary>What the red has faded to for an eye hanging at the back of the void.</summary>
     private static readonly Color DeepTint = new(86, 58, 68);
 
-    private readonly Random _random;
-
     /// <summary>Per-eye tracking rate, so seventeen eyes never swing in lockstep.</summary>
     private readonly float _trackingSpeed;
 
@@ -89,15 +87,13 @@ public class EyeSprite
     /// <summary>
     /// Creates an eye with a randomised blink schedule and tracking rate. This allows for a less robotic
     /// </summary>
-    /// <param name="random">Shared source of randomness, owned by the box.</param>
-    public EyeSprite(Random random)
+    public EyeSprite()
     {
-        _random = random;
-        _trackingSpeed = 4.5f + (float)random.NextDouble() * 4.5f;
-        _shimmerPhase = (float)random.NextDouble() * MathHelper.TwoPi;
+        _trackingSpeed = 4.5f + (float)Random.Shared.NextDouble() * 4.5f;
+        _shimmerPhase = (float)Random.Shared.NextDouble() * MathHelper.TwoPi;
 
         // Stagger the very first blink so the box does not open with all eyes in sync.
-        _blinkAfter = random.NextDouble() * MaxBlinkDelay; // AI helped me with this, staggering the initial blink for natural variation.
+        _blinkAfter = Random.Shared.NextDouble() * MaxBlinkDelay; // AI helped me with this, staggering the initial blink for natural variation.
     }
 
     /// <summary>
@@ -249,7 +245,7 @@ public class EyeSprite
                 if (_stateTimer >= OpeningDuration)
                 {
                     EnterState(EyeState.Open);
-                    _blinkAfter = MinBlinkDelay + _random.NextDouble() * (MaxBlinkDelay - MinBlinkDelay);
+                    _blinkAfter = MinBlinkDelay + Random.Shared.NextDouble() * (MaxBlinkDelay - MinBlinkDelay);
                 }
                 break;
         }

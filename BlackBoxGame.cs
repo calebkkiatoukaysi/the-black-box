@@ -73,17 +73,13 @@ public class BlackBoxGame : Game
 
     protected override void Initialize()
     {
-        // One Random shared by everything that wants one, so the whole screen is driven by a
-        // single stream and nothing accidentally ends up correlated with anything else.
-        var random = new Random();
-
         _ashDrift = new AshDriftSprite[]
         {
             new(new Vector2(7f, 3f), new Color(150, 146, 150) * 0.55f, Layers.AshDriftFar),
             new(new Vector2(-16f, 7f), new Color(214, 196, 180) * 0.75f, Layers.AshDriftNear),
         };
 
-        _blackBox = new BlackBoxSprite(random)
+        _blackBox = new BlackBoxSprite()
         {
             Position = new Vector2(ScreenWidth / 2f, BoxCenterY),
         };
@@ -92,7 +88,7 @@ public class BlackBoxGame : Game
         _ashes = new AshSprite[MoteCount];
         for (int i = 0; i < _ashes.Length; i++)
         {
-            _ashes[i] = new AshSprite(random) { Center = _blackBox.Position };
+            _ashes[i] = new AshSprite { Center = _blackBox.Position };
         }
 
         base.Initialize();
