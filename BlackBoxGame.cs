@@ -1,0 +1,190 @@
+using System;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
+
+namespace TheBlackBox;
+
+/// <summary>
+/// The title screen for The Black Box.
+/// </summary>
+public class BlackBoxGame : Game
+{
+    private const int ScreenWidth = 1600;
+    private const int ScreenHeight = 900;
+
+    // Screen layout. The box sits low enough to leave the title room to breathe, and the
+    // ash field is sized around it so nothing ever crosses a line of text.
+    private const float BoxCenterY = 500f;
+
+    /// <summary>How much ash is caught in the pull at any one time.</summary>
+    private const int MoteCount = 34;
+    private const float TitleY = 56f;
+    private const float ExitPromptY = 812f;
+
+    private const string Title = "The Black Box";
+    private const string ExitPrompt = "PRESS  ESC  TO EXIT   /   GAMEPAD:  BACK";
+
+    /// <summary>Not quite black, so the box itself still reads as the darkest thing on screen.</summary>
+    private static readonly Color VoidColor = new(10, 8, 16);
+
+    /// <summary>
+    /// Additive blending for premultiplied-alpha content.
+    /// </summary>
+    /// <remarks>
+    /// The content pipeline premultiplies alpha, but the stock <see cref="BlendState.Additive"/>
+    /// still multiplies the source by its alpha on the way in. That applies alpha twice and
+    /// leaves the glow far dimmer than authored, so the source factor is forced to One here.
+    /// </remarks>
+    private static readonly BlendState PremultipliedAdditive = new()
+    {
+        ColorSourceBlend = Blend.One,
+        AlphaSourceBlend = Blend.One,
+        ColorDestinationBlend = Blend.One,
+        AlphaDestinationBlend = Blend.One,
+    };
+
+    private GraphicsDeviceManager _graphics;
+    private SpriteBatch _spriteBatch;
+
+    private AshDriftSprite[] _ashDrift;
+    private BlackBoxSprite _blackBox;
+    private MoteSprite[] _motes;
+
+    private SpriteFont _titleFont;
+    private SpriteFont _uiFont;
+
+    private double _totalTime;
+
+    public BlackBoxGame()
+    {
+        _graphics = new GraphicsDeviceManager(this);
+        _graphics.PreferredBackBufferWidth = ScreenWidth;
+        _graphics.PreferredBackBufferHeight = ScreenHeight;
+        _graphics.ApplyChanges();
+        Content.RootDirectory = "Content";
+
+        // The eyes follow the cursor, so the player needs to be able to see it.
+        IsMouseVisible = true;
+    }
+
+    protected override void Initialize()
+    {
+        // One Random shared by everything that wants one, so the whole screen is driven by a
+        // single stream and nothing accidentally ends up correlated with anything else.
+        var random = new Random();
+
+        _ashDrift = new AshDriftSprite[]
+        {
+            new(new Vector2(7f, 3f), new Color(150, 146, 150) * 0.55f, Layers.AshDriftFar),
+            new(new Vector2(-16f, 7f), new Color(214, 196, 180) * 0.75f, Layers.AshDriftNear),
+        };
+
+        _blackBox = new BlackBoxSprite(random)
+        {
+            Position = new Vector2(ScreenWidth / 2f, BoxCenterY),
+        };
+
+        // Loose ash caught in whatever the box is doing to the air around it.
+        _motes = new MoteSprite[MoteCount];
+        for (int i = 0; i < _motes.Length; i++)
+        {
+            _motes[i] = new MoteSprite(random) { Center = _blackBox.Position };
+        }
+
+        base.Initialize();
+    }
+
+    protected override void LoadContent()
+    {
+        _spriteBatch = new SpriteBatch(GraphicsDevice);
+
+        _titleFont = Content.Load<SpriteFont>("spectral-title");
+        _uiFont = Content.Load<SpriteFont>("spectral-ui");
+
+        foreach (var layer in _ashDrift) layer.LoadContent(Content);
+        _blackBox.LoadContent(Content);
+        foreach (var mote in _motes) mote.LoadContent(Content);
+    }
+
+    protected override void Update(GameTime gameTime)
+    {
+        // The exit instructions on screen promise exactly this.
+        if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
+            Exit();
+
+        _totalTime += gameTime.ElapsedGameTime.TotalSeconds;
+
+        foreach (var layer in _ashDrift) layer.Update(gameTime);
+        _blackBox.Update(gameTime, GraphicsDevice.Viewport);
+        foreach (var mote in _motes) mote.Update(gameTime);
+
+        base.Update(gameTime);
+    }
+
+    protected override void Draw(GameTime gameTime)
+    {
+        GraphicsDevice.Clear(VoidColor);
+
+        // Pass 1 -- everything the eye light will fall on: the dead sky and the box itself.
+        // Point sampling keeps the upscaled pixel art crisp.
+        _spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
+        foreach (var layer in _ashDrift) layer.Draw(gameTime, _spriteBatch, GraphicsDevice.Viewport);
+        _blackBox.DrawBody(gameTime, _spriteBatch);
+        _spriteBatch.End();
+
+        // Pass 2 -- the eye glow, added on top of the box so the light in the opening spills
+        // onto its rim. Linear sampling, because a glow should be soft rather than blocky.
+        _spriteBatch.Begin(SpriteSortMode.BackToFront, PremultipliedAdditive, SamplerState.LinearClamp);
+        _blackBox.DrawEyeGlow(gameTime, _spriteBatch);
+        _spriteBatch.End();
+
+        // Pass 3 -- the eyes, over the glow rather than inside it, and the ash falling past
+        // in front of everything on its way in.
+        _spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
+        _blackBox.DrawEyes(gameTime, _spriteBatch);
+        foreach (var mote in _motes) mote.Draw(gameTime, _spriteBatch);
+        _spriteBatch.End();
+
+        // Pass 4 -- text, on top of everything and sampled linearly so the font stays smooth.
+        _spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        DrawInterface();
+        _spriteBatch.End();
+
+        base.Draw(gameTime);
+    }
+
+    /// <summary>
+    /// Draws the title and the exit instructions -- the only two lines on the screen.
+    /// </summary>
+    private void DrawInterface()
+    {
+        // A tight, deep red offset rather than a hard black drop shadow. The serif is light
+        // enough that anything wider ghosts out around every stroke instead of sitting
+        // behind them, and the red ties the title back to what is looking out of the box.
+        DrawCentered(_titleFont, Title, TitleY, new Color(240, 235, 240), new Color(104, 12, 17), new Vector2(2f, 2f));
+
+        // Pulse the exit line so it reads as the one instruction on screen. The floor stays
+        // well clear of zero -- it is the only thing telling the player how to get out.
+        float pulse = 0.70f + 0.30f * MathF.Sin((float)_totalTime * 2.6f);
+        DrawCentered(_uiFont, ExitPrompt, ExitPromptY, new Color(255, 226, 214) * pulse, Color.Black * pulse, new Vector2(2f, 2f));
+    }
+
+    /// <summary>
+    /// Draws a line of text centred horizontally on the screen, over a hard offset shadow.
+    /// </summary>
+    /// <param name="font">The SpriteFont to measure and render with.</param>
+    /// <param name="text">The text to draw.</param>
+    /// <param name="y">Top of the line, in screen pixels.</param>
+    /// <param name="color">Colour of the text.</param>
+    /// <param name="shadow">Colour of the shadow behind it.</param>
+    /// <param name="shadowOffset">How far the shadow is thrown, in screen pixels.</param>
+    private void DrawCentered(SpriteFont font, string text, float y, Color color, Color shadow, Vector2 shadowOffset)
+    {
+        Vector2 size = font.MeasureString(text);
+        var position = new Vector2(MathF.Round((ScreenWidth - size.X) / 2f), y);
+
+        _spriteBatch.DrawString(font, text, position + shadowOffset, shadow, 0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.TextShadow);
+        _spriteBatch.DrawString(font, text, position, color, 0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.Text);
+    }
+}
