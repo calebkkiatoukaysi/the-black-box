@@ -23,7 +23,10 @@ public class BlackBoxGame : Game
     private const float ExitPromptY = 812f;
 
     private const string Title = "The Black Box";
-    private const string ExitPrompt = "PRESS  ESC  TO EXIT   /   GAMEPAD:  BACK";
+    private const string ExitPrompt = "PRESS  ESC  TO EXIT";
+
+    private const string StartPrompt = "PRESS  ENTER  TO START (Not Implemented)";
+    private const float StartPromptY = 755f;
 
     /// <summary>Not quite black, so the box itself still reads as the darkest thing on screen.</summary>
     private static readonly Color VoidColor = new(10, 8, 16);
@@ -167,6 +170,9 @@ public class BlackBoxGame : Game
         // well clear of zero -- it is the only thing telling the player how to get out.
         float pulse = 0.70f + 0.30f * MathF.Sin((float)_totalTime * 2.6f);
         DrawCentered(_uiFont, ExitPrompt, ExitPromptY, new Color(255, 226, 214) * pulse, Color.Black * pulse, new Vector2(2f, 2f));
+
+        // Draw the start prompt.
+        DrawCentered(_uiFont, StartPrompt, StartPromptY, new Color(255, 226, 214) * pulse, Color.Black * pulse, new Vector2(2f, 2f));
     }
 
     /// <summary>
