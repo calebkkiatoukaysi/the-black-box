@@ -50,7 +50,9 @@ public class AshDriftSprite
     public void Update(GameTime gameTime)
     {
         _offset += _velocity * (float)gameTime.ElapsedGameTime.TotalSeconds;
+        // %= is the modulo assignment operator that ensures the offset stays within the texture bounds.
         _offset.X %= _texture.Width;
+        // Same as above.
         _offset.Y %= _texture.Height;
     }
 

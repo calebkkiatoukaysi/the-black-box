@@ -18,7 +18,7 @@ public class BlackBoxGame : Game
     private const float BoxCenterY = 500f;
 
     /// <summary>How much ash is caught in the pull at any one time.</summary>
-    private const int MoteCount = 34;
+    private const int AshCount = 34;
     private const float TitleY = 56f;
     private const float ExitPromptY = 812f;
 
@@ -76,6 +76,7 @@ public class BlackBoxGame : Game
 
     protected override void Initialize()
     {
+        // Initialize the ash drift layers and the black box before the game starts.
         _ashDrift = new AshDriftSprite[]
         {
             new(new Vector2(7f, 3f), new Color(150, 146, 150) * 0.55f, Layers.AshDriftFar),
@@ -88,7 +89,7 @@ public class BlackBoxGame : Game
         };
 
         // Loose ash caught in whatever the box is doing to the air around it.
-        _ashes = new AshSprite[MoteCount];
+        _ashes = new AshSprite[AshCount];
         for (int i = 0; i < _ashes.Length; i++)
         {
             _ashes[i] = new AshSprite { Center = _blackBox.Position };
@@ -112,7 +113,7 @@ public class BlackBoxGame : Game
     protected override void Update(GameTime gameTime)
     {
         // The exit instructions on screen promise exactly this.
-        if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
+        if (Keyboard.GetState().IsKeyDown(Keys.Escape))
             Exit();
 
         _totalTime += gameTime.ElapsedGameTime.TotalSeconds;
@@ -128,27 +129,29 @@ public class BlackBoxGame : Game
     {
         GraphicsDevice.Clear(VoidColor);
 
-        // Pass 1 -- everything the eye light will fall on: the dead sky and the box itself.
+        // 1 everything the eye light will fall on: the dead sky and the box itself.
         // Point sampling keeps the upscaled pixel art crisp.
         _spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
+
         foreach (var layer in _ashDrift) layer.Draw(gameTime, _spriteBatch, GraphicsDevice.Viewport);
+
         _blackBox.DrawBody(gameTime, _spriteBatch);
         _spriteBatch.End();
 
-        // Pass 2 -- the eye glow, added on top of the box so the light in the opening spills
+        // 2 the eye glow, added on top of the box so the light in the opening spills
         // onto its rim. Linear sampling, because a glow should be soft rather than blocky.
         _spriteBatch.Begin(SpriteSortMode.BackToFront, PremultipliedAdditive, SamplerState.LinearClamp);
         _blackBox.DrawEyeGlow(gameTime, _spriteBatch);
         _spriteBatch.End();
 
-        // Pass 3 -- the eyes, over the glow rather than inside it, and the ash falling past
+        // 3 the eyes, over the glow rather than inside it, and the ash falling past
         // in front of everything on its way in.
         _spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
         _blackBox.DrawEyes(gameTime, _spriteBatch);
         foreach (var mote in _ashes) mote.Draw(gameTime, _spriteBatch);
         _spriteBatch.End();
 
-        // Pass 4 -- text, on top of everything and sampled linearly so the font stays smooth.
+        // 4 text, on top of everything and sampled linearly so the font stays smooth.
         _spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.LinearClamp);
         DrawInterface();
         _spriteBatch.End();
