@@ -6,7 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 namespace TheBlackBox;
 
 /// <summary>
-/// The stages of a single blink. An eye spends almost all of its life in
+/// The stages of a single blink
 /// <see cref="Open"/> and only passes through the other three on the way back to it.
 /// </summary>
 public enum EyeState
@@ -31,10 +31,10 @@ public class EyeSprite
     /// <summary>Width and height of one frame in eye-sheet.png.</summary>
     private const int FrameSize = 16;
 
-    // Blink timings, in seconds. Closing faster than opening is what reads as a real blink.
-    private const double ClosingDuration = 0.07;
-    private const double ClosedDuration = 0.05;
-    private const double OpeningDuration = 0.13;
+    // Blink timings, in seconds. Closing faster than opening is what reads as a real blink. (Adjusted for more natural timing, or can be adjusted later.)
+    private const double ClosingDuration = 0.09;
+    private const double ClosedDuration = 0.03;
+    private const double OpeningDuration = 0.17;
     private const double MinBlinkDelay = 1.6;
     private const double MaxBlinkDelay = 6.4;
 
@@ -87,7 +87,7 @@ public class EyeSprite
     public float Depth;
 
     /// <summary>
-    /// Creates an eye with a randomised blink schedule and tracking rate.
+    /// Creates an eye with a randomised blink schedule and tracking rate. This allows for a less robotic
     /// </summary>
     /// <param name="random">Shared source of randomness, owned by the box.</param>
     public EyeSprite(Random random)
@@ -97,7 +97,7 @@ public class EyeSprite
         _shimmerPhase = (float)random.NextDouble() * MathHelper.TwoPi;
 
         // Stagger the very first blink so the box does not open with all eyes in sync.
-        _blinkAfter = random.NextDouble() * MaxBlinkDelay;
+        _blinkAfter = random.NextDouble() * MaxBlinkDelay; // AI helped me with this, staggering the initial blink for natural variation.
     }
 
     /// <summary>
@@ -106,7 +106,7 @@ public class EyeSprite
     /// <param name="content">The ContentManager to load with.</param>
     public void LoadContent(ContentManager content)
     {
-        // ContentManager caches by asset name, so every eye shares these three textures.
+        // Our PNG sprites
         _sheet = content.Load<Texture2D>("eye-sheet");
         _pupil = content.Load<Texture2D>("pupil");
         _glow = content.Load<Texture2D>("glow");
@@ -143,14 +143,19 @@ public class EyeSprite
     /// Draws the red light this eye spills out of the void.
     /// </summary>
     /// <remarks>Belongs in an additive batch; see <see cref="BlackBoxGame.Draw"/>.</remarks>
-    /// <param name="gameTime">The game time.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void DrawGlow(GameTime gameTime, SpriteBatch spriteBatch)
     {
+        //sin wave parameters for the glow shimmer effect
+        float basePulse = 0.84f;
+        float shimmerAmplitude = 0.16f;
+        float angularFrequency = 2.1f;
+
+        // Skip drawing the glow if the eye is almost closed.
         if (_openness <= 0.05f) return;
 
         // A slow shimmer keeps the glow from looking like a static decal.
-        float pulse = 0.84f + 0.16f * MathF.Sin((float)_totalTime * 2.1f + _shimmerPhase);
+        float pulse = basePulse + shimmerAmplitude * MathF.Sin((float)_totalTime * angularFrequency + _shimmerPhase);
         float intensity = _openness * pulse * (1f - Depth * 0.75f);
         var origin = new Vector2(_glow.Width / 2f, _glow.Height / 2f);
 
@@ -167,15 +172,17 @@ public class EyeSprite
     }
 
     /// <summary>
-    /// Draws the eye and, unless the lids have closed over it, its pupil.
+    /// Draws the eye and its pupil (unless the lid is closed.)
     /// </summary>
-    /// <param name="gameTime">The game time.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void Draw(GameTime gameTime, SpriteBatch spriteBatch)
     {
         var source = new Rectangle(FrameIndex * FrameSize, 0, FrameSize, FrameSize);
+
+        // https://gamedev.stackexchange.com/questions/118241/monogame-how-to-make-a-smooth-color-transition-with-color-lerp
         Color tint = Color.Lerp(Color.White, DeepTint, Depth);
 
+        // Eye
         spriteBatch.Draw(
             _sheet,
             Position,
@@ -189,10 +196,10 @@ public class EyeSprite
 
         if (_openness <= PupilVisibleThreshold) return;
 
-        // Squash the pupil vertically as the lids come down, and shrink how far it can
-        // travel up and down at the same time, so it never pokes through a closing lid.
+        // Adjusts the pupil's position based on the eye's look direction and openness
         var offset = new Vector2(_look.X * PupilRangeX, _look.Y * PupilRangeY * _openness) * Scale;
 
+        // Pupil
         spriteBatch.Draw(
             _pupil,
             Position + offset,

@@ -14,7 +14,7 @@ namespace TheBlackBox;
 /// around the aperture, accelerating as it closes, and is recycled to the outside once the
 /// void has taken it.
 /// </remarks>
-public class MoteSprite
+public class AshSprite
 {
     /// <summary>Where a mote enters the field, in pixels from the mouth.</summary>
     private const float SpawnRadius = 350f;
@@ -48,7 +48,7 @@ public class MoteSprite
     /// Creates a mote already somewhere along its way in, so the field starts full.
     /// </summary>
     /// <param name="random">Shared source of randomness, owned by the game.</param>
-    public MoteSprite(Random random)
+    public AshSprite(Random random)
     {
         _random = random;
         Respawn();
