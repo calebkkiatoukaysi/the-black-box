@@ -137,7 +137,9 @@ public class BlackBoxSprite
         double elapsed = gameTime.ElapsedGameTime.TotalSeconds;
         _totalTime += elapsed;
 
+        // Update the gaze and blink wave based on the elapsed time.
         UpdateGaze(elapsed, viewport);
+        // Update the blink wave based on the elapsed time.
         UpdateBlinkWave(elapsed);
 
         // Anchor eyes to the box's current position before updating them.
@@ -210,10 +212,14 @@ public class BlackBoxSprite
     /// </remarks>
     private Vector2 Drift(int index, EyeSlot slot)
     {
+        // AI computed the phase, speed, and reach for the eye's drift based on its index and depth.
+
+        // What this does: it calculates a drifting offset for the eye based on its index and depth, creating a natural wandering motion.
         float phase = index * 1.37f;
         float speed = 0.35f + index % 5 * 0.07f;
         float reach = DriftAmplitude * slot.Depth;
 
+        // why Sin and Cos? I find that this creates a more natural wandering motion for the eyes.
         return new Vector2(
             MathF.Sin((float)_totalTime * speed + phase) * reach,
             MathF.Cos((float)_totalTime * speed * 0.7f + phase) * reach);
@@ -227,7 +233,7 @@ public class BlackBoxSprite
     {
         Point mousePosition = Mouse.GetState().Position;
 
-        // Seed the sample instead of treating the very first frame as a mouse movement,
+        // Seed the sample instead of treating the very first frame as a mouse movement, 
         // which would otherwise yank every eye toward wherever the cursor happened to be.
 
         // If we haven't sampled the mouse yet, treat this as the first frame and center the gaze.
