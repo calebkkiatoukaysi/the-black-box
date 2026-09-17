@@ -14,8 +14,23 @@ and `BlackBoxSprite.DrawScale` together to keep the pixel art crisp.
 dotnet run
 ```
 
-Press **Esc**, to exit. The eyes follow your mouse cursor; leave it
-alone for a couple of seconds and the box goes back to looking around the room on its own. 
+**START GAME** opens the save form. A slot that has never been named asks what you are
+called before it lets you sit down; a slot that has been picks up where it was -- including
+mid-decision, if you left with something in your hand. **EXIT** and **Esc** close the game.
+Esc means "back" rather than "quit" once you are past the title screen -- it closes the form,
+and it saves and leaves a run. The eyes follow your mouse cursor; leave it alone for a couple
+of seconds and the box goes back to looking around the room on its own.
+
+Two switches exist for working on the game, and neither is the game:
+
+```
+dotnet run -- --simulate 5000     # play the table headless and print who wins
+dotnet run -- --proof shots       # render the table to shots/*.png and quit
+```
+
+The first is how the numbers in `RoundRules` were chosen (see [A round](#a-round)). The second
+is how the layout is checked after any change to the sheet, the plate or the pockets, and how
+the pictures for a release get taken. It opens a scratch run that never touches a save slot.
 
 ## What is on screen
 
@@ -26,12 +41,19 @@ alone for a couple of seconds and the box goes back to looking around the room o
 | `eye-sheet.png` | `EyeSprite` | 18 eyes, 5-frame blink driven by a state machine |
 | `pupil.png` | `EyeSprite` | Tracks a shared gaze point; squashes as the lids close |
 | `glow.png` | `EyeSprite` | Additive red light bleeding out of the opening |
-| `mote.png` | `MoteSprite` | Ash spiralling into the mouth, accelerating as it is consumed |
+| `mote.png` | `AshSprite` | Ash spiralling into the mouth, accelerating as it is consumed |
+| `button.png` | `ButtonSprite` | Nine-sliced plate; idle smoulder, kindles on hover, sinks on press |
+| `panel.png` | `SaveSlotMenu`, `NameEntry` | Nine-sliced slab the forms are built on |
+| `room.png` | `BlackBoxGame` | The wall, the lamp and the table. One light, falling off by inverse square. `ROOM_HORIZON` is where the opponent is cut off |
+| `opponent-sheet.png` | `OpponentSprite` | The figure across the table: 6 poses across, 3 injuries down. Static |
+| `hand-sheet.png` | `HandSprite` | 5 frames of your own hand, curled through offered |
+| `button.png` again | `PocketStrip` | Three pocket plates a side, live on your turn |
 
-Text is drawn with `spectral-title` (Spectral Light, 92pt) and `spectral-ui` (Spectral Medium,
-26pt), both letterspaced. The `.spritefont` files name their TTF by relative path, so the
-build always uses the font shipped in `Content/Spectral/` rather than whatever happens to be
-installed on the machine.
+Text is drawn with `spectral-title` (Spectral Light, 92pt), `spectral-ui` (Spectral Medium,
+26pt), `spectral-detail` (Spectral Light, 17pt, for the line under a save slot) and
+`spectral-small` (Spectral Medium, 14pt, for an item name on a pocket), all letterspaced. The
+`.spritefont` files name their TTF by relative path, so the build always uses the font shipped
+in `Content/Spectral/` rather than whatever happens to be installed on the machine.
 
 The box has no lid, seam or latch. Its front face is not a surface, it is an opening, and the
 eyes hang at different depths inside it - the deep ones small, dim and crowded toward the
@@ -45,7 +67,245 @@ Every PNG in `Content/` is drawn by a script rather than painted by hand:
 python tools/generate_assets.py
 ```
 
-It needs nothing but CPython - the PNG encoder is built into the script.
+It needs nothing but CPython - the PNG encoder is built into the script. Every drawing is
+seeded, so running it again produces the same bytes; only the sprite you changed changes.
+
+## The table
+
+A run is played in a room with one lamp in it, at a table, with the box centred on it and the
+opponent seated behind and a little to the left. The box is drawn at `BlackBoxSprite.TableScale`
+rather than the title screen's `DrawScale`: on the title it is the whole picture, and on the
+table it is an object in a room with somebody behind it to be in front of. It casts a contact
+shadow, without which it reads as hanging in front of the table rather than resting on it.
+
+A round runs `Discussion` -> `Offer` -> `Reaching` -> `PlayerTurn` -> `Resolving`, and then
+either the next round or `Over`. The talking ends, the box asks for a hand, the hand goes in,
+the box holds it for a moment, and then it pays. The hold is the point of the beat: dealing the
+instant the fingers cross the rim would make the box a vending machine.
+
+### The opponent
+
+The first opponent is big. At 4x a frame of `opponent-sheet.png` runs from the table lip to
+the top of the wall, the way a visitor fills a doorway in the games this one is built on --
+long hair down over a hood, thin, tired, a cigarette held up beside the jaw with one thread of
+smoke off it, and a coat wide enough to come out either side of the box. The first sheet was a
+head and a collar drawn at 5x, and at that size the box could have swallowed it. The fix was
+not a bigger number but a bigger person, drawn to fill the frame.
+
+They sit left of centre on purpose. The box owns the middle of the table, and a figure drawn
+straight behind it is a figure the box covers from the collar down. Off to one side, the box
+covers their far shoulder and nothing else: the face, the raised hand and the near shoulder
+are always in the open. The words moved to make room -- see [The plate](#the-plate).
+
+**Nothing on the opponent moves, ever.** Every cell of `opponent-sheet.png` is one finished
+picture and the game switches between them; there is no blink, no loop, no timer anywhere in
+`OpponentSprite`. Even the smoke is still. A jaw flapping through a line it has no audio for
+reads as a puppet, and a blink on a loop reads as a screensaver. What the player is meant to
+notice is that the face is not the one that was there a moment ago.
+
+Two axes pick the picture. **Pose** is the column: the three `Warmth` bands while there is
+talking to do, plus `Talking`, `Reaching` (leant toward the box, far shoulder hauled up because
+the arm under it is in the box, and the cigarette moved to the mouth because the hand that
+held it is the one that went in) and `Hurt` (eyes shut, mouth open, cigarette on the floor).
+**Injury** is the row, and is `StartingLives` minus the lives they hold -- a cut over the brow,
+then a split lip and a closed eye, with the head dropping and the colour draining as it goes.
+The two are independent, so somebody who is losing can still be pleased to see you.
+
+The hair is the character, and it is why every cell of the sheet is drawn from the same seed:
+the strands land in the same place in every frame, so switching poses changes the face and
+nothing else. Half-up rounding matters here too -- Python's `round()` is half-to-even, and the
+first draft's brows came out as a comb because of it.
+
+`Talking` is the one pose with a clock on it, and the clock is in `BlackBoxGame`, not in the
+sprite. It is struck when a line of theirs lands and dropped `SpeakSeconds` later, so the
+mouth is open on the beat the words arrive and shut again while they are still being read --
+the alternative, holding it for as long as the line is on screen, leaves them gaping through
+a silence, because the player reads at their own pace and there is nothing to lip-sync to.
+Clearing the pose is also what lets a change of temper reach the face, since a face that is
+doing something ignores what it is told to think.
+
+Two numbers hold the composition together: `OpponentScale` in `BlackBoxGame`, and
+`ROOM_HORIZON` in `tools/generate_assets.py`, which is the table line and the bottom of them.
+The top of the frame has to clear the run's bookkeeping along the top edge, so the sheet's
+height (`OPP_OH`) is cut to exactly that distance at that scale. Change one and recut the other.
+
+### The plate
+
+Everything that is said is written on a dark plate on the right-hand side of the wall, beside
+the opponent: the speaker's name at the top, the patience bar under it while there is talking
+to do, and the line under that, growing downward as it wraps. The words used to be stacked
+into the strip of wall above the opponent's head, and the opponent's head now reaches the top
+of the wall. It is the composition of the reference this table was built from -- the figure on
+one side of the frame, what is being said on the other.
+
+Whoever is speaking owns the plate. Through the beat after a reply it carries the player's own
+name and line; the rest of the time it is the opponent's; and once the talking is over it is
+the box's -- what it wants, what it gave, what that did.
+
+## The shape of an exchange
+
+A beat of a discussion is three states, not one. The opponent's line is up and the four plates
+are live; the player clicks one; the plates come down and **the player's own line replaces
+theirs on the plate**, under the player's name, for as long as it takes to read; then the
+answer lands and the mouth is open on the frame it arrives.
+
+That middle state is the one that was missing. `DialogueOption.Line` -- the sentence the player
+actually says -- was authored for every option and never drawn: `Answer` chose, advanced the
+node and repopulated the wheel inside a single frame, so the player picked a three-word label
+and went straight to the reply without ever seeing what they had said. `DiscussionPeriod.Said`
+is what the screen reads it from now.
+
+The clock does not stop for any of it. A line costs the time it takes to say, the same as it
+would across a real table, which is why `DemoDiscussion.Seconds` went up by about what a played
+discussion now spends on speech -- the player is left with the deliberation time they had
+before, and the pressure still comes from the box rather than from the reading.
+
+## Talking
+
+A round opens with a **discussion period**: the opponent says something, you get four ways to
+answer, and the box allows the whole exchange a fixed number of seconds. The clock does not
+stop while you read, so working out what all four options mean costs the time it takes.
+
+The four replies always sit in the same places and always carry the same tones -- warm and
+level on the left, probing and cutting on the right. Fallout 4's wheel is the model and also
+the warning: it showed a two-word paraphrase and then said something else. The paraphrase here
+may still surprise you; where it sits never will. `DialogueScript.Validate` refuses to load a
+script that puts a tone in the wrong corner.
+
+Running the clock out is not a failure. It produces `Tone.Silence`, which is never offered as
+an option but is heard like any other answer -- colder than being plain, warier than being
+warm.
+
+**The conversation moves on.** A script has one opening node per round -- `Openings` -- and
+each round's discussion starts on the next one, so the first night is an introduction, the
+second is after you have both felt the box take hold, the third is where people start counting,
+the fourth is the quiet before something lands, and every round after that is the two of you
+running out of things to say. What the player said last round is carried in the
+`Disposition`, not in the script, so each beat is a fresh one that the temper colours: the
+writing does not branch on the past, it only has to sound like it remembers it.
+
+| File | What it is |
+| --- | --- |
+| `Tone` | How a line is said, rather than what it says. Four are offered; `Silence` is only ever arrived at |
+| `Disposition` | What one opponent thinks of you, on two axes. **Warmth** picks which version of a line they say; **Guard** decides whether the line has anything in it |
+| `DialogueNode` | One beat: what they say in up to three tempers, and the four ways to answer |
+| `DialogueScript` | One opponent's whole conversation, how long the box allows each round of it, and where each round opens |
+| `DiscussionPeriod` | One round's discussion being played. Draws nothing, so it can be tested with no window open |
+| `DemoDiscussion` | A stand-in opponent, meant to be thrown away |
+
+The two axes are the point. One affection meter cannot express the opponent who is perfectly
+friendly and tells you nothing. It also means you cannot probe your way to candour -- asking
+directly raises their guard, so the question that needs them relaxed is exactly the one a
+direct question closes.
+
+A disposition outlives the discussion it was earned in. It is written to the save, so an
+opponent opens the second night remembering how the first one went -- and it is the input to
+how they play, not flavour between rounds. Across the simulated table a player the opponent
+has warmed to wins about five points more often than one they have turned on.
+
+## Items
+
+`ItemId` names every item the box can deal; `ItemCatalog` is the table behind it, holding what
+each is called, what it claims to do and how heavily the box favours it. Weights are relative
+and happen to total 100, so they read as percentages while the game is being balanced. As it
+stands a dealt item is worthless 10% of the time and costs somebody a life 36% of the time,
+which is the dial for how cruel the box is. It was 14% and 26% before the pockets arrived, and
+at those numbers a run took twenty rounds: with a pocket to keep a tourniquet in, healing
+cancelled the damage and the table stalled.
+
+`Round/ItemResolver` is the only place that knows what an item does, in a switch the compiler
+checks. `ItemCatalog` stays inert on purpose -- an effect needs two sets of lives, two hands and
+two pairs of pockets, and none of that belongs in a table.
+
+Two items changed meaning when the pockets went on screen. How many of the opponent's pockets
+are full is on the table for anyone to see, so a **Tally** now shows what is in them rather
+than how many. And a **Levy** burns what the opponent is holding if they are holding anything,
+and something out of their pocket if they are not -- the opponent plays second, by which time
+the player's hand is always empty, and a levy that only ever burned a hand would have been a
+blank every time they drew it.
+
+## A round
+
+`Discussion` -> `Offer` -> `Reaching` -> `PlayerTurn` -> `Resolving`, and then either the next
+round or `Over`.
+
+Both hands go into the box at the same moment and both sides are dealt; theirs is hidden. Then
+it is **the player's turn**, and a turn is two things. First, the pockets: three plates along
+the near edge of the table that are live while the turn is, and clicking one plays what is in
+it -- as many as you like, one after another, each read out before the table comes back to
+you. Second, the hand: **USE IT** plays the dealt item and destroys it, **KEEP IT** puts it in a
+pocket, and **LEAVE IT** gives it back to the box. KEEP IT refuses two things and says which on
+itself: full pockets, which you can do something about by playing one, and a blind deal, which
+cannot be put away because putting it away unseen would be a way of never paying what the
+rotgut charged.
+
+Then the opponent takes theirs, second, into the unknown the player just made: they may take
+one thing out of their own pockets, and then they use, pocket or give back what they were
+dealt. They answer second because acting into the unknown is the shape of the round. What both
+turns did is read one line at a time with CONTINUE, so a round that turns on a mirror is
+legible instead of arriving as a new set of numbers.
+
+The rules live in `Round/RoundEngine`, not in the screen. It takes a `SaveData` and a `Random`
+and hands back what happened as lines, so the same code plays the table on screen and plays it
+thousands of times in `Round/RoundSimulator`. The screen only decides what to draw and when.
+
+### The trial run
+
+This is the first table, and it leans the player's way on purpose: the point of it is to teach
+how a round works, and a player who is shot dead while they are still learning what a pocket
+is has been taught nothing. Every dial is in `Round/RoundRules`:
+
+- **Pockets.** Three a side, the same for both. The player may play any number of them in a
+  turn; the opponent plays at most one, and only looks in their pockets half the time.
+- **Favour.** Half the time the box deals the player a blank or a pact, it takes it back and
+  deals again. Once, so a bad hand is still possible. The opponent gets no favour.
+- **Restraint.** The opponent's willingness to fire a weapon is what their temper says it is,
+  times 0.7.
+
+`dotnet run -- --simulate 4000` plays the table with a plain, unclever player -- fires a
+revolver when it has one, patches itself when it is hurt, keeps a guard for when it is
+frightened and throws blanks away -- at each temper the opponent can be in:
+
+```
+TEMPER     WON     LOST   UNFINISHED   ROUNDS
+HOSTILE    67 %    32 %        1 %     11.9
+EVEN       70 %    29 %        1 %     12.1
+OPEN       72 %    27 %        1 %     12.5
+```
+
+Seven in ten, a dozen rounds, and talking worth five points. Change a number in `RoundRules`
+or a weight in `ItemCatalog` and run that before trusting it.
+
+## Saving
+
+Three slots, one JSON file each, under
+`%LOCALAPPDATA%\TheBlackBox\Saves\slot0.json`. Deliberately not next to the executable:
+`bin/` is deleted by every clean build, and a save that a `dotnet clean` destroys is not a save.
+
+| File | What it is |
+| --- | --- |
+| `SaveData` | The whole save: your name, chapter, opponent, round, lives, what each side is holding and carrying, what the opponent thinks of you, and a flat list of string flags for everything else that has to be remembered |
+| `SaveSlot` | One slot as the form sees it -- empty, occupied or unreadable, plus the line printed on the plate |
+| `SaveSystem` | Reads, writes and erases slots. The only thing in the project that touches a file |
+
+Three decisions worth knowing about:
+
+- **Writes are atomic.** A save goes to `slotN.json.tmp` and only then replaces the real file, so
+  a crash mid-write leaves the old save intact rather than half of a new one. The displaced save
+  is kept as `slotN.json.bak`.
+- **Nothing throws.** A missing, locked or corrupt file comes back as a slot that says
+  `UNREADABLE` and can be erased. A save system that throws turns a bad sector into a crash on
+  the title screen.
+- **Every file carries a `Version`.** The fields below it are a guess at a game that is not
+  written yet and they will change; `SaveSystem.Upgrade` is where an old file gets brought
+  forward when they do. It has been needed twice. Version 2 separated the item that has just
+  been dealt from the ones kept, and reads version 1's `Hand` back out of `SaveData.Extra` --
+  without it `System.Text.Json` would drop the field before the migration ever saw it. Version
+  3 gave the bank a size: it is a pocket now, with `RoundRules.PocketSlots` slots, and a
+  version 2 save that was carrying more keeps the oldest three.
+
+The save form itself is `SaveSlotMenu`, drawn over the title screen rather than replacing it, so
+the box is still watching while you pick a slot.
 
 ## Assets
 

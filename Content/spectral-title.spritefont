@@ -41,7 +41,12 @@ with.
     If you uncomment this line, the default character will be substituted if you draw
     or measure text that contains characters which were not included in the font.
     -->
-    <!-- <DefaultCharacter>*</DefaultCharacter> -->
+    <!--
+    Enabled deliberately. A glyph the font does not carry is a crash out of MeasureString,
+    which would take the game down over a punctuation mark; substituting is the right way
+    for that to fail.
+    -->
+    <DefaultCharacter>?</DefaultCharacter>
 
     <!--
     CharacterRegions control what letters are available in the font. Every
@@ -54,6 +59,12 @@ with.
       <CharacterRegion>
         <Start>&#32;</Start>
         <End>&#126;</End>
+      </CharacterRegion>
+
+      <!-- The middle dot the save slots and the Escape hint separate their fields with. -->
+      <CharacterRegion>
+        <Start>&#183;</Start>
+        <End>&#183;</End>
       </CharacterRegion>
     </CharacterRegions>
   </Asset>

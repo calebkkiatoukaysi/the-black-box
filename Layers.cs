@@ -12,6 +12,9 @@ namespace TheBlackBox;
 /// </remarks>
 public static class Layers
 {
+    /// <summary>The room the game is played in: wall, lamp and table. Behind everything.</summary>
+    public const float Room = 1.00f;
+
     /// <summary>The slower, dimmer ash layer.</summary>
     public const float AshDriftFar = 1.00f;
 
@@ -20,6 +23,18 @@ public static class Layers
 
     /// <summary>The box, and the void it is built around.</summary>
     public const float Box = 0.80f;
+
+    /// <summary>The figure across the table, in front of the wall and behind the box.</summary>
+    public const float Opponent = 0.92f;
+
+    /// <summary>An eye sitting in its socket, over the face it is set into.</summary>
+    public const float OpponentEye = 0.91f;
+
+    /// <summary>The pool of dark the box sits in, on the table and under it.</summary>
+    public const float BoxShadow = 0.86f;
+
+    /// <summary>The player's own hand, reaching past the box into the opening.</summary>
+    public const float Hand = 0.30f;
 
     /// <summary>Red light bleeding out of each socket (drawn in the additive batch).</summary>
     public const float EyeGlow = 0.50f;
@@ -32,6 +47,30 @@ public static class Layers
 
     /// <summary>Ash spiralling into the mouth, in front of everything it is falling past.</summary>
     public const float Mote = 0.20f;
+
+    /// <summary>
+    /// The dimming pane a form is laid over. It is drawn in the form's own batch, behind
+    /// everything else in it and in front of the whole title screen under it.
+    /// </summary>
+    public const float Veil = 0.60f;
+
+    /// <summary>The concrete slab a form is built on, over the veil.</summary>
+    public const float PanelPlate = 0.50f;
+
+    /// <summary>The concrete plate of a button.</summary>
+    public const float ButtonPlate = 0.18f;
+
+    /// <summary>The light bleeding out of a button's groove, over its own plate.</summary>
+    public const float ButtonAccent = 0.17f;
+
+    /// <summary>Offset drop shadow behind a button's label.</summary>
+    public const float ButtonLabelShadow = 0.16f;
+
+    /// <summary>A button's label, the closest part of the button.</summary>
+    public const float ButtonLabel = 0.15f;
+
+    /// <summary>The dark plate the dialogue is written on, behind its own text.</summary>
+    public const float DialoguePlate = 0.14f;
 
     /// <summary>Offset drop shadow sitting just behind a line of text.</summary>
     public const float TextShadow = 0.12f;

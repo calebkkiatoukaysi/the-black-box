@@ -8,7 +8,17 @@ Content/glow.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedu
 
 Content/mote.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
 
+Content/button.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
+Content/panel.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
 Content/ash-drift.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
+Content/room.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
+Content/opponent-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
+Content/hand-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
 
 Content/Spectral/Spectral-Light.ttf - Spectral font created by Production Type, released on Google Fonts (https://fonts.google.com/specimen/Spectral) under the SIL Open Font License
 

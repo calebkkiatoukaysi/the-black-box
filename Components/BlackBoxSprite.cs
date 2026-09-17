@@ -20,8 +20,27 @@ public class BlackBoxSprite
     /// <summary>Width and height of black-box.png.</summary>
     private const int TextureSize = 128;
 
-    /// <summary>The art is small and blown up by a whole number to stay crisp.</summary>
+    /// <summary>
+    /// What the box is blown up by on the title screen, where it is the whole picture.
+    /// </summary>
     public const float DrawScale = 4f;
+
+    /// <summary>What it is blown up by once it is an object sitting on a table.</summary>
+    /// <remarks>
+    /// <para>
+    /// Smaller because there is now something behind it to be in front of. At the title
+    /// scale the box covers the opponent from the collar up, which is a fine picture of a
+    /// box and a poor one of two people playing across it.
+    /// </para>
+    /// <para>
+    /// The only fraction in the game, and it is here because the number this controls is not
+    /// really the box's size -- it is how much of the opponent the box is allowed to cover.
+    /// Its top edge is the ceiling the man behind it has to keep his jaw above, so every step
+    /// down here is a step up in how large he can be drawn. A whole 2 would buy him more
+    /// again and leave the box too small to be the thing the room is built around.
+    /// </para>
+    /// </remarks>
+    public const float TableScale = 2.5f;
 
     // The box hangs in the air rather than sitting still.
     private const float BobAmplitude = 7f;
@@ -101,6 +120,20 @@ public class BlackBoxSprite
     /// <summary>Centre of the box in screen space, before the idle bob is applied.</summary>
     public Vector2 Position;
 
+    /// <summary>The radial falloff the contact shadow is drawn from.</summary>
+    private Texture2D _glow;
+
+    /// <summary>
+    /// How far the art is blown up, per instance.
+    /// </summary>
+    /// <remarks>
+    /// A field rather than the constant it used to be, because the box is two different
+    /// sizes in two different scenes. Whole numbers only: everything in this project is
+    /// point-sampled pixel art and a fractional scale would put seams through the shell.
+    /// Changing it is free -- the eyes re-anchor from it every frame.
+    /// </remarks>
+    public float Scale = DrawScale;
+
     /// <summary>
     /// Builds the box and one eye per slot.
     /// </summary>
@@ -109,6 +142,8 @@ public class BlackBoxSprite
         _eyes = new EyeSprite[EyeSlots.Length];
         for (int i = 0; i < _eyes.Length; i++)
         {
+            // Eye scale is set in Update rather than here, so that changing the box's own
+            // scale mid-game brings the eyes with it instead of leaving them at title size.
             _eyes[i] = new EyeSprite()
             {
                 Scale = DrawScale * EyeSlots[i].Size,
@@ -123,6 +158,7 @@ public class BlackBoxSprite
     /// <param name="content">The ContentManager to load with.</param>
     public void LoadContent(ContentManager content)
     {
+        _glow = content.Load<Texture2D>("glow");
         _texture = content.Load<Texture2D>("black-box");
         foreach (var eye in _eyes) eye.LoadContent(content);
     }
@@ -143,12 +179,13 @@ public class BlackBoxSprite
         UpdateBlinkWave(elapsed);
 
         // Anchor eyes to the box's current position before updating them.
-        Vector2 topLeft = DrawPosition - new Vector2(TextureSize * DrawScale / 2f);
+        Vector2 topLeft = DrawPosition - new Vector2(TextureSize * Scale / 2f);
 
         for (int i = 0; i < _eyes.Length; i++)
         {
             EyeSlot slot = EyeSlots[i];
-            _eyes[i].Position = topLeft + (new Vector2(slot.X, slot.Y) + Drift(i, slot)) * DrawScale;
+            _eyes[i].Scale = Scale * slot.Size;
+            _eyes[i].Position = topLeft + (new Vector2(slot.X, slot.Y) + Drift(i, slot)) * Scale;
             _eyes[i].Update(gameTime, _gazePoint);
         }
     }
@@ -167,9 +204,44 @@ public class BlackBoxSprite
             Color.White,
             0f,
             new Vector2(TextureSize / 2f),
-            DrawScale,
+            Scale,
             SpriteEffects.None,
             Layers.Box);
+    }
+
+    /// <summary>
+    /// Draws the pool of dark the box is sitting in.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// glow.png is a radial falloff, which is all a contact shadow is. Squashed flat and
+    /// drawn near-black it grounds the box on the table; without it the box reads as hanging
+    /// in front of the table rather than resting on it, because nothing else in the scene
+    /// casts anything.
+    /// </para>
+    /// <para>
+    /// Sat just below the bottom edge rather than centred on it. Centred, the half of the
+    /// ellipse above the edge is wider than the box and sticks out either side as two dark
+    /// nubs that read as feet.
+    /// </para>
+    /// </remarks>
+    /// <param name="spriteBatch">The SpriteBatch to render with.</param>
+    public void DrawContactShadow(SpriteBatch spriteBatch)
+    {
+        if (_glow is null) return;
+
+        float width = TextureSize * Scale * 1.30f;
+        float height = Scale * 20f;
+        float bottom = DrawPosition.Y + TextureSize * Scale / 2f;
+
+        var destination = new Rectangle(
+            (int)MathF.Round(Position.X - width / 2f),
+            (int)MathF.Round(bottom - height * 0.34f),
+            (int)MathF.Round(width),
+            (int)MathF.Round(height));
+
+        spriteBatch.Draw(_glow, destination, null, new Color(4, 3, 6) * 0.95f,
+            0f, Vector2.Zero, SpriteEffects.None, Layers.BoxShadow);
     }
 
     /// <summary>
