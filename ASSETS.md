@@ -16,7 +16,9 @@ Content/ash-drift.png - created by Caleb Kiatoukaysi for The Black Box, drawn pr
 
 Content/room.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
 
-Content/opponent-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+Content/opponent-sheet.png - built by tools/generate_assets.py from tools/source/opponent-portrait.png: the portrait off the opponent's character sheet, keyed and sampled to art pixels, with each pose and injury made as pixel edits on it; the character sheet was supplied by Caleb Kiatoukaysi for The Black Box
+
+tools/source/opponent-portrait.png - the portrait from the opponent's character sheet, supplied by Caleb Kiatoukaysi for The Black Box; the only picture the generator reads rather than draws
 
 Content/hand-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
 

@@ -92,15 +92,17 @@ public partial class BlackBoxGame : Game
     private static readonly Vector2 OpponentFoot = new(600f, 640f);
 
     /// <summary>
-    /// Blown up by the same whole number as the player's own hand.
+    /// How far a frame of the opponent is blown up. A whole number, so the pixels stay square.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Big. At 4x a frame of <c>opponent-sheet.png</c> runs from the table lip to the top of
+    /// Big. At 6x a frame of <c>opponent-sheet.png</c> runs from the table lip to the top of
     /// the wall, which makes the opponent the thing the room is about and the box the thing
     /// between the two of you. The first sheet was a head and a collar drawn at 5x, and at
     /// that size the box could have swallowed it -- the fix was not a bigger number but a
-    /// bigger person, drawn to fill the frame.
+    /// bigger person, drawn to fill the frame. It is 6x rather than the room's 4x because she
+    /// is now cut from her character sheet at the sheet's own pixel size, and that portrait
+    /// is 92 pixels tall: 6x is the whole number that puts her back where the drawn one stood.
     /// </para>
     /// <para>
     /// Two numbers hold this together: this, and <c>ROOM_HORIZON</c> in
@@ -109,16 +111,41 @@ public partial class BlackBoxGame : Game
     /// sheet's height is cut to exactly that distance at this scale.
     /// </para>
     /// </remarks>
-    private const float OpponentScale = 4f;
+    private const float OpponentScale = 6f;
 
-    /// <summary>How far the player's own hand is blown up. Nearer the camera, so larger.</summary>
+    /// <summary>
+    /// How far the player's own arm is blown up.
+    /// </summary>
+    /// <remarks>
+    /// The same whole number as everything else, so the pixels match. It is nearer the
+    /// camera than anything on the table, but that is drawn into the sheet -- the arm is big
+    /// in its own pixels, elbow to fingertips across most of a 96-pixel frame -- rather than
+    /// bought with a bigger multiplier, because a sprite blown up further than its neighbours
+    /// reads as a different game pasted over this one.
+    /// </remarks>
     private const float HandScale = 4f;
 
-    /// <summary>Where the hand waits, below the bottom of the screen.</summary>
-    private const float HandRestY = ScreenHeight + 40f;
+    /// <summary>
+    /// Where the fingertips wait before the hand is offered: off the bottom of the screen,
+    /// right of centre.
+    /// </summary>
+    /// <remarks>
+    /// This and <see cref="HandMouth"/> lie on the line the arm is drawn along, so that the
+    /// arm slides out along its own length. Moved anywhere else it would drift sideways as it
+    /// came in, and an arm that drifts is not attached to anybody. The whole frame is below
+    /// the screen at this point, sleeve and all, so nothing is seen until the offer.
+    /// </remarks>
+    private static readonly Vector2 HandRest = new(1058f, 997f);
 
-    /// <summary>Where the hand ends up, far enough in that the mouth has closed over it.</summary>
-    private const float HandMouthY = 592f;
+    /// <summary>
+    /// Where the fingertips end up: inside the mouth of the box, a little left of its centre.
+    /// </summary>
+    /// <remarks>
+    /// Far enough in that the opening has closed over the fingers, and left of centre because
+    /// a right hand reaching straight ahead lands there. With the tips here the elbow end of
+    /// the frame is still off the bottom-right corner, which is the point of the diagonal.
+    /// </remarks>
+    private static readonly Vector2 HandMouth = new(792f, 598f);
 
     /// <summary>How long the hand takes to go in, in seconds.</summary>
     private const float ReachSeconds = 1.35f;
@@ -608,8 +635,8 @@ public partial class BlackBoxGame : Game
         _blackBox.DrawEyes(gameTime, _spriteBatch);
         foreach (var mote in _ashes) mote.Draw(gameTime, _spriteBatch);
 
-        // Over the box, because the hand is between the player and it.
-        _hand.Draw(_spriteBatch, ScreenWidth / 2f, HandRestY, HandMouthY, HandScale);
+        // Over the box, because the arm is between the player and it.
+        _hand.Draw(_spriteBatch, HandRest, HandMouth, HandScale);
 
         _spriteBatch.End();
 

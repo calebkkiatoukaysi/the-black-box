@@ -15,7 +15,10 @@ namespace TheBlackBox;
 /// </remarks>
 public enum OpponentPose
 {
-    /// <summary>Done being civil.</summary>
+    /// <summary>
+    /// Done being civil. On this opponent that is not a scowl: it is the head over to one
+    /// side, the eyes too open, and the smile too wide, held.
+    /// </summary>
     Hostile = 0,
 
     /// <summary>Giving nothing away either direction.</summary>
@@ -51,24 +54,27 @@ public enum OpponentPose
 /// <para>
 /// Two axes. <see cref="Pose"/> is the column and is either a <see cref="Warmth"/> band or
 /// something they are doing; <see cref="Injury"/> is the row and is how many lives they have
-/// lost. The two are independent, so a man who is losing can still be pleased to see you.
+/// lost. The two are independent, so somebody who is losing can still be pleased to see you.
 /// </para>
 /// </remarks>
 public class OpponentSprite
 {
     /// <summary>Width of one frame in opponent-sheet.png.</summary>
-    private const int FrameWidth = 160;
+    private const int FrameWidth = 107;
 
     /// <summary>
     /// Height of one frame. See <see cref="FrameWidth"/>.
     /// </summary>
     /// <remarks>
     /// The bottom row of the frame is the far edge of the table and there is no more of them
-    /// to draw below it. Above it the frame is tall: at 4x it runs from the table lip to the
+    /// to draw below it. Above it the frame is tall: at 6x it runs from the table lip to the
     /// top of the wall, which is what makes them the thing the room is about rather than a
-    /// head behind a box. The box in front covers one shoulder and nothing else.
+    /// head behind a box. The box in front covers one shoulder and nothing else. The frame
+    /// is the size of the portrait on her character sheet, sampled to art pixels, plus a
+    /// little room round it; it was 160x150 at 4x when she was drawn by the generator, and
+    /// the two come to the same height on screen.
     /// </remarks>
-    private const int FrameHeight = 150;
+    private const int FrameHeight = 100;
 
     /// <summary>Rows in the sheet, which is how many times they can be hurt and stay up.</summary>
     private const int InjuryRows = 3;
@@ -89,9 +95,9 @@ public class OpponentSprite
     /// Puts them in the temper their disposition says they are in.
     /// </summary>
     /// <remarks>
-    /// Ignored while they are doing something. A man with his arm inside the box is not
-    /// showing you what he thinks of you, and overwriting <see cref="OpponentPose.Reaching"/>
-    /// with a mood would snap him upright in the middle of paying. The caller that set the
+    /// Ignored while they are doing something. Somebody with an arm inside the box is not
+    /// showing you what they think of you, and overwriting <see cref="OpponentPose.Reaching"/>
+    /// with a mood would snap them upright in the middle of paying. The caller that set the
     /// pose is the one that clears it, by putting them back on a temper frame first -- which
     /// is also how the disposition a line changed reaches the face, a beat after it is said.
     /// </remarks>
