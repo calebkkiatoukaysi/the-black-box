@@ -15,7 +15,6 @@ public sealed class DiscussionPeriod
 {
     private readonly DialogueScript _script;
     private readonly string _playerName;
-    private readonly List<string> _transcript = new();
     private readonly List<string> _flags = new();
 
     /// <summary>Opens a discussion.</summary>
@@ -58,9 +57,6 @@ public sealed class DiscussionPeriod
     /// <summary>How much of the allowed time is left, from 1 to 0, for drawing a bar.</summary>
     public float Patience => Math.Clamp(Remaining / _script.Seconds, 0f, 1f);
 
-    /// <summary>Everything said so far, in order, for a scrollback or a log.</summary>
-    public IReadOnlyList<string> Transcript => _transcript;
-
     /// <summary>The <see cref="SaveData.Flags"/> ids the choices have raised.</summary>
     /// <remarks>Collected here, not written. This class never touches a save; the caller drains this at the end.</remarks>
     public IReadOnlyList<string> FlagsRaised => _flags;
@@ -84,7 +80,6 @@ public sealed class DiscussionPeriod
         // Out of time. The opponent hears the silence, and the box moves things along.
         Remaining = 0f;
         Disposition = Disposition.Hear(Tone.Silence);
-        _transcript.Add($"{_playerName} says nothing.");
         Current = null;
         State = DiscussionState.Silenced;
     }
@@ -108,9 +103,6 @@ public sealed class DiscussionPeriod
         DialogueOption option = Current.Options[corner];
 
         Said = Fill(option.Line);
-
-        _transcript.Add(Fill(Current.LineFor(Disposition)));
-        _transcript.Add($"{_playerName}: {Said}");
 
         Disposition = Disposition.Hear(option.Tone).Shift(option.Value, option.Guard);
         Exchanges++;

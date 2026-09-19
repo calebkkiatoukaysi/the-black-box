@@ -26,8 +26,8 @@ public class CatchHandSprite
     /// <summary>The frame with the hand open and fanned: the last one in the sheet.</summary>
     private const int OpenFrame = 4;
 
-    /// <summary>How far the art is blown up. Four on the table, six in the close-up to match the reaching arm.</summary>
-    public float Scale { get; set; } = 4f;
+    /// <summary>How far the art is blown up. The catch happens in the close-up, so it matches the reaching arm there.</summary>
+    private const float Scale = 6f;
 
     /// <summary>Where the tip of the middle finger is inside a frame, in sheet pixels.</summary>
     private static readonly Vector2 Fingertip = new(17f, 25f);

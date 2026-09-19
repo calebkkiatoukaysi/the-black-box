@@ -1018,10 +1018,11 @@ def build_room(seed=5150):
 
 
 # --------------------------------------------------------------------------- #
-# opponent-sheet.png -- the first opponent: 6 poses across, one row, 107x100 a frame
+# opponent-sheet.png -- the chapter-two opponent: 5 poses across, one row, 107x100 a frame
 #
-# Columns: hostile, even, open, talk, reach, hurt. Every opponent's sheet has these six
-# columns in this order; OpponentSprite cuts them at the size and scale Opponents.cs says.
+# Columns: hostile, even, open, reach, hurt. Every opponent's sheet has these five columns
+# in this order; OpponentSprite cuts them at the size and scale Opponents.cs says. There is
+# no talking column: a line landing does not move her, the idle is the talking.
 # She is not drawn here. The portrait off her character sheet (tools/source/
 # opponent-portrait.png) is keyed and box-sampled at 4 image px per art px, and each
 # pose is a few pixels moved. I drew her twice before this and both were a likeness,
@@ -1031,8 +1032,7 @@ def build_room(seed=5150):
 
 OPP_OW, OPP_OH = 107, 100
 
-OPP_POSES = ("hostile", "even", "open", "talk", "reach", "hurt")
-OPP_INJURIES = (0,)
+OPP_POSES = ("hostile", "even", "open", "reach", "hurt")
 
 OPP_SOURCE = os.path.join(ROOT, "tools", "source", "opponent-portrait.png")
 
@@ -1073,10 +1073,6 @@ OPP_GOLD_D = (112, 84, 40, 255)
 OPP_MOUTH_DARK = (28, 8, 10, 255)
 OPP_TEETH      = (218, 202, 190, 255)
 OPP_LASH       = (14, 7, 8, 255)
-OPP_BLOOD_D    = (58, 10, 12, 255)
-OPP_BLOOD      = (134, 22, 24, 255)
-OPP_BRUISE     = (92, 50, 90, 255)
-OPP_SKIN_PALE  = (216, 194, 182, 255)
 
 # Per pose: head tilt in degrees (negative is toward the near side), lean toward the
 # box, drop, and what the eyes and mouth are doing.
@@ -1086,8 +1082,6 @@ OPP_POSE = {
     # Idle leans toward the box a little, like someone who has been sitting a while.
     "even":    dict(tilt=4.0, lean=1, drop=1, eyes="rest", mouth="rest"),
     "open":    dict(tilt=7.0, lean=1, drop=0, eyes="rest", mouth="smile"),
-    # Talking lifts and leans in, so a line landing is a posture change, not just a mouth.
-    "talk":    dict(tilt=-3.0, lean=-3, drop=-1, eyes="rest", mouth="talk"),
     # Reaching: leant toward the box, eyes down on what the hand is doing.
     "reach":   dict(tilt=5.0, lean=4, drop=3, eyes="down", mouth="rest"),
     # Hurt: head down and away, eyes shut, mouth open.
@@ -1307,7 +1301,7 @@ def _blend(img, x, y, rgba, k):
         img[y][x] = list(lerp_color(tuple(img[y][x]), rgba, min(1.0, k)))
 
 
-def opp_edit_eyes(img, mode, injury, face):
+def opp_edit_eyes(img, mode, face):
     """
     What the eyes are doing, by moving rows. wide lifts brow and lash a row; down moves
     the eye down under the lid; shut paints the lids over with cheek skin plus a lash line.
@@ -1332,10 +1326,6 @@ def opp_edit_eyes(img, mode, injury, face):
         elif mode == "down":
             _shift_block(img, x0, lash, x1, lower, 0, 1)
             for x in range(x0, x1 + 1):
-                img[lash][x] = list(img[lash - 1][x])
-        if side == "R" and injury >= 2:
-            for x in range(x0 + 1, x1):
-                img[lash + 1][x] = list(img[lash][x])
                 img[lash][x] = list(img[lash - 1][x])
 
 
@@ -1383,12 +1373,6 @@ def opp_edit_mouth(img, mode, face):
             img[y][x] = list(teeth if x % 2 else shade(teeth, 0.84))
             _blend(img, x, y + 1, OPP_MOUTH_DARK, 0.45)
 
-    elif mode == "talk":
-        _shift_block(img, x0 - 1, my + 1, x1 + 1, my + 3, 0, 2)
-        for x in range(x0, x1 + 1):
-            img[my + 1][x] = list(teeth if x % 2 else shade(teeth, 0.84)) if x0 + 2 <= x <= x1 - 2 else list(OPP_MOUTH_DARK)
-            img[my + 2][x] = list(OPP_MOUTH_DARK)
-
     elif mode == "cry":
         for x in range(x0, x1 + 1):
             if abs(x - cx) >= 2.5:
@@ -1398,64 +1382,6 @@ def opp_edit_mouth(img, mode, face):
             img[my + 2][x] = list(OPP_MOUTH_DARK)
             img[my + 3][x] = list(OPP_MOUTH_DARK)
             _blend(img, x, my + 1, OPP_MOUTH_DARK, 0.5)
-
-
-def _is_skin(px):
-    return px[3] > 0 and px[0] > 120 and px[0] - px[1] > 40 and px[1] > px[2]
-
-
-def opp_edit_injury(img, injury, face):
-    """
-    What has been taken off her: the face pales a little each time, and a cut opens.
-    Asymmetric on purpose, symmetry reads as decoration. (Unused now, OPP_INJURIES is one row.)
-    """
-    if injury <= 0:
-        return
-
-    fx, fy = face["centre"]
-    nx0, nx1, ny0, ny1 = face["neck"]
-    ex0, _, elash, _ = face["eye_l"]
-    rx0, rx1, rlash, _ = face["eye_r"]
-    mx0, mx1, my = face["mouth"]
-    mc = (mx0 + mx1) // 2
-    pale = 0.12 * injury
-    for y in range(len(img)):
-        for x in range(len(img[0])):
-            in_face = ((x - fx) / 15.0) ** 2 + ((y - fy) / 19.0) ** 2 <= 1.0
-            in_neck = nx0 <= x <= nx1 and ny0 <= y <= ny1
-            if (in_face or in_neck) and _is_skin(img[y][x]):
-                _blend(img, x, y, OPP_SKIN_PALE, pale)
-
-    def run(x0, y0, length, drift):
-        x = float(x0)
-        for i in range(length):
-            t = i / float(length)
-            x += drift
-            c = lerp_color(OPP_BLOOD, OPP_BLOOD_D, t ** 0.6)
-            _blend(img, r(x), y0 + i, c, 0.9 - 0.5 * t)
-
-    # One cut through the outer end of the near brow, and the run off it down the temple.
-    cx, cy = ex0 - 1, elash - 4
-    for i in range(5):
-        _blend(img, cx + i, cy + (i // 3), OPP_BLOOD, 0.95)
-        _blend(img, cx + i, cy + 1 + (i // 3), OPP_BLOOD_D, 0.8)
-    run(cx + 1, cy + 2, 15, -0.08)
-    run(cx + 3, cy + 3, 6, 0.05)
-
-    if injury < 2:
-        return
-
-    # Second hit: split lip, nosebleed, and a bruise over the far eye (its lid moves in opp_edit_eyes).
-    for x in range(mc + 1, mc + 5):
-        _blend(img, x, my + 1, OPP_BLOOD_D, 0.85)
-    run(mc + 3, my + 2, 4, 0.1)
-    run(mc - 1, my - 3, 3, 0.0)
-    ex, ey = (rx0 + rx1) / 2.0, rlash + 1.0
-    for y in range(int(ey) - 5, int(ey) + 6):
-        for x in range(int(ex) - 7, int(ex) + 8):
-            d = ((x - ex) / 6.5) ** 2 + ((y - ey) / 4.5) ** 2
-            if d <= 1.0:
-                _blend(img, x, y, OPP_BRUISE, 0.55 * (1.0 - d))
 
 
 def opp_bend(img, tilt, lean, drop, face):
@@ -1596,18 +1522,17 @@ def opp_edit_skin(img):
             img[y][x] = [c[0], c[1], c[2], px[3]]
 
 
-def build_opponent_frame(img, ox, oy, portrait, pose_name, injury, face):
+def build_opponent_frame(img, ox, oy, portrait, pose_name, face):
     p = OPP_POSE[pose_name]
     fx, fy = face["origin"]
     cell = [[list(px) for px in row] for row in portrait]
-    opp_edit_eyes(cell, p["eyes"], injury, face)
+    opp_edit_eyes(cell, p["eyes"], face)
     opp_edit_mouth(cell, p["mouth"], face)
-    opp_edit_injury(cell, injury, face)
     frame = new_image(OPP_OW, OPP_OH)
     for y, row in enumerate(cell):
         for x, px in enumerate(row):
             frame[fy + y][fx + x] = list(px)
-    frame = opp_bend(frame, p["tilt"], p["lean"], p["drop"] + injury, face)
+    frame = opp_bend(frame, p["tilt"], p["lean"], p["drop"], face)
     for y, row in enumerate(frame):
         for x, px in enumerate(row):
             if px[3]:
@@ -1615,14 +1540,13 @@ def build_opponent_frame(img, ox, oy, portrait, pose_name, injury, face):
 
 
 def write_opponent_sheet(name, portrait, face):
-    """One opponent's sheet: the six poses of one finished portrait, side by side."""
+    """One opponent's sheet: the five poses of one finished portrait, side by side."""
     fx, fy = face["origin"]
     assert fx + len(portrait[0]) <= OPP_OW and fy + len(portrait) == OPP_OH, \
         (name + ": the portrait no longer fits the frame", len(portrait[0]), len(portrait))
-    img = new_image(OPP_OW * len(OPP_POSES), OPP_OH * len(OPP_INJURIES))
-    for row, injury in enumerate(OPP_INJURIES):
-        for col, pose in enumerate(OPP_POSES):
-            build_opponent_frame(img, col * OPP_OW, row * OPP_OH, portrait, pose, injury, face)
+    img = new_image(OPP_OW * len(OPP_POSES), OPP_OH)
+    for col, pose in enumerate(OPP_POSES):
+        build_opponent_frame(img, col * OPP_OW, 0, portrait, pose, face)
     write_png(os.path.join(OUT, name), img)
 
 
@@ -1647,8 +1571,8 @@ def build_opponent_sheet():
 # nose and mouth left alone), the skin pulled toward a pale grey, the eye sockets put
 # in shadow from the brow down, and four picture pixels to the art pixel, drawn at 4x.
 # That is what makes her read as less beat up and more wrong, and it lost the fine
-# detail the first cut of her had. Five columns are that picture; talk is the head
-# bent up and toward the player (no mouth edit -- I tried one and it looked pasted on).
+# detail the first cut of her had. Every column is that one picture: nothing on her
+# moves when a line lands (a mouth edit looked pasted on, and a head bend jumped).
 # Frame size and scale are also on Opponents.First and have to agree.
 # --------------------------------------------------------------------------- #
 
@@ -1704,12 +1628,6 @@ OPP2_SKIN_PALE_T = 0.55
 OPP2_EYES = ((266, 140, 324, 194), (326, 142, 378, 194))
 OPP2_HOOD = 0.42
 OPP2_HOOD_EDGE = 8
-
-#: The talking pose, in art pixels: bent about the base of the neck like the first
-#: opponent (opp_bend), up and toward the player. The pivot is the neck base, the bend
-#: runs from the chin to the shoulders.
-OPP2_FACE = dict(origin=(0, 0), pivot=(70.5, 87.5), bend=(72, 96))
-OPP2_TALK = dict(tilt=-5.0, lean=-3, drop=-2)
 
 
 def _opp2_hidden(x, y):
@@ -1914,11 +1832,9 @@ def opp2_sample(frame):
 
 def build_second_opponent_sheet():
     base = opp2_sample(opp2_make_pale(opp2_clean_face(opp2_load_portrait())))
-    talking = opp_bend(base, OPP2_TALK["tilt"], OPP2_TALK["lean"], OPP2_TALK["drop"], OPP2_FACE)
     img = new_image(OPP2_ART_W * len(OPP_POSES), OPP2_ART_H)
-    for col, pose in enumerate(OPP_POSES):
-        cell = talking if pose == "talk" else base
-        for y, row in enumerate(cell):
+    for col in range(len(OPP_POSES)):
+        for y, row in enumerate(base):
             for x, px in enumerate(row):
                 if px[3]:
                     img[y][col * OPP2_ART_W + x] = list(px)
@@ -2013,15 +1929,19 @@ def build_token_frame(img, ox, angle):
                     n += 1
             if n:
                 img[y][ox + x] = [acc[0] // n, acc[1] // n, acc[2] // n, 255 * n // (S * S)]
-    # The dark rim the sheet has round everything.
-    for y in range(TOKEN_SIZE):
-        for x in range(TOKEN_SIZE):
+    _rim_frame(img, ox, TOKEN_SIZE, TOKEN_RIM)
+
+
+def _rim_frame(img, ox, size, rim):
+    """The dark rim the sheets have round everything: every edge pixel, halfway to the rim colour."""
+    for y in range(size):
+        for x in range(size):
             p = img[y][ox + x]
             if p[3] < 40:
                 continue
             for xx, yy in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
-                if xx < 0 or yy < 0 or xx >= TOKEN_SIZE or yy >= TOKEN_SIZE or img[yy][ox + xx][3] < 40:
-                    img[y][ox + x] = list(lerp_color(tuple(p), TOKEN_RIM + (p[3],), 0.5))
+                if xx < 0 or yy < 0 or xx >= size or yy >= size or img[yy][ox + xx][3] < 40:
+                    img[y][ox + x] = list(lerp_color(tuple(p), rim + (p[3],), 0.5))
                     break
 
 
@@ -2030,6 +1950,263 @@ def build_token_sheet():
     for f in range(TOKEN_FRAMES):
         build_token_frame(img, f * TOKEN_SIZE, math.pi * f / TOKEN_FRAMES)
     write_png(os.path.join(OUT, "token-sheet.png"), img)
+
+
+# --------------------------------------------------------------------------- #
+# item-sheet.png -- a picture of every item the box deals, 24x24 each, in ItemId order
+#
+# Eighteen frames across, one per ItemId in the enum's order, so the frame index is the
+# enum value and ItemSprite has nothing to look up. Each one is a handful of shapes
+# (discs, rings, boxes, capsules, polygons) rasterised at 3x, lit from the upper left
+# where the lamp is with a dark line at every edge, then averaged down like the token so
+# they sit on the same table as the tag. They show on the pocket plates at 2x and beside
+# the dealt item's line on the plate at 3x.
+# --------------------------------------------------------------------------- #
+
+ITEM_SIZE = 24
+ITEM_SS = 3
+
+ITEM_STEEL   = (146, 142, 150)
+ITEM_STEEL_D = (58, 54, 62)
+ITEM_BRASS   = (196, 156, 84)
+ITEM_BRASS_D = (110, 82, 38)
+ITEM_BONE    = (226, 214, 200)
+ITEM_BONE_D  = (150, 138, 126)
+ITEM_RED     = (172, 40, 34)
+ITEM_RED_D   = (96, 16, 18)
+ITEM_ASH     = (96, 92, 98)
+ITEM_ASH_D   = (40, 38, 44)
+ITEM_EMBER   = (250, 150, 60)
+ITEM_FLAME   = (255, 226, 140)
+ITEM_GLASS   = (150, 190, 200)
+ITEM_GLINT   = (236, 246, 250)
+ITEM_GREEN   = (48, 82, 52)
+ITEM_GREEN_L = (92, 132, 92)
+ITEM_INK     = (26, 22, 30)
+ITEM_AMBER   = (196, 120, 40)
+ITEM_CARD    = (54, 60, 84)
+ITEM_RIM     = (12, 9, 14)
+
+#: How much brighter the lit corner of a shape is than the dark one, and how wide the edge line is.
+ITEM_LIGHT = 0.30
+ITEM_EDGE = 0.55
+
+
+def _sd_disc(x, y, cx, cy, radius):
+    return radius - math.hypot(x - cx, y - cy)
+
+
+def _sd_ring(x, y, cx, cy, radius, width):
+    d = math.hypot(x - cx, y - cy)
+    return min(radius - d, d - (radius - width))
+
+
+def _sd_box(x, y, x0, y0, x1, y1, corner=0.0, rot=0.0):
+    """A box with rounded corners, turned rot degrees about its middle."""
+    cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+    if rot:
+        a = math.radians(rot)
+        ca, sa = math.cos(a), math.sin(a)
+        dx, dy = x - cx, y - cy
+        x, y = cx + dx * ca + dy * sa, cy - dx * sa + dy * ca
+    qx = abs(x - cx) - ((x1 - x0) / 2.0 - corner)
+    qy = abs(y - cy) - ((y1 - y0) / 2.0 - corner)
+    outside = math.hypot(max(qx, 0.0), max(qy, 0.0))
+    inside = min(max(qx, qy), 0.0)
+    return corner - (outside + inside)
+
+
+def _sd_line(x, y, x0, y0, x1, y1, width):
+    """A capsule: a line of some thickness with round ends."""
+    dx, dy = x1 - x0, y1 - y0
+    length2 = dx * dx + dy * dy
+    t = 0.0 if length2 == 0.0 else max(0.0, min(1.0, ((x - x0) * dx + (y - y0) * dy) / length2))
+    return width / 2.0 - math.hypot(x - x0 - t * dx, y - y0 - t * dy)
+
+
+def _sd_poly(x, y, points):
+    """Even-odd inside test, and the distance to the nearest edge for the sign."""
+    inside = False
+    nearest = float("inf")
+    n = len(points)
+    for i in range(n):
+        ax, ay = points[i]
+        bx, by = points[(i + 1) % n]
+        nearest = min(nearest, -_sd_line(x, y, ax, ay, bx, by, 0.0))
+        if (ay > y) != (by > y):
+            if x < ax + (y - ay) * (bx - ax) / (by - ay):
+                inside = not inside
+    return nearest if inside else -nearest
+
+
+def _item_sd(shape, x, y):
+    kind = shape[0]
+    if kind == "disc":
+        return _sd_disc(x, y, *shape[2:])
+    if kind == "ring":
+        return _sd_ring(x, y, *shape[2:])
+    if kind == "box":
+        return _sd_box(x, y, *shape[2:])
+    if kind == "line":
+        return _sd_line(x, y, *shape[2:])
+    return _sd_poly(x, y, shape[2])
+
+
+def _turn(points, deg, cx=12.0, cy=12.0):
+    """Turns a list of points about a centre, for pips and marks on a turned shape."""
+    a = math.radians(deg)
+    ca, sa = math.cos(a), math.sin(a)
+    return [(cx + (x - cx) * ca - (y - cy) * sa, cy + (x - cx) * sa + (y - cy) * ca) for x, y in points]
+
+
+def build_item_frame(img, ox, shapes):
+    """Paints the shapes in order, later ones over earlier, then lights and rims them."""
+    S = ITEM_SS
+    cells = []
+    for Y in range(ITEM_SIZE * S):
+        row = []
+        py = (Y + 0.5) / S
+        for X in range(ITEM_SIZE * S):
+            px = (X + 0.5) / S
+            hit = None
+            for shape in shapes:
+                d = _item_sd(shape, px, py)
+                if d > 0.0:
+                    hit = (shape[1], d)
+            if hit is None:
+                row.append(None)
+                continue
+            colour, d = hit
+            # The lamp is up and to the left of everything on the table.
+            lit = 0.5 + 0.5 * (-(px - 12.0) - (py - 12.0)) / 17.0
+            t = 1.0 - ITEM_LIGHT / 2.0 + ITEM_LIGHT * lit
+            c = tuple(min(255, int(ch * t)) for ch in colour) + (255,)
+            if d < ITEM_EDGE:
+                c = lerp_color(c, ITEM_RIM + (255,), 0.55)
+            row.append(c)
+        cells.append(row)
+    _downsample_into(img, ox, cells, ITEM_SIZE, S)
+    _rim_frame(img, ox, ITEM_SIZE, ITEM_RIM)
+
+
+def item_shapes():
+    """Every item, in ItemId order. Coordinates are frame pixels, y down."""
+    die = _turn([(8.5, 8.0), (12.0, 12.0), (15.5, 16.0)], 15)
+    flame = [(12.0, 2.0), (16.0, 7.0), (15.0, 12.0), (12.0, 10.0), (9.0, 12.0), (8.0, 7.0)]
+    return [
+        # Cinder: a lump of pressed ash with the last of the fire in it.
+        [("poly", ITEM_ASH, [(5, 15), (8, 8), (13, 6), (18, 9), (20, 14), (17, 19), (9, 19)]),
+         ("line", ITEM_ASH_D, 9, 13, 14, 11, 1.0),
+         ("line", ITEM_ASH_D, 13, 15, 17, 14, 1.0),
+         ("disc", ITEM_EMBER, 15.0, 15.5, 1.0),
+         ("disc", ITEM_EMBER, 8.5, 12.0, 0.8)],
+        # Spent Shell: a brass casing on its side, the open mouth toward the box.
+        [("line", ITEM_BRASS, 7, 16, 17, 8, 6.0),
+         ("disc", ITEM_BRASS_D, 7.0, 16.0, 3.3),
+         ("disc", ITEM_BRASS, 7.0, 16.0, 2.2),
+         ("disc", ITEM_ASH_D, 17.0, 8.0, 2.2)],
+        # Revolver: side on, barrel to the left.
+        [("box", ITEM_STEEL, 3, 8, 14, 11, 0.6),
+         ("disc", ITEM_STEEL_D, 13.0, 11.0, 3.2),
+         ("disc", ITEM_ASH_D, 13.0, 11.0, 1.3),
+         ("box", ITEM_ASH_D, 14, 12, 19, 20, 1.0, 20),
+         ("ring", ITEM_STEEL_D, 11.5, 14.5, 2.4, 0.9),
+         ("box", ITEM_STEEL_D, 16.5, 7, 19, 10, 0.5)],
+        # Pact: a folded paper with two lines on it and a seal in blood-red wax.
+        [("box", ITEM_BONE, 6, 4, 18, 20, 1.0),
+         ("poly", ITEM_BONE_D, [(6, 4), (12, 4), (6, 10)]),
+         ("line", ITEM_INK, 9, 12, 15, 12, 1.0),
+         ("line", ITEM_INK, 9, 15, 14, 15, 1.0),
+         ("disc", ITEM_RED, 15.0, 17.0, 2.6),
+         ("disc", ITEM_RED_D, 15.0, 17.0, 1.1)],
+        # Wager: a die, since the box does the choosing.
+        [("box", ITEM_BONE, 5, 5, 19, 19, 2.5, 15)]
+        + [("disc", ITEM_INK, x, y, 1.2) for x, y in die],
+        # High Card: one card, face up, a diamond on it.
+        [("box", ITEM_BONE, 7, 3, 17, 21, 1.2),
+         ("poly", ITEM_RED, [(12, 8.5), (14.6, 12), (12, 15.5), (9.4, 12)]),
+         ("disc", ITEM_RED, 9.2, 5.8, 0.8),
+         ("disc", ITEM_RED, 14.8, 18.2, 0.8)],
+        # Tourniquet: a roll of bandage with the end trailing, and it has been used before.
+        [("line", ITEM_BONE, 4, 17, 13, 15, 4.0),
+         ("disc", ITEM_RED, 7.0, 16.5, 1.3),
+         ("disc", ITEM_BONE, 14.0, 11.0, 5.5),
+         ("ring", ITEM_BONE_D, 14.0, 11.0, 3.6, 1.0),
+         ("disc", ITEM_BONE_D, 14.0, 11.0, 1.0)],
+        # Ash Veil: a grey cloth hung from a rod.
+        [("line", ITEM_STEEL_D, 4, 5, 20, 5, 1.6),
+         ("poly", ITEM_ASH, [(5, 6), (19, 6), (17.5, 20), (6.5, 20)]),
+         ("line", ITEM_ASH_D, 9, 7, 8.5, 19, 1.0),
+         ("line", ITEM_ASH_D, 15, 7, 15.5, 19, 1.0),
+         ("line", ITEM_STEEL, 12, 7, 12, 19, 0.8)],
+        # Mirror: a hand mirror, brass round the glass, the glint where the lamp is.
+        [("line", ITEM_BRASS_D, 13, 13, 19.5, 20, 3.0),
+         ("disc", ITEM_BRASS, 10.0, 9.5, 6.6),
+         ("disc", (190, 196, 210), 10.0, 9.5, 5.0),
+         ("line", ITEM_GLINT, 7.2, 8.0, 9.0, 6.0, 1.3)],
+        # Lens: a magnifier, dark handle, the glass a little blue.
+        [("line", ITEM_ASH_D, 14, 14, 20, 20, 3.0),
+         ("disc", ITEM_BRASS, 9.5, 9.5, 6.6),
+         ("disc", ITEM_GLASS, 9.5, 9.5, 4.9),
+         ("line", ITEM_GLINT, 6.8, 8.2, 8.4, 6.6, 1.3)],
+        # Tally: five marks on a bone plate, four and the stroke through them.
+        [("box", ITEM_BONE, 4, 5, 20, 19, 1.0),
+         ("line", ITEM_INK, 7, 8, 7, 16, 1.2),
+         ("line", ITEM_INK, 9.7, 8, 9.7, 16, 1.2),
+         ("line", ITEM_INK, 12.3, 8, 12.3, 16, 1.2),
+         ("line", ITEM_INK, 15, 8, 15, 16, 1.2),
+         ("line", ITEM_INK, 5.5, 16, 17.5, 8, 1.2)],
+        # Marked Deck: two cards face down, the top one carrying the mark.
+        [("box", ITEM_BONE, 8, 3, 18, 19, 1.2, 6),
+         ("box", ITEM_CARD, 9.2, 4.2, 16.8, 17.8, 0.8, 6),
+         ("box", ITEM_BONE, 5, 5, 15, 21, 1.2, -6),
+         ("box", ITEM_CARD, 6.2, 6.2, 13.8, 19.8, 0.8, -6),
+         ("disc", ITEM_RED, 10.0, 13.0, 1.4)],
+        # Confession: a candle, lit.
+        [("line", ITEM_BRASS_D, 6, 20, 18, 20, 2.0),
+         ("box", ITEM_BONE, 9, 9, 15, 20, 0.8),
+         ("line", ITEM_INK, 12, 7.5, 12, 9, 1.0),
+         ("poly", ITEM_EMBER, [(12, 2), (14.6, 6), (12, 9.6), (9.4, 6)]),
+         ("disc", ITEM_FLAME, 12.0, 6.6, 1.2)],
+        # Levy: something of theirs, burning.
+        [("box", ITEM_ASH_D, 7, 8, 17, 21, 1.0, -10),
+         ("poly", ITEM_EMBER, flame),
+         ("disc", ITEM_FLAME, 12.0, 8.2, 1.6),
+         ("disc", ITEM_EMBER, 17.5, 4.5, 0.8)],
+        # Second Hand: a clock face. The box takes again without waiting for the round.
+        [("disc", ITEM_BRASS_D, 12.0, 12.0, 9.2),
+         ("disc", ITEM_BONE, 12.0, 12.0, 7.6),
+         ("line", ITEM_INK, 12, 12, 12, 6.5, 1.3),
+         ("line", ITEM_INK, 12, 12, 16, 12, 1.3),
+         ("line", ITEM_RED, 12, 12, 8.2, 16, 0.8),
+         ("disc", ITEM_INK, 12.0, 12.0, 0.9)],
+        # Wild Card: a card split corner to corner, one pip on each half.
+        [("box", ITEM_BONE, 7, 3, 17, 21, 1.2),
+         ("poly", ITEM_INK, [(8, 3.6), (16.4, 3.6), (16.4, 20.4)]),
+         ("disc", ITEM_RED, 10.0, 15.0, 1.5),
+         ("disc", ITEM_BONE, 14.0, 9.0, 1.5)],
+        # Rotgut: a bottle of something green, corked.
+        [("box", ITEM_GREEN, 10.5, 3, 13.5, 9, 0.8),
+         ("box", ITEM_GREEN, 8, 8, 16, 21, 2.0),
+         ("line", ITEM_GREEN_L, 9.6, 10.5, 9.6, 18.5, 1.0),
+         ("box", ITEM_BONE_D, 9.5, 13, 14.5, 17, 0.3),
+         ("box", ITEM_BRASS_D, 10.8, 2, 13.2, 4.5, 0.5)],
+        # Last Call: two glasses, poured.
+        [("poly", ITEM_GLASS, [(3, 8), (11, 8), (10, 20), (4, 20)]),
+         ("poly", ITEM_AMBER, [(4.6, 13), (9.8, 13), (9.4, 19.2), (4.9, 19.2)]),
+         ("poly", ITEM_GLASS, [(13, 8), (21, 8), (20, 20), (14, 20)]),
+         ("poly", ITEM_AMBER, [(14.6, 12), (19.8, 12), (19.4, 19.2), (14.9, 19.2)]),
+         ("line", ITEM_GLINT, 3, 8, 11, 8, 0.9),
+         ("line", ITEM_GLINT, 13, 8, 21, 8, 0.9)],
+    ]
+
+
+def build_item_sheet():
+    shapes = item_shapes()
+    img = new_image(ITEM_SIZE * len(shapes), ITEM_SIZE)
+    for i, item in enumerate(shapes):
+        build_item_frame(img, i * ITEM_SIZE, item)
+    write_png(os.path.join(OUT, "item-sheet.png"), img)
 
 
 # --------------------------------------------------------------------------- #
@@ -2740,6 +2917,7 @@ if __name__ == "__main__":
     build_second_opponent_sheet()
     build_hand_sheet()
     build_token_sheet()
+    build_item_sheet()
     build_sight_sheet()
     build_ember_sheet()
     build_steady_bar()

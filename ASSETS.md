@@ -16,17 +16,19 @@ Content/ash-drift.png - created by Caleb Kiatoukaysi for The Black Box, drawn pr
 
 Content/room.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
 
-Content/opponent-sheet.png - built by tools/generate_assets.py from tools/source/opponent-portrait.png: the portrait off the opponent's character sheet, keyed and sampled to art pixels, with each pose and injury made as pixel edits on it; the character sheet was supplied by Caleb Kiatoukaysi for The Black Box
+Content/opponent-sheet.png - built by tools/generate_assets.py from tools/source/opponent-portrait.png: the portrait off the opponent's character sheet, keyed and sampled to art pixels, with each of the five poses made as pixel edits on it; the character sheet was supplied by Caleb Kiatoukaysi for The Black Box
 
 tools/source/opponent-portrait.png - the portrait from the opponent's character sheet, supplied by Caleb Kiatoukaysi for The Black Box; one of the two pictures the generator reads rather than draws
 
-Content/opponent-second-sheet.png - built by tools/generate_assets.py from tools/source/opponent-second-portrait.png: the default opponent's picture keyed off the wall behind her, cleaned up, paled and sampled to art pixels, six columns of it with the head bent on the talking one; the picture was supplied by Caleb Kiatoukaysi for The Black Box
+Content/opponent-second-sheet.png - built by tools/generate_assets.py from tools/source/opponent-second-portrait.png: the default opponent's picture keyed off the wall behind her, cleaned up, paled and sampled to art pixels, five columns of the one still; the picture was supplied by Caleb Kiatoukaysi for The Black Box
 
 tools/source/opponent-second-portrait.png - a picture of the second opponent at the table, supplied by Caleb Kiatoukaysi for The Black Box; the other picture the generator reads rather than draws
 
 Content/hand-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
 
 Content/token-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
+Content/item-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
 
 Content/sight-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
 

@@ -24,9 +24,6 @@ public static class Layers
     /// <summary>The figure across the table, in front of the wall and behind the box.</summary>
     public const float Opponent = 0.92f;
 
-    /// <summary>An eye sitting in its socket, over the face it is set into.</summary>
-    public const float OpponentEye = 0.91f;
-
     /// <summary>The pool of dark the box sits in, on the table and under it.</summary>
     public const float BoxShadow = 0.86f;
 

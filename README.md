@@ -44,13 +44,14 @@ the pictures for a release get taken. It opens a scratch run that never touches 
 | `mote.png` | `AshSprite` | Ash spiralling into the mouth, accelerating as it is consumed |
 | `button.png` | `ButtonSprite` | Nine-sliced plate; idle smoulder, kindles on hover, sinks on press |
 | `panel.png` | `SaveSlotMenu`, `NameEntry` | Nine-sliced slab the forms are built on |
-| `room.png` | `BlackBoxGame` | The room, drawn at twice the resolution of the rest of the table so it reads as a photograph: poured concrete under three sizes of noise, damp streaks and bloom, a rusting steel door, pipes, a vent, a camera, tally marks, and the one lamp with its haze. `ROOM_HORIZON` is where the opponent is cut off |
-| `opponent-second-sheet.png` | `OpponentSprite` | The default opponent, chapter one: her picture cleaned up, paled and sampled to art pixels at 4x, six columns of it, the talking one with the head bent up toward the player |
-| `opponent-sheet.png` | `OpponentSprite` | The opponent from the character sheet, chapter two: 6 poses across, one row. Static |
+| `room.png` | `TableScreen` | The room, drawn at twice the resolution of the rest of the table so it reads as a photograph: poured concrete under three sizes of noise, damp streaks and bloom, a rusting steel door, pipes, a vent, a camera, tally marks, and the one lamp with its haze. `ROOM_HORIZON` is where the opponent is cut off |
+| `opponent-second-sheet.png` | `OpponentSprite` | The default opponent, chapter one: her picture cleaned up, paled and sampled to art pixels at 4x, five columns of the one still |
+| `opponent-sheet.png` | `OpponentSprite` | The opponent from the character sheet, chapter two: 5 poses across, one row. Static |
 | `hand-sheet.png` | `HandSprite`, `CatchHandSprite` | 5 frames of your own arm, elbow to fingertips, curled through offered; the open frame is also the hand that catches the payout |
 | `token-sheet.png` | `TokenSprite` | 8 frames of the steel tag the box pays with, spinning; slides down the table under its own physics |
 | `hearts.png` | `HeartsSprite` | A heart, full and hollow, for both sides' lives on the heading |
-| `box-lid.png` | `BlackBoxGame` | The box's jaws in the close-up: the plate over its mouth that draws back into the rim |
+| `item-sheet.png` | `ItemSprite` | A picture of every item, 18 of them in `ItemId` order; on the pocket plates and beside the dealt item's line |
+| `box-lid.png` | `BoxLidSprite` | The box's jaws in the close-up: the plate over its mouth that draws back into the rim |
 | `sight-sheet.png` | `AimCheck`, `ReadCheck` | 4 frames of the sight's ticks turning; wanders over her on a tremor, or steps along the tags |
 | `ember-sheet.png` | `SteadyCheck` | 4 frames of the ember breathing; blown along the groove and pushed back |
 | `steady-bar.png` | `SteadyCheck` | The groove and the band of light the ember has to be held in |
@@ -144,11 +145,11 @@ blink on a loop reads as a screensaver. What the player is meant to notice is th
 not the one that was there a moment ago.
 
 One axis picks the picture now. **Pose** is the column: the three `Warmth` bands while there
-is talking to do, plus `Talking`, `Reaching` and `Hurt`. None of them is square to the player.
+is talking to do, plus `Reaching` and `Hurt`. None of them is square to the player.
 `Even` has the head over toward the box a little and down a touch, the way someone sits when
-they have been sitting a while; `Talking` comes up and forward out of that, the head lifted,
-tipped the other way and leant in, so a line landing is a change of posture and not just a
-mouth opening. `Hostile` is the one to look at: it is not a scowl. The head goes over to one
+they have been sitting a while, and it is the talking face too: nothing changes when a line
+lands. There was a talking column once, the head lifted and leant in, and it jumped on every
+line like a tic, so the idle is the talking. `Hostile` is the one to look at: it is not a scowl. The head goes over to one
 side, the eyes open a pixel wider than they should, and the grin runs past the corners of the
 mouth with a row of teeth in it, held. `Open` is the same face smiling properly, and the sheet
 is about how little separates the two. The sheet had three rows once, for the wounds she took,
@@ -158,8 +159,7 @@ table whatever the count is, and a split lip is not that.
 
 The poses are pixel edits in `opp_edit_eyes` and `opp_edit_mouth`, and they are small on
 purpose: the eyes are seven pixels wide and the mouth is ten, and at that size one pixel is a
-whole expression. A smile lifts the outer three columns of the mouth by a row; talking drops
-the lower lip two rows and puts the dark of the mouth and a row of teeth in the gap; shut eyes
+whole expression. A smile lifts the outer three columns of the mouth by a row; shut eyes
 are the skin from the cheek painted over the opening with a lash line laid across. Anything
 bigger than that and it stops being her face.
 
@@ -169,15 +169,7 @@ less and less, and the shoulders do not move -- so the hair hanging in front of 
 joined to the hair on her head, and the shoulders stay on the table. It is sampled backwards,
 one source pixel per frame pixel, so nothing is blended and there are no holes.
 
-`Talking` is the one pose with a clock on it, and the clock is in `BlackBoxGame`, not in the
-sprite. It is struck when a line of theirs lands and dropped `SpeakSeconds` later, so the
-mouth is open on the beat the words arrive and shut again while they are still being read --
-the alternative, holding it for as long as the line is on screen, leaves them gaping through
-a silence, because the player reads at their own pace and there is nothing to lip-sync to.
-Clearing the pose is also what lets a change of temper reach the face, since a face that is
-doing something ignores what it is told to think.
-
-Two numbers hold the composition together: `OpponentScale` in `BlackBoxGame`, and
+Two numbers hold the composition together: `OpponentFoot` in `TableScreen`, and
 `ROOM_HORIZON` in `tools/generate_assets.py`, which is the table line and the bottom of them.
 The top of the frame has to clear the run's bookkeeping along the top edge, so the sheet's
 height (`OPP_OH`) is cut to exactly that distance at that scale: 100 rows at 6x, where the
@@ -190,7 +182,7 @@ an id for the save, a sheet for the sprite with its frame size and scale, where 
 for the aim check, and a script for the talking -- in chapter order, and `SaveData.Advance`
 empties the seat so that the next time the run is entered the roster fills it. A player who is
 consumed sits back down with the same person; a player who gets up meets the next one. Every
-sheet has the same six columns in the same order, so `OpponentSprite` cuts whichever one `Who`
+sheet has the same five columns in the same order, so `OpponentSprite` cuts whichever one `Who`
 names at whatever size `Who` says. Both of them talk through the stand-in script until they
 have scripts of their own.
 
@@ -205,9 +197,9 @@ before she is sampled down: the scar and the dirt are cleaned off her face (a da
 the face becomes the skin around it, with the eyes, nose and mouth left alone), the skin is
 pulled toward a pale grey, the eye sockets are put in shadow from the brow down, and she is
 sampled at four picture pixels to the art pixel and drawn at 4x. I tried her at the picture's
-own pixels first and it was too much detail for the table. Her talking still is not a mouth
-edit (I tried that too, and it looked pasted on); it is the head bent up and toward the player
-the same way the first opponent's is, so a line landing is a change of posture.
+own pixels first and it was too much detail for the table. Every column of her sheet is that
+one still. A mouth edit looked pasted on and a head bend jumped, so nothing on her moves when
+a line lands, the same as the other one.
 
 ### The arm
 
@@ -217,15 +209,15 @@ own hand with the fingers going out to the left, stacked one above the next, rel
 little curled, the thumb riding along the top edge: the way your right hand looks when you
 reach into something in front of you. It is modelled on a photograph of exactly that, and
 drawn from nothing -- the skeleton in the generator is the pose, and every pixel is lit off
-it. It slides out along its own length: `HandRest` and `HandMouth` in `BlackBoxGame` (and
-their close-up counterparts) are both on the line the arm is drawn along, so the elbow end
-never leaves the edge of the screen and the arm is always coming out of somebody. The sprite
+it. It slides out along its own length: `HandRest` and `HandMouth` in `TableScreen` are both
+on the line the arm is drawn along, so the elbow end never leaves the edge of the screen and
+the arm is always coming out of somebody. The sprite
 is placed by the tip of the middle finger, because that is the only part of it whose
 position matters -- the game says where the fingers land and the arm follows.
 
 It is a whole forearm with the cuff of a sleeve at the near end, drawn big in its own pixels
-rather than blown up further than the rest of the table, and at 4x it fills the corner the way
-an arm fills the bottom of your own eye. The first sheet was a hand on its own, forty pixels
+rather than blown up further than the rest of the table, and at 6x in the close-up it fills the
+corner the way an arm fills the bottom of your own eye. The first sheet was a hand on its own, forty pixels
 wide and drawn straight up the middle, and it floated: a hand with nothing behind it reads as
 a glove. The five frames go from half-curled to open and fanned, and one number drives both the
 pose and the position, so the fingers finish opening at the moment the hand finishes arriving.
@@ -293,7 +285,17 @@ one side of the frame, what is being said on the other.
 
 Whoever is speaking owns the plate. Through the beat after a reply it carries the player's own
 name and line; the rest of the time it is the opponent's; and once the talking is over it is
-the box's -- what it wants, what it gave, what that did.
+the box's -- what it wants, what it gave, what that did. While the player is deciding about
+something the box dealt, the item's picture sits on the plate beside its line.
+
+### The heading
+
+The line along the top is the run's bookkeeping: the chapter, the round and the clock in the
+middle, your name and hearts on the left over your pockets, THEM and their hearts on the right
+over theirs, and the way out in the corner. Everything on it is measured off its neighbour --
+the first draft put THEM at a fixed offset, and a long name pushed the player's hearts under
+it. Yours grow rightward from the margin and theirs are right-aligned against the hint, so the
+two cannot meet whatever the name is.
 
 ## The shape of an exchange
 
@@ -359,7 +361,10 @@ has warmed to wins about five points more often than one they have turned on.
 ## Items
 
 `ItemId` names every item the box can deal; `ItemCatalog` is the table behind it, holding what
-each is called, what it claims to do and how heavily the box favours it. Weights are relative
+each is called, what it claims to do and how heavily the box favours it. Every item has a
+picture on `item-sheet.png`, in `ItemId` order so the frame is the enum value: a few shapes
+each, lit from the lamp's side and averaged down like the tag, drawn on a pocket plate you are
+allowed to read and beside the dealt item's line on the wall. Weights are relative
 and happen to total 100, so they read as percentages while the game is being balanced. As it
 stands a dealt item is worthless 10% of the time and costs somebody a life 36% of the time,
 which is the dial for how cruel the box is. It was 14% and 26% before the pockets arrived, and
@@ -462,11 +467,13 @@ the box is still watching while you pick a slot.
 
 ## Where things are
 
+- `BlackBoxGame.cs` is the title screen, the forms and the sprite batches. `BlackBoxGame.Proof.cs` takes the proof shots.
+- `Table/` is the run: `TableScreen` split by phase (the discussion, the hand, the turn, and its part of the proof schedule), and the plate, the heading and the ending veil it draws with.
 - `Components/` is every sprite and screen element, each with `LoadContent`, `Update` and `Draw` the way the tutorials do it. `Components/Checks/` is the three skill checks.
-- `Enums/` is every enum in the game, one file each.
+- `Enums/` is every enum in the game, one file each. `Opponents/` is the roster, one type each.
 - `Dialogue/`, `Items/`, `Round/` and `Save/` are the rules: talking, what the box deals, how a round plays, and the save file.
 - `Collisions/` is the bounding shapes the checks test with.
-- `Layers.cs` is the draw order, `Palette.cs` is the colours more than one screen uses, and `Opponents.cs` is the roster.
+- `Layers.cs` is the draw order, `Palette.cs` is the colours more than one screen uses, and `Text.cs` draws a line of text with its shadow for everything that writes on the wall.
 
 ## Assets
 

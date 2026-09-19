@@ -125,9 +125,6 @@ public static class ItemCatalog
         }
     }
 
-    /// <summary>Every item there is, in declaration order.</summary>
-    public static IReadOnlyList<ItemDefinition> All => Table;
-
     /// <summary>Looks up one item.</summary>
     /// <param name="id">The item.</param>
     /// <returns>Its row in the table.</returns>

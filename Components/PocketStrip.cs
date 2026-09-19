@@ -12,11 +12,12 @@ namespace TheBlackBox;
 /// <remarks>
 /// On the player's turn the row is live and clicking a slot plays it; otherwise the plates are dead
 /// and just show what's carried. The opponent's row is never live and only says how many are full,
-/// unless a Tally has revealed them. Built on <see cref="ButtonSprite"/> like every other plate.
+/// unless a Tally has revealed them. A pocket the player can read carries the item's picture too.
+/// Built on <see cref="ButtonSprite"/> like every other plate.
 /// </remarks>
 public class PocketStrip
 {
-    /// <summary>Size of one pocket plate. Wide enough for the longest item name, and three have to fit beside the box.</summary>
+    /// <summary>Size of one pocket plate. Wide enough for a picture and the longest item name, and three have to fit beside the box.</summary>
     private static readonly Point SlotSize = new(190, 60);
 
     /// <summary>Gap between plates.</summary>
@@ -39,6 +40,7 @@ public class PocketStrip
     /// <summary>What each plate was last told to show, so it is only reset when that changes.</summary>
     private readonly string[] _shown = new string[RoundRules.PocketSlots];
 
+    private readonly ItemSprite _items = new();
     private readonly string _title;
     private readonly Color _accent;
     private readonly Vector2 _origin;
@@ -74,11 +76,12 @@ public class PocketStrip
         }
     }
 
-    /// <summary>Loads the plates and the title font.</summary>
+    /// <summary>Loads the plates, the item pictures and the title font.</summary>
     /// <param name="content">The ContentManager to load with.</param>
     public void LoadContent(ContentManager content)
     {
         _detailFont = content.Load<SpriteFont>("spectral-detail");
+        _items.LoadContent(content);
         foreach (ButtonSprite slot in _slots) slot.LoadContent(content);
     }
 
@@ -97,7 +100,8 @@ public class PocketStrip
         {
             ItemId item = default;
             bool full = i < pockets.Count && ItemCatalog.TryParse(pockets[i], out item);
-            string label = !full ? EmptyLabel : revealed ? ItemCatalog.NameOf(item).ToUpperInvariant() : HiddenLabel;
+            bool shown = full && revealed;
+            string label = !full ? EmptyLabel : shown ? ItemCatalog.NameOf(item).ToUpperInvariant() : HiddenLabel;
             bool enabled = full && interactive;
 
             string key = label + (enabled ? "+" : "-");
@@ -106,6 +110,8 @@ public class PocketStrip
             _shown[i] = key;
             _slots[i].Label = label;
             _slots[i].Enabled = enabled;
+            _slots[i].Icon = shown ? _items.Sheet : null;
+            _slots[i].IconSource = ItemSprite.SourceOf(item);
             _slots[i].Reset();
         }
     }

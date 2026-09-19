@@ -9,7 +9,8 @@ namespace TheBlackBox;
 /// </summary>
 /// <remarks>
 /// Lives used to be wounds on her face. Now they're hearts on both sides, and spent ones are
-/// drawn hollow so you can see how many you started with. Two frames in hearts.png, full and hollow.
+/// drawn hollow so you can see how many you started with. Two frames in hearts.png, full and
+/// hollow. Drawn at 2x so a heart is about the height of the heading it sits in.
 /// </remarks>
 public class HeartsSprite
 {
@@ -17,7 +18,7 @@ public class HeartsSprite
     private const int FrameSize = 12;
 
     /// <summary>How far the art is blown up.</summary>
-    private const float Scale = 3f;
+    private const float Scale = 2f;
 
     /// <summary>The gap between hearts, in screen pixels.</summary>
     private const float Gap = 6f;

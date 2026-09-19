@@ -76,6 +76,9 @@ public class ButtonSprite
     /// <summary>Gap between the label and the detail line under it, in screen pixels.</summary>
     private const float SublabelGap = 4f;
 
+    /// <summary>Room between the plate's left edge and an icon, in screen pixels.</summary>
+    private const int IconPad = 8;
+
     /// <summary>The light the box gives off. For anything that commits the player to something.</summary>
     public static readonly Color EmberRed = new(226, 62, 44);
 
@@ -114,6 +117,13 @@ public class ButtonSprite
     /// <summary>Whether the label uses the small font. For pockets, which have to fit an item name.</summary>
     public bool Small;
 
+    /// <summary>A sheet to cut a picture from for the left of the plate, or null. The label centres in what is left.</summary>
+    public Texture2D Icon;
+
+    /// <summary>Which frame of <see cref="Icon"/> to draw, and how far to blow it up.</summary>
+    public Rectangle IconSource;
+    public float IconScale = 2f;
+
     /// <summary>Centre of the button in screen space.</summary>
     public Vector2 Center;
 
@@ -123,23 +133,14 @@ public class ButtonSprite
     /// <summary>Colour of the light coming out of the groove.</summary>
     public Color Accent = EmberRed;
 
-    /// <summary>Tint multiplied into the plate. White leaves it as drawn.</summary>
-    public Color PlateTint = Color.White;
-
     /// <summary>Whether the button responds to the cursor at all.</summary>
     public bool Enabled = true;
 
     /// <summary>Raised the moment a press that started on this button is released on it.</summary>
     public event Action Clicked;
 
-    /// <summary>Whether the cursor is over the button. Always false while it is disabled.</summary>
-    public bool Hovered => _hovered;
-
     /// <summary>Whether the button is being held down right now.</summary>
     public bool Held => _armed && _hovered;
-
-    /// <summary>True for the one frame a click completes on this button. Polling alternative to <see cref="Clicked"/>.</summary>
-    public bool WasClicked { get; private set; }
 
     /// <summary>The area the button covers, in screen pixels.</summary>
     public Rectangle Bounds => new(
@@ -195,7 +196,6 @@ public class ButtonSprite
         _hovered = false;
         _armed = false;
         _hasMouseSample = false;
-        WasClicked = false;
     }
 
     /// <summary>Advances the animation and works out whether the button was clicked this frame.</summary>
@@ -203,7 +203,6 @@ public class ButtonSprite
     public void Update(GameTime gameTime)
     {
         float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
-        WasClicked = false;
 
         MouseState mouse = Mouse.GetState();
 
@@ -235,11 +234,7 @@ public class ButtonSprite
 
             if (releasedNow)
             {
-                if (_armed && _hovered)
-                {
-                    WasClicked = true;
-                    Clicked?.Invoke();
-                }
+                if (_armed && _hovered) Clicked?.Invoke();
                 _armed = false;
             }
 
@@ -268,19 +263,25 @@ public class ButtonSprite
             plate.Offset(travel, travel);
         }
 
-        DrawPlate(spriteBatch, plate, frame, PlateTint, Layers.ButtonPlate);
+        DrawPlate(spriteBatch, plate, frame, Color.White, Layers.ButtonPlate);
         DrawPlate(spriteBatch, plate, new Point(frame.X, frame.Y + AccentBandOffset), Accent, Layers.ButtonAccent);
 
-        DrawLabel(spriteBatch, plate);
+        // The icon sits on the left and the label takes the rest of the plate.
+        int inset = 0;
+        if (Icon is not null)
+        {
+            var at = new Vector2(plate.X + IconPad, MathF.Round(plate.Y + (plate.Height - IconSource.Height * IconScale) / 2f));
+            spriteBatch.Draw(Icon, at, IconSource, Color.White, 0f, Vector2.Zero, IconScale, SpriteEffects.None, Layers.ButtonLabel);
+            inset = IconPad + (int)MathF.Round(IconSource.Width * IconScale);
+        }
+
+        DrawLabel(spriteBatch, new Rectangle(plate.X + inset, plate.Y, plate.Width - inset, plate.Height));
     }
 
     /// <summary>Whether the mouse is over the button.</summary>
     /// <param name="mousePosition">The current mouse position.</param>
     /// <returns>True if it is over the button.</returns>
-    public bool IsHovered(Point mousePosition)
-    {
-        return Bounds.Contains(mousePosition);
-    }
+    private bool IsHovered(Point mousePosition) => Bounds.Contains(mousePosition);
 
     /// <summary>Picks the frame to draw, as its top-left corner in the sheet's plate band.</summary>
     /// <remarks>The hover row is a ramp, not a loop, so running _kindle back down plays it in reverse. No un-hover animation needed.</remarks>
@@ -319,7 +320,7 @@ public class ButtonSprite
 
     /// <summary>Draws the label, and the detail line under it if there is one, centred on the plate.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
-    /// <param name="plate">The plate the label sits on, already offset by any press.</param>
+    /// <param name="plate">The part of the plate the label may use, already offset by any press and less any icon.</param>
     private void DrawLabel(SpriteBatch spriteBatch, Rectangle plate)
     {
         if (string.IsNullOrEmpty(Label)) return;

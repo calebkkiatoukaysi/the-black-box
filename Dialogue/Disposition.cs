@@ -31,12 +31,8 @@ public readonly record struct Disposition(int Value, int Guard)
     /// <remarks>Holding one tone for a whole discussion moves warmth a bit over 30, so this makes that worth exactly one band. Lengthen the scripts and this has to go up with them.</remarks>
     public const int Register = 32;
 
-    /// <summary>The guard above which they refuse a question, and below which they volunteer things.</summary>
-    public const int ShutGuard = 75;
+    /// <summary>The guard below which they volunteer things.</summary>
     public const int CandidGuard = 25;
-
-    /// <summary>Whether they are guarded enough to refuse a question outright.</summary>
-    public bool IsShut => Guard >= ShutGuard;
 
     /// <summary>Whether they have relaxed enough to volunteer something unasked.</summary>
     public bool IsCandid => Guard <= CandidGuard;

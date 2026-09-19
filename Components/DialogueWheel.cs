@@ -30,8 +30,9 @@ public class DialogueWheel
     /// <summary>How wide a plate is, so a long paraphrase does not reach the box.</summary>
     private static readonly Point PlateSize = new(420, 84);
 
-    /// <summary>Where the patience bar sits: on the dialogue plate, under the name. Moves with DialoguePlate in BlackBoxGame.</summary>
-    private static readonly Rectangle PatienceBar = new(1040, 104, 500, 8);
+    /// <summary>Where the patience bar sits: on the dialogue plate, under the name, inside its padding.</summary>
+    private static readonly Rectangle PatienceBar = new(
+        DialoguePlate.Left + DialoguePlate.Padding, DialoguePlate.PatienceY, DialoguePlate.Width - 2 * DialoguePlate.Padding, 8);
 
     /// <summary>What the plate says instead of a tone when the opponent will not hear it.</summary>
     private const string LockedNote = "THEY ARE NOT OPEN ENOUGH FOR THAT";
