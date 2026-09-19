@@ -7,29 +7,20 @@ namespace TheBlackBox;
 /// What happens when an item is used, and what to say about it.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The one place in the project that knows what an item does. <see cref="ItemCatalog"/> is
-/// deliberately inert -- it holds names, descriptions and weights and nothing else -- because
-/// an effect needs two sets of lives, two held items and whatever is guarding each side, and
-/// none of that belongs in a table. It belongs here, in a switch the compiler checks.
-/// </para>
-/// <para>
-/// Every method returns lines rather than printing them. A round is read one beat at a time
-/// with the player clicking through it, so what an item did has to be a value the caller can
-/// hold onto and show at its own pace.
-/// </para>
+/// The one place that knows what an item does. ItemCatalog only holds names and weights.
+/// Everything returns lines instead of printing them, because the round is read back one
+/// click at a time.
 /// </remarks>
 public static class ItemResolver
 {
-    /// <summary>
-    /// Uses one item, applies everything it does, and says what happened.
-    /// </summary>
-    /// <param name="run">The run to change. Lives, wards and hands are all written here.</param>
+    /// <summary>Uses one item, applies everything it does, and says what happened.</summary>
+    /// <param name="run">The run to change.</param>
     /// <param name="item">What is being used.</param>
     /// <param name="byPlayer">True if the player used it, false if the opponent did.</param>
-    /// <param name="random">The source of any coin the item makes the box flip.</param>
-    /// <returns>One line per thing that happened, in the order it happened.</returns>
-    public static List<string> Use(SaveData run, ItemId item, bool byPlayer, Random random)
+    /// <param name="random">The coin for anything the item flips.</param>
+    /// <param name="efficiency">How well the skill check went, 0 to 1. The opponent and simulator pass 1, which is the item working as normal.</param>
+    /// <returns>One line per thing that happened, in order.</returns>
+    public static List<string> Use(SaveData run, ItemId item, bool byPlayer, Random random, float efficiency = 1f)
     {
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(random);
@@ -38,10 +29,9 @@ public static class ItemResolver
         string who = byPlayer ? run.PlayerName.ToUpperInvariant() : "THEY";
 
         log.Add(who + " USED " + ItemCatalog.NameOf(item).ToUpperInvariant() + ".");
-        Resolve(run, item, byPlayer, random, log);
+        Resolve(run, item, byPlayer, random, log, Math.Clamp(efficiency, 0f, 1f));
 
-        // A wild card copies whatever was last used, so it has to record the real item and
-        // not itself -- otherwise two in a row would copy each other forever.
+        // A wild card copies the last thing used, so it must not record itself or two in a row loop forever.
         if (item != ItemId.WildCard) run.LastUsed = ItemCatalog.ToSaveId(item);
 
         return log;
@@ -51,9 +41,10 @@ public static class ItemResolver
     /// <param name="run">The run to change.</param>
     /// <param name="item">What is being used.</param>
     /// <param name="byPlayer">True if the player used it.</param>
-    /// <param name="random">The source of any coin flip.</param>
+    /// <param name="random">The coin.</param>
     /// <param name="log">Where to write what happened.</param>
-    private static void Resolve(SaveData run, ItemId item, bool byPlayer, Random random, List<string> log)
+    /// <param name="efficiency">How well the check went. See <see cref="Use"/>.</param>
+    private static void Resolve(SaveData run, ItemId item, bool byPlayer, Random random, List<string> log, float efficiency)
     {
         switch (item)
         {
@@ -62,20 +53,24 @@ public static class ItemResolver
                 log.Add("NOTHING HAPPENS. IT WAS NEVER GOING TO.");
                 break;
 
+            // Aimed. A clean shot lands, a bad one is a weighted coin, a miss is a miss.
             case ItemId.Revolver:
-                Damage(run, !byPlayer, log);
+                if (Lands(random, efficiency)) Damage(run, !byPlayer, log);
+                else log.Add("THE SHOT GOES WIDE. IT COSTS THEM NOTHING.");
                 break;
 
             case ItemId.Pact:
                 log.Add("IT TAKES FROM BOTH SIDES OF THE TABLE.");
                 Damage(run, byPlayer, log);
-                Damage(run, !byPlayer, log);
+                if (Lands(random, efficiency)) Damage(run, !byPlayer, log);
+                else log.Add("THE HALF THAT WAS THEIRS GOES WIDE. YOURS DID NOT.");
                 break;
 
+            // Fair coin at full efficiency, the player pays every time at zero.
             case ItemId.Wager:
             case ItemId.HighCard:
             {
-                bool playerPays = random.Next(2) == 0;
+                bool playerPays = random.NextDouble() < 1.0 - 0.5 * efficiency;
                 log.Add(item == ItemId.HighCard
                     ? "YOU BOTH CUT THE DECK."
                     : "THE BOX DECIDES WHICH OF YOU PAYS.");
@@ -83,8 +78,10 @@ public static class ItemResolver
                 break;
             }
 
+            // Held. A guard held steadily settles; one that was let slip may not.
             case ItemId.Tourniquet:
-                Heal(run, byPlayer, log);
+                if (Lands(random, efficiency)) Heal(run, byPlayer, log);
+                else log.Add("IT DOES NOT HOLD. THE BLOOD KEEPS COMING.");
                 break;
 
             case ItemId.Rotgut:
@@ -103,14 +100,24 @@ public static class ItemResolver
 
             case ItemId.AshVeil:
             case ItemId.Mirror:
+                if (!Lands(random, efficiency))
+                {
+                    log.Add("YOUR HANDS SHAKE. IT DOES NOT SETTLE, AND IT IS SPENT.");
+                    break;
+                }
                 SetWard(run, byPlayer, item);
                 log.Add(item == ItemId.AshVeil
                     ? "THE NEXT THING USED AGAINST THEM WILL NOT LAND.".Replace("THEM", byPlayer ? "YOU" : "THEM")
                     : "THE NEXT THING USED AGAINST THEM WILL HAPPEN TO ITS SENDER.".Replace("THEM", byPlayer ? "YOU" : "THEM"));
                 break;
 
+            // Read. A reading is right or it is nothing.
             case ItemId.Lens:
-                if (byPlayer)
+                if (byPlayer && efficiency < 0.5f)
+                {
+                    log.Add("YOU LOOK AT THE WRONG THING. THEY ARE HOLDING SOMETHING, AND YOU DO NOT KNOW WHAT.");
+                }
+                else if (byPlayer)
                 {
                     run.SeesOpponentItem = true;
                     log.Add(ItemCatalog.TryParse(run.OpponentDealt, out ItemId theirs)
@@ -123,8 +130,7 @@ public static class ItemResolver
                 }
                 break;
 
-            // How many pockets are full is on the table for anyone to see, so a tally
-            // has to say what is in them or it is not worth a hand.
+            // How many pockets are full is already visible, so a tally has to say what is in them.
             case ItemId.Tally:
                 if (byPlayer)
                 {
@@ -141,13 +147,14 @@ public static class ItemResolver
 
             case ItemId.MarkedDeck:
             {
-                // The next deal has to exist before it can be shown, so it is rolled now and
-                // spent by the next hand rather than re-rolled then.
+                // Rolled now and stored, so what the deck shows is what actually gets dealt.
                 ItemId next = ItemCatalog.Deal(random);
                 run.NextDeal = ItemCatalog.ToSaveId(next);
-                log.Add(byPlayer
-                    ? "THE BOX DEALS " + ItemCatalog.NameOf(next).ToUpperInvariant() + " NEXT. IT DOES NOT SAY TO WHOM."
-                    : "THEY READ THE DECK, AND SAY NOTHING.");
+                log.Add(byPlayer && efficiency < 0.5f
+                    ? "YOU LOSE YOUR PLACE IN THE DECK. THE BOX DEALS WHAT IT DEALS."
+                    : byPlayer
+                        ? "THE BOX DEALS " + ItemCatalog.NameOf(next).ToUpperInvariant() + " NEXT. IT DOES NOT SAY TO WHOM."
+                        : "THEY READ THE DECK, AND SAY NOTHING.");
                 break;
             }
 
@@ -157,9 +164,8 @@ public static class ItemResolver
                     : "THEY ASK YOU SOMETHING, AND WAIT.");
                 break;
 
-            // The hand first, and a pocket if the hand is empty. The opponent plays second,
-            // by which time the player's hand always is -- a levy that only ever burned a
-            // hand would be a blank every time they drew it.
+            // Hand first, then a pocket if the hand is empty. The opponent plays second, when
+            // the player's hand is always empty, so a hand-only levy would be a blank for them.
             case ItemId.Levy:
             {
                 string burned = byPlayer ? run.OpponentDealt : run.Dealt;
@@ -207,13 +213,12 @@ public static class ItemResolver
             }
 
             case ItemId.WildCard:
-                // Never copies another wild card. Use refuses to record one, so in play this
-                // cannot arise -- but a hand-edited save can put one here, and a wild card
-                // copying a wild card is an infinite recursion rather than a bad round.
+                // Never copies another wild card. Can't happen in play, but a hand-edited save
+                // could do it and that would recurse forever.
                 if (ItemCatalog.TryParse(run.LastUsed, out ItemId copied) && copied != ItemId.WildCard)
                 {
                     log.Add("IT BECOMES " + ItemCatalog.NameOf(copied).ToUpperInvariant() + ".");
-                    Resolve(run, copied, byPlayer, random, log);
+                    Resolve(run, copied, byPlayer, random, log, efficiency);
                 }
                 else
                 {
@@ -227,14 +232,19 @@ public static class ItemResolver
         }
     }
 
-    /// <summary>
-    /// Takes a life off one side, unless something is in the way.
-    /// </summary>
-    /// <remarks>
-    /// Wards are spent whether or not they were worth spending: a veil raised against a pact
-    /// is gone even though the pact was going to cost a life anyway. That is what makes
-    /// holding one a guess rather than a certainty.
-    /// </remarks>
+    /// <summary>Whether a thing done this well comes off.</summary>
+    /// <remarks>A coin weighted by efficiency, but 1 always lands and 0 never does, so a clear miss cannot get lucky.</remarks>
+    /// <param name="random">The coin.</param>
+    /// <param name="efficiency">How well it was done, 0 to 1.</param>
+    private static bool Lands(Random random, float efficiency)
+    {
+        if (efficiency >= 1f) return true;
+        if (efficiency <= 0f) return false;
+        return random.NextDouble() < efficiency;
+    }
+
+    /// <summary>Takes a life off one side, unless a guard is in the way.</summary>
+    /// <remarks>A guard is spent whether or not it was worth spending. That is what makes holding one a guess.</remarks>
     /// <param name="run">The run to change.</param>
     /// <param name="onPlayer">True to take it off the player, false off the opponent.</param>
     /// <param name="log">Where to write what happened.</param>
@@ -327,9 +337,7 @@ public static class ItemResolver
         else run.OpponentNextDealBlind = true;
     }
 
-    /// <summary>
-    /// Puts an item into a hand, and collects any blindness owed on it.
-    /// </summary>
+    /// <summary>Puts an item into a hand, and collects any blindness owed on it.</summary>
     /// <param name="run">The run to change.</param>
     /// <param name="item">What was dealt.</param>
     /// <param name="toPlayer">True if it was dealt to the player.</param>
@@ -351,14 +359,7 @@ public static class ItemResolver
         }
     }
 
-    /// <summary>
-    /// Puts a second deal wherever there is room for it.
-    /// </summary>
-    /// <remarks>
-    /// The hand, if it is empty. A pocket, if the hand is not. The fire, if neither has
-    /// room -- a second hand played with full pockets and a full hand is a hand wasted, which
-    /// is a real thing to be able to get wrong.
-    /// </remarks>
+    /// <summary>Puts a second deal wherever there is room: the hand, then a pocket, else it burns.</summary>
     /// <param name="run">The run to change.</param>
     /// <param name="item">What the box just dealt.</param>
     /// <param name="toPlayer">True if it was dealt to the player.</param>
@@ -385,16 +386,14 @@ public static class ItemResolver
         log.Add(toPlayer ? "YOUR HANDS AND POCKETS ARE FULL. IT BURNS." : "THEY HAVE NOWHERE TO PUT IT. IT BURNS.");
     }
 
-    /// <summary>
-    /// Takes whatever the box has already decided to deal, or rolls a fresh one.
-    /// </summary>
+    /// <summary>Takes whatever the box has already decided to deal, or rolls a fresh one.</summary>
     /// <param name="run">The run holding a promised deal, if there is one.</param>
-    /// <param name="random">The source of the draw when there is nothing promised.</param>
+    /// <param name="random">The draw when nothing was promised.</param>
     /// <param name="favour">How kind the box is to this side. See <see cref="ItemCatalog.Deal"/>.</param>
     /// <returns>The item the box parts with.</returns>
     public static ItemId TakeNextDeal(SaveData run, Random random, float favour = 0f)
     {
-        // A promise is a promise, whatever the favour would have made of it.
+        // A promised deal is dealt as promised, favour or not.
         if (ItemCatalog.TryParse(run.NextDeal, out ItemId promised))
         {
             run.NextDeal = string.Empty;

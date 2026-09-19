@@ -7,30 +7,20 @@ namespace TheBlackBox;
 /// Plays the table headless, thousands of times, and says who wins.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Run with <c>dotnet run -- --simulate 5000</c>. No window, no content, no dialogue: it
-/// deals, plays both turns through <see cref="RoundEngine"/> and counts. It exists because
-/// every number in <see cref="RoundRules"/> is a guess until something like this has been
-/// pointed at it, and because the claim that the trial run leans the player's way is
-/// otherwise just a claim.
-/// </para>
-/// <para>
-/// The player it stands in for is a plain one, not a clever one. It fires a revolver when
-/// it has one, patches itself when it is hurt, keeps a guard for when it is frightened and
-/// throws blanks away. That is roughly what somebody playing their third round does, and
-/// tuning for a better player than that would make the trial run hard for everyone else.
-/// </para>
-/// <para>
-/// The discussion period is not simulated. What it produces is a <see cref="Disposition"/>,
-/// so the table is played once at each temper the opponent can be in and the three results
-/// are printed side by side -- which is also the quickest way to see that talking matters.
-/// </para>
+/// Run with `dotnet run -- --simulate 5000`. No window, no dialogue, just RoundEngine and a
+/// counter. The stand-in player is a plain one (shoots when it can, heals when hurt, keeps a
+/// guard for when it is scared) because that is about what a third-round player does. The
+/// discussion is not simulated; the table is played at each of the three tempers instead.
 /// </remarks>
 public static class RoundSimulator
 {
-    /// <summary>
-    /// Plays <paramref name="runs"/> runs at each temper and prints the results.
-    /// </summary>
+    /// <summary>How far from even the hostile and open tempers are sampled at.</summary>
+    private const int TemperSpread = 60;
+
+    /// <summary>A fixed seed, so two runs of the simulator print the same table.</summary>
+    private const int Seed = 12345;
+
+    /// <summary>Plays this many runs at each temper and prints the results.</summary>
     /// <param name="runs">How many runs per temper.</param>
     public static void Run(int runs)
     {
@@ -42,9 +32,9 @@ public static class RoundSimulator
         Console.WriteLine();
         Console.WriteLine("TEMPER     WON     LOST   UNFINISHED   ROUNDS");
 
-        foreach ((string name, int warmth) in new[] { ("HOSTILE", -60), ("EVEN", 0), ("OPEN", 60) })
+        foreach ((string name, int warmth) in new[] { ("HOSTILE", -TemperSpread), ("EVEN", 0), ("OPEN", TemperSpread) })
         {
-            var random = new Random(warmth + 12345);
+            var random = new Random(warmth + Seed);
             int won = 0, lost = 0, unfinished = 0, rounds = 0;
 
             for (int i = 0; i < runs; i++)
@@ -89,7 +79,7 @@ public static class RoundSimulator
     /// <param name="random">The coin.</param>
     private static void PlayerTurn(SaveData run, Random random)
     {
-        // Pockets, from the front, as often as something in them is worth playing now.
+        // Pockets first, front to back, whenever something in there is worth playing.
         for (int slot = 0; slot < run.Banked.Count && !RoundEngine.IsOver(run);)
         {
             if (ItemCatalog.TryParse(run.Banked[slot], out ItemId item) && WantsToPlay(run, item, fromPocket: true))
@@ -100,7 +90,7 @@ public static class RoundSimulator
 
         if (RoundEngine.IsOver(run)) return;
 
-        // The hand. A second hand can refill it, so this loops until it is empty.
+        // Then the hand. A second hand can refill it, so loop until it is empty.
         while (ItemCatalog.TryParse(run.Dealt, out ItemId held) && !RoundEngine.IsOver(run))
         {
             DealtChoice choice;
@@ -118,7 +108,7 @@ public static class RoundSimulator
     /// <summary>What a plain player does with an item, whether it came from a pocket or the box.</summary>
     /// <param name="run">The table.</param>
     /// <param name="item">The item in question.</param>
-    /// <param name="fromPocket">True if it is already pocketed, which raises the bar for spending it.</param>
+    /// <param name="fromPocket">True if it is already pocketed, which makes it worth more.</param>
     private static bool WantsToPlay(SaveData run, ItemId item, bool fromPocket)
     {
         bool hurt = run.PlayerLives < SaveData.StartingLives;

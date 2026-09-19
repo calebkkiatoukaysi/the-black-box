@@ -4,30 +4,16 @@ using System.Collections.Generic;
 namespace TheBlackBox;
 
 /// <summary>
-/// The whole set of items, and the box's hand when it reaches in to pick one.
+/// The table of every item, and the weighted draw the box deals from.
 /// </summary>
 /// <remarks>
-/// <para>
-/// One table, in one file, because every question anyone asks about an item -- what it is
-/// called, what it claims to do, how often it turns up -- is answered by the same row. Adding
-/// an item is a line in <see cref="Table"/> and a member on <see cref="ItemId"/>, and nothing
-/// else in the game has to be told.
-/// </para>
-/// <para>
-/// Nothing here knows what an item <em>does</em>. See <see cref="ItemDefinition"/> for why.
-/// </para>
+/// Adding an item is one row here and one member on ItemId. What an item actually does lives
+/// in ItemResolver, not here.
 /// </remarks>
 public static class ItemCatalog
 {
-    /// <summary>
-    /// Every item, in the order <see cref="ItemId"/> declares them, grouped as that enum
-    /// groups them.
-    /// </summary>
-    /// <remarks>
-    /// The weights happen to total 100, which makes them readable as percentages while the
-    /// game is being tuned. Nothing depends on that -- <see cref="Deal"/> divides by whatever
-    /// they add up to -- so an item can be added without the rest being corrected.
-    /// </remarks>
+    /// <summary>Every item, in the same order and groups as ItemId.</summary>
+    /// <remarks>The weights add up to 100 so I can read them as percentages, but nothing depends on that.</remarks>
     private static readonly ItemDefinition[] Table =
     {
         // Blanks.
@@ -108,22 +94,16 @@ public static class ItemCatalog
             ItemTarget.Both, 2),
     };
 
-    /// <summary>Every item, by id, for the lookups the rest of the game does.</summary>
+    /// <summary>Every item, by id.</summary>
     private static readonly Dictionary<ItemId, ItemDefinition> ById = new();
 
-    /// <summary>What <see cref="Deal"/> divides by. Summed once rather than on every draw.</summary>
+    /// <summary>The sum of the weights, summed once.</summary>
     private static readonly int TotalWeight;
 
-    /// <summary>
-    /// Indexes the table, and refuses to start if it is incomplete.
-    /// </summary>
+    /// <summary>Indexes the table, and throws if an ItemId has no row.</summary>
     /// <remarks>
-    /// This is the one place in the project that throws on purpose. <see cref="SaveSystem"/>
-    /// swallows everything because the thing going wrong there is a disk, and a player cannot
-    /// fix a disk from the title screen. The thing going wrong here is a member added to
-    /// <see cref="ItemId"/> without a row to go with it, which is a mistake made while the game
-    /// is being written and is far cheaper to hear about on the first frame than to find later
-    /// as an item the box deals that has no name.
+    /// This throws on purpose. A missing row is my mistake while writing the game, and I would
+    /// rather hear about it on the first frame than find an item with no name mid-run.
     /// </remarks>
     static ItemCatalog()
     {
@@ -148,30 +128,23 @@ public static class ItemCatalog
     /// <summary>Every item there is, in declaration order.</summary>
     public static IReadOnlyList<ItemDefinition> All => Table;
 
-    /// <summary>
-    /// Looks up one item.
-    /// </summary>
-    /// <param name="id">The item to describe.</param>
-    /// <returns>The row for <paramref name="id"/>.</returns>
+    /// <summary>Looks up one item.</summary>
+    /// <param name="id">The item.</param>
+    /// <returns>Its row in the table.</returns>
     public static ItemDefinition Get(ItemId id) => ById[id];
 
     /// <summary>What an item is called on screen.</summary>
     /// <param name="id">The item to name.</param>
     public static string NameOf(ItemId id) => ById[id].Name;
 
-    /// <summary>
-    /// Reads an item back out of a save.
-    /// </summary>
+    /// <summary>Reads an item back out of a save.</summary>
     /// <remarks>
-    /// The dictionary is what decides, not <see cref="Enum.TryParse{T}(string, bool, out T)"/>
-    /// alone: that happily parses <c>"42"</c> into an <see cref="ItemId"/> that has no name and
-    /// no row, so a hand-edited or out-of-date save could put an item into play that does not
-    /// exist. Anything this cannot place comes back false and the caller drops it, the same way
-    /// an unreadable slot is dropped rather than crashing the run.
+    /// Checked against the dictionary and not just Enum.TryParse, because TryParse will happily
+    /// turn "42" into an id that has no row. Anything unknown comes back false and gets dropped.
     /// </remarks>
-    /// <param name="text">The id as it was written to disk.</param>
+    /// <param name="text">The id as written to disk.</param>
     /// <param name="id">The item, if the text named one.</param>
-    /// <returns>True if <paramref name="text"/> named an item this build knows.</returns>
+    /// <returns>True if this build knows the item.</returns>
     public static bool TryParse(string text, out ItemId id)
     {
         id = default;
@@ -180,29 +153,19 @@ public static class ItemCatalog
             && ById.ContainsKey(id);
     }
 
-    /// <summary>How an item is written to disk. See <see cref="ItemId"/> for why it is text.</summary>
+    /// <summary>How an item is written to disk: by name, so reordering the enum cannot break a save.</summary>
     /// <param name="id">The item to write.</param>
     public static string ToSaveId(ItemId id) => id.ToString();
 
-    /// <summary>
-    /// Reaches into the box and takes one item out.
-    /// </summary>
+    /// <summary>Deals one item, weighted by the table.</summary>
     /// <remarks>
-    /// <para>
-    /// Weighted, so the box can be cruel on purpose -- blanks and revolvers are common, mirrors
-    /// and wild cards are not. The caller supplies the <see cref="Random"/> rather than this holding
-    /// a static one, so a run can be seeded and replayed while the loop is being tested.
-    /// </para>
-    /// <para>
-    /// <paramref name="favour"/> is the box being kinder to one side of the table than it is
-    /// written to be. A hand that came up with a blank or a pact is put back and dealt again
-    /// that often -- once, so the bad draw is rarer and not impossible. The opponent is dealt
-    /// with no favour at all; see <see cref="RoundRules.PlayerFavour"/> for why the player is.
-    /// </para>
+    /// The caller passes the Random so a run can be seeded and replayed. Favour is the box going
+    /// easy on the player: a blank or a pact gets redrawn that often, once, so bad draws are
+    /// rarer but still possible. See RoundRules.PlayerFavour.
     /// </remarks>
     /// <param name="random">The source of the draw.</param>
-    /// <param name="favour">How often a cruel draw is taken back, from 0 to 1.</param>
-    /// <returns>The item the box gives back for the hand it took.</returns>
+    /// <param name="favour">How often a cruel draw is redrawn, 0 to 1.</param>
+    /// <returns>The item dealt.</returns>
     public static ItemId Deal(Random random, float favour = 0f)
     {
         ArgumentNullException.ThrowIfNull(random);
@@ -214,11 +177,11 @@ public static class ItemCatalog
         return item;
     }
 
-    /// <summary>Whether a draw is one the box's favour is allowed to take back.</summary>
+    /// <summary>Whether a draw is bad enough for favour to redraw it.</summary>
     /// <param name="item">The item that came up.</param>
     private static bool IsCruel(ItemId item) => item is ItemId.Cinder or ItemId.SpentShell or ItemId.Pact;
 
-    /// <summary>One weighted draw, with nothing done to it.</summary>
+    /// <summary>One weighted draw.</summary>
     /// <param name="random">The source of the draw.</param>
     private static ItemId Draw(Random random)
     {
@@ -230,9 +193,18 @@ public static class ItemCatalog
             if (roll < 0) return item.Id;
         }
 
-        // Unreachable: the weights sum to TotalWeight, so the roll always runs out inside the
-        // loop. Returning a blank rather than throwing means that if it ever is reached, the
-        // box is stingy for one round instead of taking the game down mid-run.
+        // Should be unreachable since the roll is under TotalWeight. A blank is safer than a throw if it ever is.
         return ItemId.Cinder;
     }
+
+    /// <summary>Which skill check an item asks for. By kind: weapons aim, guards hold, sight items read.</summary>
+    /// <param name="item">The item.</param>
+    /// <returns>The check, or None.</returns>
+    public static SkillCheck CheckFor(ItemId item) => item switch
+    {
+        ItemId.Revolver or ItemId.Pact or ItemId.Wager or ItemId.HighCard => SkillCheck.Aim,
+        ItemId.Tourniquet or ItemId.AshVeil or ItemId.Mirror => SkillCheck.Steady,
+        ItemId.Lens or ItemId.MarkedDeck => SkillCheck.Read,
+        _ => SkillCheck.None,
+    };
 }

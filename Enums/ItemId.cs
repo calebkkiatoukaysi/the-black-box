@@ -1,30 +1,12 @@
 namespace TheBlackBox;
 
 /// <summary>
-/// Every item the box can deal, by name.
+/// Every item the box can deal.
 /// </summary>
 /// <remarks>
-/// <para>
-/// An enum rather than the loose strings <see cref="SaveData.Flags"/> uses, because these two
-/// lists are not the same kind of list. A flag is a fact that happened and nothing but the
-/// writing cares about it, so the set is open and grows every time a line of dialogue is
-/// added. An item is something the round loop has to reason about -- deal it, hold it, spend
-/// it, resolve it -- and every one of those places wants the compiler to say when a case has
-/// been missed. There will be a few dozen of these at most, and the game is wrong if it is
-/// ever handed one it does not recognise.
-/// </para>
-/// <para>
-/// The names are the ids. They are written into saves as text by <see cref="ItemCatalog"/>
-/// rather than as the numbers behind them, so reordering this enum cannot silently turn one
-/// player's revolver into somebody else's tourniquet, and a save stays readable by hand.
-/// Members may be reordered or inserted freely; renaming or removing one is the change that
-/// breaks old saves, and <see cref="ItemCatalog.TryParse"/> is what stops that breaking a run.
-/// </para>
-/// <para>
-/// Grouped by what an item is for rather than alphabetically, because the groups are how the
-/// set is balanced -- the question being asked while tuning is nearly always "how much of the
-/// table is a weapon" and never "what comes after Pact".
-/// </para>
+/// An enum, not strings, so the round code gets a compiler error when a case is missed. Saves
+/// store the name and not the number, so reordering here is safe but renaming breaks old saves.
+/// Grouped by what an item is for, since that is how I balance them.
 /// </remarks>
 public enum ItemId
 {
