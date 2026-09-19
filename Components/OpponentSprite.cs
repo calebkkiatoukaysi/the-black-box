@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
@@ -6,80 +7,25 @@ using Microsoft.Xna.Framework.Graphics;
 namespace TheBlackBox;
 
 /// <summary>
-/// Which picture of the opponent is on the table.
+/// The figure across the table: their face, what they think of you, and what they have lost.
 /// </summary>
 /// <remarks>
-/// The first three are the <see cref="Warmth"/> bands and are what they look like while
-/// there is talking to do. The last three are things they are doing, and override the temper
-/// for as long as they are doing them.
-/// </remarks>
-public enum OpponentPose
-{
-    /// <summary>
-    /// Done being civil. On this opponent that is not a scowl: it is the head over to one
-    /// side, the eyes too open, and the smile too wide, held.
-    /// </summary>
-    Hostile = 0,
-
-    /// <summary>Giving nothing away either direction.</summary>
-    Even = 1,
-
-    /// <summary>They have decided you are a person.</summary>
-    Open = 2,
-
-    /// <summary>Mid-word. Held for a beat when a line lands, not for as long as it is on screen.</summary>
-    Talking = 3,
-
-    /// <summary>Leant in over the table with an arm in the box.</summary>
-    Reaching = 4,
-
-    /// <summary>Something just landed on them.</summary>
-    Hurt = 5,
-}
-
-/// <summary>
-/// The figure across the table: head, shoulders, what they think of you, and what has
-/// already been taken off them.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Static. There is no timer in this class and nothing in it moves -- every cell of the
-/// sheet is one finished picture, and the game switches between them. A jaw flapping through
-/// a written line it has no audio for reads as a puppet, and a blink on a loop reads as a
-/// screensaver; what the player is meant to notice is that the face is not the one that was
-/// there a moment ago. <see cref="OpponentPose.Talking"/> is one picture for the same reason:
-/// it is struck when a line arrives and dropped a moment later by whoever set it, so the
-/// mouth is open on the beat the words land and shut again while they are still being read.
-/// </para>
-/// <para>
-/// Two axes. <see cref="Pose"/> is the column and is either a <see cref="Warmth"/> band or
-/// something they are doing; <see cref="Injury"/> is the row and is how many lives they have
-/// lost. The two are independent, so somebody who is losing can still be pleased to see you.
-/// </para>
+/// Nothing animates. Every cell of the sheet is one still and the game switches between them,
+/// because a flapping jaw with no audio reads as a puppet. <see cref="Pose"/> is the column and
+/// <see cref="Injury"/> is the row. Which sheet is <see cref="Who"/>: every opponent's sheet has
+/// the same six columns, so the sprite doesn't care who is in the seat.
 /// </remarks>
 public class OpponentSprite
 {
-    /// <summary>Width of one frame in opponent-sheet.png.</summary>
-    private const int FrameWidth = 107;
+    /// <summary>Rows in the sheet. One, since the wounds moved off her face and onto the hearts. Injury is kept in case they come back.</summary>
+    private const int InjuryRows = 1;
 
-    /// <summary>
-    /// Height of one frame. See <see cref="FrameWidth"/>.
-    /// </summary>
-    /// <remarks>
-    /// The bottom row of the frame is the far edge of the table and there is no more of them
-    /// to draw below it. Above it the frame is tall: at 6x it runs from the table lip to the
-    /// top of the wall, which is what makes them the thing the room is about rather than a
-    /// head behind a box. The box in front covers one shoulder and nothing else. The frame
-    /// is the size of the portrait on her character sheet, sampled to art pixels, plus a
-    /// little room round it; it was 160x150 at 4x when she was drawn by the generator, and
-    /// the two come to the same height on screen.
-    /// </remarks>
-    private const int FrameHeight = 100;
+    /// <summary>Every opponent's sheet, by the content name on the roster.</summary>
+    private readonly Dictionary<string, Texture2D> _sheets = new();
 
-    /// <summary>Rows in the sheet, which is how many times they can be hurt and stay up.</summary>
-    private const int InjuryRows = 3;
-
-    private Texture2D _sheet;
+    /// <summary>Who is in the seat: which sheet, how big a frame is, and how far it is blown up.</summary>
+    /// <remarks>The bottom row of every frame is the table lip. The first opponent is art pixels at 6x, the second is her picture at 1x.</remarks>
+    public Opponent Who { get; set; } = Opponents.First;
 
     /// <summary>Which picture is on the table.</summary>
     public OpponentPose Pose { get; set; } = OpponentPose.Even;
@@ -87,20 +33,16 @@ public class OpponentSprite
     /// <summary>How many lives they have lost, from 0 to <see cref="InjuryRows"/> - 1.</summary>
     public int Injury { get; private set; }
 
-    /// <summary>Loads opponent-sheet.png.</summary>
+    /// <summary>Loads every sheet on the roster.</summary>
     /// <param name="content">The content manager to load through.</param>
-    public void LoadContent(ContentManager content) => _sheet = content.Load<Texture2D>("opponent-sheet");
+    public void LoadContent(ContentManager content)
+    {
+        foreach (Opponent opponent in Opponents.Roster)
+            _sheets[opponent.Sheet] = content.Load<Texture2D>(opponent.Sheet);
+    }
 
-    /// <summary>
-    /// Puts them in the temper their disposition says they are in.
-    /// </summary>
-    /// <remarks>
-    /// Ignored while they are doing something. Somebody with an arm inside the box is not
-    /// showing you what they think of you, and overwriting <see cref="OpponentPose.Reaching"/>
-    /// with a mood would snap them upright in the middle of paying. The caller that set the
-    /// pose is the one that clears it, by putting them back on a temper frame first -- which
-    /// is also how the disposition a line changed reaches the face, a beat after it is said.
-    /// </remarks>
+    /// <summary>Puts them in the temper their disposition says they are in.</summary>
+    /// <remarks>Ignored while they are reaching, hurt or talking. Whoever set that pose clears it by putting them back on a temper first.</remarks>
     /// <param name="disposition">What they currently think of the player.</param>
     public void SetDisposition(Disposition disposition)
     {
@@ -114,35 +56,28 @@ public class OpponentSprite
         };
     }
 
-    /// <summary>
-    /// Records how much has been taken off them.
-    /// </summary>
+    /// <summary>Records how much has been taken off them.</summary>
     /// <param name="livesLeft">What they have left to lose.</param>
     public void SetLives(int livesLeft) =>
         Injury = Math.Clamp(SaveData.StartingLives - livesLeft, 0, InjuryRows - 1);
 
-    /// <summary>
-    /// Draws whichever picture of them is current.
-    /// </summary>
+    /// <summary>Draws whichever picture of them is current.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
-    /// <param name="bottomCentre">
-    /// Where the bottom middle of the frame lands, which is where the table cuts them off.
-    /// Anchored there rather than at the centre so that moving the table does not mean
-    /// recomputing where their middle has to be.
-    /// </param>
-    /// <param name="scale">How far the art is blown up. Whole numbers keep it crisp.</param>
-    public void Draw(SpriteBatch spriteBatch, Vector2 bottomCentre, float scale)
+    /// <param name="bottomCentre">Where the bottom middle of the frame lands, which is the table lip.</param>
+    public void Draw(SpriteBatch spriteBatch, Vector2 bottomCentre)
     {
-        if (_sheet is null) return;
+        if (!_sheets.TryGetValue(Who.Sheet, out Texture2D sheet)) return;
 
-        var source = new Rectangle(
-            (int)Pose * FrameWidth, Injury * FrameHeight, FrameWidth, FrameHeight);
+        int width = Who.FrameWidth, height = Who.FrameHeight;
+        float scale = Who.Scale;
+
+        var source = new Rectangle((int)Pose * width, Injury * height, width, height);
 
         var position = new Vector2(
-            MathF.Round(bottomCentre.X - FrameWidth * scale / 2f),
-            MathF.Round(bottomCentre.Y - FrameHeight * scale));
+            MathF.Round(bottomCentre.X - width * scale / 2f),
+            MathF.Round(bottomCentre.Y - height * scale));
 
-        spriteBatch.Draw(_sheet, position, source, Color.White, 0f,
+        spriteBatch.Draw(sheet, position, source, Color.White, 0f,
             Vector2.Zero, scale, SpriteEffects.None, Layers.Opponent);
     }
 }

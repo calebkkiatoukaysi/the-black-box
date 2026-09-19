@@ -1,16 +1,13 @@
 """
-Procedural art generator for "The Black Box".
+Procedural art generator for The Black Box.
 
-Every sprite shipped in Content/ is produced by this script. All but one are drawn
-from nothing; the opponent is cut from her character sheet, which is the one picture
-the script reads (tools/source/opponent-portrait.png). Nothing is traced, downloaded,
-or derived from third-party art. Run it from the repository root:
+Every PNG in Content/ comes out of this script. Run it from the repo root:
 
     python tools/generate_assets.py
 
-It writes PNGs with a small dependency-free encoder, and reads the one it needs with
-a decoder to match, so the project regenerates its art on a clean machine with
-nothing but CPython installed.
+It only needs CPython: the PNG encoder and decoder are in here. Everything is drawn
+from scratch except the two opponents, which are cut from the two pictures in
+tools/source/ (opponent-portrait.png and opponent-second-portrait.png).
 """
 
 import math
@@ -98,10 +95,7 @@ def shade(rgba, factor):
     )
 
 def r(v):
-    """
-    Rounds half up. Python's round() is half-to-even, which turns a run of .5 coordinates
-    into pairs and gaps -- the first draft's brows came out as a comb because of it.
-    """
+    """Rounds half up. Python's round() is half-to-even and it turned a row of .5 coords into a comb."""
     return int(math.floor(v + 0.5))
 
 
@@ -145,13 +139,7 @@ def build_ash_drift(size=512, seed=20250904):
 # --------------------------------------------------------------------------- #
 
 def build_black_box(seed=4041):
-    """
-    A shell of dead concrete around an opening that light does not come back out of.
-
-    The shell band is deliberately thin, and the box has no lid, seam or latch, because
-    none of those belong on something you are meant to put your hand into. The front
-    face is not a surface, it is a hole, and the art has to say so at a glance.
-    """
+    """A concrete shell around an opening. No lid or latch on purpose: it is a hole you put your hand in."""
     rng = random.Random(seed)
     S = 128
     img = new_image(S, S)
@@ -186,9 +174,7 @@ def build_black_box(seed=4041):
             put(img, X0 + i, y, shade(SHELL_LT, f * 0.85))
             put(img, X1 - i, y, SHELL_DK)
 
-    # 4. Soft vertical bands where the dark smears further out than it should. Built as
-    #    overlapping bumps rather than single columns, so they read as smudges in the
-    #    murk instead of scratches ruled down the front of it.
+    # 4. Soft vertical smears of dark, as overlapping bumps so they read as smudges, not scratches.
     smear = {}
     for _ in range(5):
         centre = rng.randint(AX0 + 4, AX1 - 4)
@@ -198,15 +184,9 @@ def build_black_box(seed=4041):
             falloff = amplitude * (1.0 - abs(dx) / float(width + 1))
             smear[centre + dx] = smear.get(centre + dx, 0.0) + falloff
 
-    # 5. The void.
-    #
-    #    The falloff follows a superellipse rather than the distance to the nearest edge.
-    #    A nearest-edge field creases along the diagonals, and those four seams make the
-    #    opening read as a bevelled picture frame -- exactly the wrong thing. A rounded
-    #    square has no seams, still follows the shape of the mouth, and just goes dark.
-    #
-    #    Light also has to fall off directionally, or the hole looks painted on. The bias
-    #    is a smooth function of the angle toward the upper left, where the key light is.
+    # 5. The void. Falloff follows a superellipse, not distance to the nearest edge: the
+    #    nearest-edge version creased along the diagonals and looked like a picture frame.
+    #    Light also falls off toward the upper left, where the key light is.
     cx, cy = (AX0 + AX1) / 2.0, (AY0 + AY1) / 2.0
     hw, hh = (AX1 - AX0) / 2.0, (AY1 - AY0) / 2.0
     SQUARENESS = 5.0     # 2 would be an ellipse; high values approach the square aperture
@@ -408,29 +388,20 @@ def build_mote(size=8):
 # button.png -- an animated, nine-sliceable plate for every clickable thing
 # --------------------------------------------------------------------------- #
 #
-# The sheet is two stacked bands of the same grid:
-#
-#     top band (opaque)     the concrete plate itself, neutral grey so the game can
-#                           tint it per button
-#     bottom band (alpha)   the light bleeding out of the recessed groove, drawn
-#                           white so it takes any accent colour
-#
-#   Row 0  idle      4 frames  the groove smouldering, never quite steady
-#   Row 1  hover     6 frames  the plate kindling under the cursor, run backwards on the way out
-#   Row 2  press     4 frames  bevel inverted so the plate sinks, light flaring out of the seam
-#   Row 3  disabled  1 frame   grey, dead, no light at all
-#
-# Every frame is authored to survive a nine-slice: the corners carry the bolts and
-# the elbow of the groove, the edges carry only structure that runs along them, and
-# the middle is flat plate that stretches to any label width.
+# Two stacked bands of the same 24px grid: the top band is the opaque concrete plate
+# (neutral grey, tinted per button in game), the bottom band is the light out of the
+# groove, drawn white so it takes any accent colour.
+#   Row 0 idle (4 frames), row 1 hover (6, played backwards on the way out),
+#   row 2 press (4, bevel inverted), row 3 disabled (1).
+# Every frame has to survive a nine-slice: bolts and groove corners in the corners, the
+# edges only carry what runs along them, and the middle is flat plate.
 
 BUTTON_FRAME = 24
 BUTTON_CORNER = 8
 BUTTON_COLS = 6
 BUTTON_ROWS = 4
 
-#: Depth of the recessed groove, in pixels in from the frame border. It has to stay
-#: inside the corner band (< BUTTON_CORNER) or the light would break at the seams.
+#: Groove inset from the border. Has to stay < BUTTON_CORNER or the light breaks at the seams.
 BUTTON_GROOVE = 3
 
 #: Per frame: (face brightness, inverted bevel, dead, groove alpha, how far light spreads)
@@ -482,20 +453,14 @@ def _button_plate(img, ox, oy, face_mul, inverted, dead, rng):
     def tone(rgb, extra=1.0):
         r, g, b = (c * face_mul * extra for c in rgb)
         if dead:
-            # A disabled plate loses its blue cast as well as its light, so it reads
-            # as switched off rather than merely dark.
+            # Disabled loses its blue cast too, so it reads as switched off, not just dark.
             grey = (r + g + b) / 3.0
             r, g, b = (c * 0.35 + grey * 0.65 for c in (r, g, b))
         return (max(0, min(255, int(r))), max(0, min(255, int(g))), max(0, min(255, int(b))), 255)
 
-    # 1. Face, grained like the box so the two read as the same material.
-    #
-    #    The grain has to be constant along whichever axis its region gets stretched,
-    #    or the nine-slice smears one row of speckle across the whole button and the
-    #    plate ends up ruled with horizontal streaks. So: corners are the only part
-    #    that never stretches and get real per-pixel grain, the top and bottom edges
-    #    vary only down the frame, the left and right edges only across it, and the
-    #    middle -- stretched both ways -- is left flat.
+    # 1. Face, grained like the box. The grain has to be constant along whichever axis a
+    #    region gets stretched, or the nine-slice smears one row of speckle across the
+    #    whole button: corners get real grain, edges vary along one axis, middle is flat.
     C = BUTTON_CORNER
     row_grain = [rng.randint(-3, 3) for _ in range(S)]
     col_grain = [rng.randint(-3, 3) for _ in range(S)]
@@ -534,9 +499,7 @@ def _button_plate(img, ox, oy, face_mul, inverted, dead, rng):
             put(img, ox + S - 1 - i, oy + y, tone(lo, f * 0.90))
             put(img, ox + i, oy + y, tone(hi, f * 0.85))
 
-    # 3. The groove: the only place light gets out of the plate. It is cut all the way
-    #    around at a fixed distance in from the border, which is what lets the
-    #    nine-slice stretch a button to any size without breaking the seam.
+    # 3. The groove, cut all the way round at a fixed inset so the nine-slice can stretch it.
     g = BUTTON_GROOVE
     for x in range(g, S - g):
         put(img, ox + x, oy + g, tone(GROOVE))
@@ -561,8 +524,7 @@ def _button_accent(img, ox, oy, alpha, spread):
     S = BUTTON_FRAME
     for y in range(S):
         for x in range(S):
-            # Distance in from the nearest border. The groove sits at a constant inset,
-            # so the light is a plain function of it and slices as cleanly as the plate.
+            # Distance in from the nearest border; the groove is a constant inset so this slices cleanly.
             inset = min(x, S - 1 - x, y, S - 1 - y)
             a = int(alpha * _button_falloff(abs(inset - BUTTON_GROOVE), spread))
             if a > 0:
@@ -589,18 +551,13 @@ def build_button(seed=8812):
 # panel.png -- the nine-sliceable slab every form is built on
 # --------------------------------------------------------------------------- #
 #
-# One frame, no animation: a form does not react to the cursor, the controls on it
-# do. It is the same concrete as the box and the buttons, but a shade darker and
-# hollowed out, so a plate laid on top of it reads as sitting proud of the surface
-# rather than dissolving into it.
-#
-# Like the button, everything that varies is either in a corner or runs along the
-# edge it lives on, so the slab stretches to any form size without smearing.
+# One frame, no animation: a form does not react to the cursor, the controls on it do.
+# Same concrete as the box and buttons, a shade darker and hollowed out. Same nine-slice
+# rule as the button: variation only in the corners or along the edge it lives on.
 
 PANEL_FRAME = 32
 
-#: Fixed corner of the nine-slice. Must stay larger than PANEL_WELL, or the lip of
-#: the recess would land in a stretched region and shear.
+#: Fixed corner of the nine-slice. Must stay larger than PANEL_WELL or the well's lip shears.
 PANEL_CORNER = 12
 
 #: How far in from the border the recessed well is cut.
@@ -627,9 +584,7 @@ def build_panel(seed=4471):
     def tone(rgb, extra=1.0):
         return tuple(max(0, min(255, int(c * extra))) for c in rgb) + (255,)
 
-    # 1. Face. Same stretch-safe grain rule as the button: real noise only in the
-    #    corners, one axis of noise along each edge, and nothing at all in the
-    #    middle, which is the one region stretched both ways.
+    # 1. Face. Same stretch-safe grain rule as the button.
     row_grain = [rng.randint(-2, 2) for _ in range(S)]
     col_grain = [rng.randint(-2, 2) for _ in range(S)]
     for y in range(S):
@@ -662,9 +617,7 @@ def build_panel(seed=4471):
             put(img, i, y, tone(SHELL_LT, f * 0.85))
             put(img, S - 1 - i, y, tone(SHELL_DK, f * 0.90))
 
-    # 3. The well: the slab hollowed out, so the lighting inverts. Its far lip
-    #    catches the light and its near lip falls into shadow, which is what sells
-    #    the surface as cut into rather than laid on.
+    # 3. The well: the slab hollowed out, so the lighting inverts (far lip lit, near lip in shadow).
     w = PANEL_WELL
     for y in range(w, S - w):
         for x in range(w, S - w):
@@ -690,29 +643,30 @@ def build_panel(seed=4471):
 
 
 # --------------------------------------------------------------------------- #
-# room.png -- the room the game is played in, drawn at a quarter size and blown up
+# room.png -- the room the game is played in, drawn at half the window and blown up 2x
 #
-# One lamp over one table and nothing else, falling off by inverse square: a room lit
-# evenly is a room nobody is being kept in, and the dark in the corners does as much
-# work as the light in the middle. The table's far lip is the brightest edge because
-# it is the nearest thing facing the lamp, and the surface runs away into the dark
-# toward the player -- which is what leaves the box a black shape to read against.
+# One lamp over one table, falling off by inverse square, so the corners go dark. It is
+# supposed to look like a photo of a room, not a drawing, so it is drawn at twice the
+# resolution of the other sprites and nothing in it is a flat colour: the wall is three
+# sizes of value noise (pour, aggregate, dust) with damp, bloom, seams and cracks, the
+# door rusts up from the bottom, and the table has grain and scuffs.
 # --------------------------------------------------------------------------- #
 
-# Drawn at a quarter of the window and blown up 4x like everything else.
-ROOM_RW, ROOM_RH = 400, 225
+ROOM_R = 2
+ROOM_RW, ROOM_RH = 400 * ROOM_R, 225 * ROOM_R
 # Where the far edge of the table meets the wall. This is also the line the opponent is
-# cut off by, so it is really a decision about him: everything above it is his, and the
-# table only has to be deep enough to stand the box on and reach across. It was higher
-# when he was drawn smaller, and the wall it freed is what he grew into.
-ROOM_HORIZON = 160
-ROOM_LIP = 8                # thickness of the table's far edge
+# cut off by, so OpponentFoot.Y in BlackBoxGame has to agree with it.
+ROOM_HORIZON = 160 * ROOM_R
+ROOM_LIP = 8 * ROOM_R               # thickness of the table's far edge
 
 ROOM_WALL_TOP  = (17, 15, 21, 255)
 ROOM_WALL_MID  = (33, 29, 36, 255)
 ROOM_WALL_LOW  = (46, 40, 46, 255)
 ROOM_SEAM      = (11, 10, 14, 255)
 ROOM_GRIME     = (24, 20, 25, 255)
+ROOM_BLOOM     = (66, 62, 60, 255)
+ROOM_RUST      = (96, 52, 30, 255)
+ROOM_RUST_D    = (52, 26, 16, 255)
 
 ROOM_TABLE_LIP  = (86, 74, 70, 255)
 ROOM_TABLE_FAR  = (62, 53, 52, 255)
@@ -720,254 +674,329 @@ ROOM_TABLE_NEAR = (21, 18, 21, 255)
 
 ROOM_LAMP = (196, 168, 130, 255)
 
+ROOM_LAMP_X, ROOM_LAMP_Y = ROOM_RW / 2.0, 20.0 * ROOM_R
 
-ROOM_LAMP_X, ROOM_LAMP_Y = ROOM_RW / 2.0, 20.0
+
+class _Noise:
+    """Value noise: a grid of random numbers, smoothstepped between. Three of these added is the concrete."""
+
+    def __init__(self, rng, w, h, cell):
+        self.cell = float(cell)
+        self.cols = int(w / cell) + 3
+        self.rows = int(h / cell) + 3
+        self.grid = [[rng.uniform(-1.0, 1.0) for _ in range(self.cols)] for _ in range(self.rows)]
+
+    def at(self, x, y):
+        fx, fy = x / self.cell, y / self.cell
+        ix, iy = int(fx), int(fy)
+        tx, ty = fx - ix, fy - iy
+        tx = tx * tx * (3.0 - 2.0 * tx)
+        ty = ty * ty * (3.0 - 2.0 * ty)
+        ix = min(self.cols - 2, ix)
+        iy = min(self.rows - 2, iy)
+        g = self.grid
+        top = g[iy][ix] + (g[iy][ix + 1] - g[iy][ix]) * tx
+        bottom = g[iy + 1][ix] + (g[iy + 1][ix + 1] - g[iy + 1][ix]) * tx
+        return top + (bottom - top) * ty
 
 
 def build_room(seed=5150):
+    R = ROOM_R
     rng = random.Random(seed)
     img = new_image(ROOM_RW, ROOM_RH)
 
-    # 1. The wall, lit by one lamp and nothing else. Inverse-square falloff rather than a
-    #    gradient: a room lit evenly is a room nobody is being kept in, and the darkness in
-    #    the corners is doing as much work here as the light in the middle.
+    def lit_at(x, y):
+        d = math.hypot((x - ROOM_LAMP_X) / 1.35, y - ROOM_LAMP_Y)
+        return 1.0 / (1.0 + (d / (46.0 * R)) ** 2)
+
+    # The three noises of the concrete, and a fourth, very large, for the damp.
+    pour = _Noise(rng, ROOM_RW, ROOM_RH, 30 * R)
+    grain = _Noise(rng, ROOM_RW, ROOM_RH, 7 * R)
+    dust = _Noise(rng, ROOM_RW, ROOM_RH, 2 * R)
+    damp = _Noise(rng, ROOM_RW, ROOM_RH, 60 * R)
+
+    # 1. The wall, lit by the one lamp.
     for y in range(ROOM_HORIZON):
         for x in range(ROOM_RW):
-            d = math.hypot((x - ROOM_LAMP_X) / 1.35, y - ROOM_LAMP_Y)
-            fall = 1.0 / (1.0 + (d / 46.0) ** 2)
-
+            fall = lit_at(x, y)
             c = lerp_color(ROOM_WALL_TOP, ROOM_WALL_LOW, min(1.0, fall * 1.5))
-
-            # The wall behind the opponent picks up a little bounce off the table.
-            if y > ROOM_HORIZON - 34:
-                c = lerp_color(c, ROOM_WALL_MID, (y - (ROOM_HORIZON - 34)) / 34.0 * 0.35)
-
+            if y > ROOM_HORIZON - 34 * R:
+                c = lerp_color(c, ROOM_WALL_MID, (y - (ROOM_HORIZON - 34 * R)) / (34.0 * R) * 0.35)
+            # Pour, aggregate, dust; only as visible as the lamp makes it.
+            k = 1.0 + (0.14 * pour.at(x, y) + 0.09 * grain.at(x, y) + 0.05 * dust.at(x, y)) * (0.4 + 0.6 * min(1.0, fall * 2.0))
+            # Damp: darker and greener.
+            wet = max(0.0, damp.at(x, y) - 0.25) * 1.4
+            c = (int(c[0] * k * (1.0 - 0.22 * wet)), int(c[1] * k * (1.0 - 0.14 * wet)), int(c[2] * k * (1.0 - 0.20 * wet)), 255)
+            # Bloom: the pale salts left where the damp dried, at its edges.
+            bloom = max(0.0, 0.18 - abs(damp.at(x, y) - 0.25)) * 3.0
+            if bloom > 0:
+                c = lerp_color(c, ROOM_BLOOM, 0.3 * bloom * min(1.0, fall * 2.5))
             put(img, x, y, c)
 
-    # 2. Concrete panel seams, at irregular spacing -- evenly spaced ones read as wallpaper,
-    #    and this is a room that was poured rather than decorated. Only visible where the
-    #    lamp actually reaches.
-    x = 14
+    # 2. Panel seams at irregular spacing, with chipped edges.
+    x = 14 * R
     while x < ROOM_RW:
-        # Never down the centre line: that is where the lamp hangs and where the opponent
-        # sits, and a seam there reads as a wire coming out of their skull.
-        if abs(x - ROOM_RW / 2) < 26:
-            x += rng.randint(38, 62)
+        if abs(x - ROOM_RW / 2) < 26 * R:
+            x += rng.randint(38 * R, 62 * R)
             continue
         for y in range(ROOM_HORIZON):
-            d = math.hypot((x - ROOM_LAMP_X) / 1.35, y - ROOM_LAMP_Y)
-            fall = 1.0 / (1.0 + (d / 46.0) ** 2)
-            put(img, x, y, (ROOM_SEAM[0], ROOM_SEAM[1], ROOM_SEAM[2], int(170 * fall)))
-        x += rng.randint(38, 62)
+            fall = lit_at(x, y)
+            chip = 1 if rng.random() < 0.06 else 0
+            put(img, x + chip, y, (ROOM_SEAM[0], ROOM_SEAM[1], ROOM_SEAM[2], int(180 * fall)))
+            put(img, x + chip + 1, y, (ROOM_SEAM[0], ROOM_SEAM[1], ROOM_SEAM[2], int(90 * fall)))
+            # The lit side of the seam, where the lamp catches the lip of the panel.
+            put(img, x - 1, y, (70, 64, 70, int(70 * fall)))
+        x += rng.randint(38 * R, 62 * R)
 
-    # 3. Grime, and only where there is light to show it.
-    for _ in range(3000):
+    # 3. Damp streaks running down from the top, wandering a little and thinning out.
+    for _ in range(18):
+        sx = rng.randrange(ROOM_RW)
+        if abs(sx - ROOM_RW / 2) < 30 * R:
+            continue
+        length = rng.randint(30 * R, 110 * R)
+        width = rng.randint(1, 3) * R
+        for y in range(0, min(ROOM_HORIZON, length)):
+            t = y / float(length)
+            wx = sx + int(2.0 * R * math.sin(y * 0.05 + sx))
+            for i in range(width):
+                put(img, wx + i, y, (10, 9, 12, int(70 * (1.0 - t) * (0.6 + 0.4 * math.sin(i * 2.0 + y * 0.3)))))
+
+    # 4. Grime, and only where there is light to show it.
+    for _ in range(3000 * R * R):
         gx, gy = rng.randrange(ROOM_RW), rng.randrange(ROOM_HORIZON)
-        d = math.hypot((gx - ROOM_LAMP_X) / 1.35, gy - ROOM_LAMP_Y)
-        fall = 1.0 / (1.0 + (d / 46.0) ** 2)
+        fall = lit_at(gx, gy)
         if rng.random() < fall * 0.55:
             put(img, gx, gy, (ROOM_GRIME[0], ROOM_GRIME[1], ROOM_GRIME[2], rng.randint(40, 120)))
 
-    # 3b. The room dressed. One lamp is still all the light there is, and everything
-    #     here is lit by it and only it -- so the door in the far corner is a shape in
-    #     the dark and the pipe over the table has a highlight down it. Nothing goes
-    #     where she sits (the middle third) or where the plate hangs (upper right):
-    #     the left wall, the strip over her head, and the right wall under the plate
-    #     are what is free, and that is where the room is.
-    def lit_at(x, y):
-        d = math.hypot((x - ROOM_LAMP_X) / 1.35, y - ROOM_LAMP_Y)
-        return 1.0 / (1.0 + (d / 46.0) ** 2)
-
+    # 3b. Fixtures. Everything is lit by the same lamp. Nothing goes where she sits (the
+    #     middle third) or where the plate hangs (upper right).
     def fixture(x, y, c, a=1.0, floor=0.34):
-        # A thing on the wall, lit by the lamp with a floor under it, so that what is
-        # in the corner is dim but there.
         k = floor + (1.0 - floor) * min(1.0, lit_at(x, y) * 2.2)
+        # The dust is on the fixtures too.
+        k *= 1.0 + 0.06 * dust.at(x, y) + 0.05 * grain.at(x, y)
         put(img, x, y, (int(c[0] * k), int(c[1] * k), int(c[2] * k), int(255 * a)))
 
-    # The wall is painted two tones, the lower band darker, with the line between them
-    # at shoulder height: the way rooms like this are painted, so the lower half can
-    # be scrubbed.
-    for y in range(102, ROOM_HORIZON):
+    def rust(x, y, amount):
+        # Rust: orange where it is fresh, dark where it has been there longest.
+        if amount <= 0:
+            return
+        c = lerp_color(ROOM_RUST, ROOM_RUST_D, max(0.0, min(1.0, grain.at(x, y) * 0.5 + 0.5)))
+        put(img, x, y, (c[0], c[1], c[2], int(255 * min(1.0, amount))))
+
+    # Two-tone paint with the line at shoulder height, worn through in places.
+    for y in range(102 * R, ROOM_HORIZON):
         for x in range(ROOM_RW):
             c = img[y][x]
-            if y <= 104:
+            if y <= 104 * R + 1:
                 fixture(x, y, (72, 66, 70), a=0.55)
-            elif y == 105:
+            elif y == 105 * R:
                 put(img, x, y, (ROOM_SEAM[0], ROOM_SEAM[1], ROOM_SEAM[2], 140))
             else:
-                img[y][x] = list(lerp_color(tuple(c), (30, 34, 34, 255), 0.22))
+                worn = max(0.0, pour.at(x, y) - 0.45) * 2.0
+                img[y][x] = list(lerp_color(tuple(c), (30, 34, 34, 255), 0.22 * (1.0 - worn)))
 
-    # A steel door on the left, riveted, with a small barred window in it. Behind the
-    # window is a corridor with its own light, cold, which is the only light in the
-    # room that is not the lamp's -- and the only way out.
-    DX0, DX1, DY0 = 10, 60, 34
+    # A steel door on the left, riveted, with a barred window and a cold corridor light behind it.
+    DX0, DX1, DY0 = 10 * R, 60 * R, 34 * R
     for y in range(DY0, ROOM_HORIZON):
         for x in range(DX0, DX1 + 1):
-            edge = x in (DX0, DX0 + 1, DX1 - 1, DX1) or y in (DY0, DY0 + 1)
+            edge = x <= DX0 + 1 or x >= DX1 - 1 or y <= DY0 + 1
             plate = (36, 34, 42) if not edge else (22, 21, 26)
-            if y >= ROOM_HORIZON - 22:
-                plate = (28, 27, 33)                        # the kick plate, scuffed
+            if y >= ROOM_HORIZON - 22 * R:
+                plate = (28, 27, 33)
             fixture(x, y, plate)
-    for y in range(DY0 + 5, ROOM_HORIZON, 9):
-        for x in (DX0 + 4, DX1 - 4):
-            fixture(x, y, (88, 82, 90))
-            fixture(x + 1, y + 1, (14, 13, 16), a=0.7)
-    for y in range(52, 74):
-        for x in range(24, 46):
-            frame = x in (24, 45) or y in (52, 73)
+            # Rust: from the bottom up, and along the edges, where the water sits.
+            up = max(0.0, (y - (ROOM_HORIZON - 40 * R)) / (40.0 * R))
+            side = max(0.0, 1.0 - min(x - DX0, DX1 - x) / (6.0 * R))
+            rust(x, y, (0.5 * up * up + 0.3 * side * side) * (0.5 + 0.5 * grain.at(x, y)) * min(1.0, lit_at(x, y) * 3.0 + 0.3))
+    for y in range(DY0 + 5 * R, ROOM_HORIZON, 9 * R):
+        for x in (DX0 + 4 * R, DX1 - 4 * R):
+            for dx in range(R):
+                for dy in range(R):
+                    fixture(x + dx, y + dy, (88, 82, 90))
+            fixture(x + R, y + R, (14, 13, 16), a=0.7)
+            fixture(x + R + 1, y + R, (14, 13, 16), a=0.5)
+            # The streak of rust under each rivet.
+            for k in range(6 * R):
+                rust(x + rng.choice((0, 1)), y + R + k, 0.5 * (1.0 - k / (6.0 * R)))
+    for y in range(52 * R, 74 * R):
+        for x in range(24 * R, 46 * R):
+            frame = x < 24 * R + R or x >= 46 * R - R or y < 52 * R + R or y >= 74 * R - R
             if frame:
                 fixture(x, y, (18, 17, 21))
-            elif x in (30, 36, 42):
+            elif (x - 24 * R) % (6 * R) < R + 1 and (x - 24 * R) >= 5 * R:
                 fixture(x, y, (64, 62, 70))
             else:
-                # The corridor light, cold and faint, a little brighter at the top.
-                t = (y - 53) / 20.0
+                t = (y - 53 * R) / (20.0 * R)
                 put(img, x, y, (44 - int(10 * t), 58 - int(12 * t), 74 - int(14 * t), 255))
-    for x in range(48, 56):
-        fixture(x, 108, (96, 90, 96))
-        fixture(x, 109, (48, 44, 50))
-    for y in range(DY0 + 8, DY0 + 20):
-        fixture(DX0 - 2, y, (54, 50, 58))
-    for y in range(ROOM_HORIZON - 34, ROOM_HORIZON - 22):
-        fixture(DX0 - 2, y, (54, 50, 58))
+    for x in range(48 * R, 56 * R):
+        for dy in range(R):
+            fixture(x, 108 * R + dy, (96, 90, 96))
+            fixture(x, 109 * R + dy, (48, 44, 50))
+    for y in list(range(DY0 + 8 * R, DY0 + 20 * R)) + list(range(ROOM_HORIZON - 34 * R, ROOM_HORIZON - 22 * R)):
+        for dx in range(R):
+            fixture(DX0 - 2 * R + dx, y, (54, 50, 58))
 
-    # Pipes along the top of the wall, either side of the lamp's flex, with a valve
-    # where the near one turns down, and the stain the joint has been dripping onto the
-    # wall for years. The highlight along the top of each is the lamp; the far side is
-    # the room.
+    # Pipes along the top of the wall either side of the flex, a valve where the near one
+    # turns down, and the drip stains under the joints.
     def pipe(x0, x1, y):
         for x in range(x0, x1 + 1):
-            fixture(x, y, (92, 84, 88))
-            fixture(x, y + 1, (66, 60, 64))
-            fixture(x, y + 2, (44, 40, 46))
-            fixture(x, y + 3, (20, 18, 22))
-    # Just under the run's bookkeeping along the top edge and just over the plate.
-    pipe(0, 150, 11)
-    pipe(250, ROOM_RW - 1, 11)
-    for jx in (40, 104, 300, 356):
-        for y in range(10, 16):
-            fixture(jx, y, (58, 52, 58))
-            fixture(jx + 1, y, (104, 96, 100))
-            fixture(jx + 2, y, (58, 52, 58))
-    for y in range(15, 32):
-        fixture(150, y, (52, 46, 50))
-        fixture(151, y, (78, 70, 74))
-        fixture(152, y, (30, 27, 32))
-    for a in range(0, 360, 6):
-        px, py = 151 + 6.0 * math.cos(math.radians(a)), 36 + 6.0 * math.sin(math.radians(a))
+            shades = ((92, 84, 88), (66, 60, 64), (44, 40, 46), (20, 18, 22))
+            for i, s_ in enumerate(shades):
+                for dy in range(R):
+                    fixture(x, y + i * R + dy, s_)
+            # Rust rings, every so often, where the pipe sweats.
+            if (x // R) % 23 == 0:
+                for dy in range(4 * R):
+                    rust(x, y + dy, 0.5)
+    pipe(0, 150 * R, 11 * R)
+    pipe(250 * R, ROOM_RW - 1, 11 * R)
+    for jx in (40 * R, 104 * R, 300 * R, 356 * R):
+        for y in range(10 * R, 16 * R):
+            for dx in range(R):
+                fixture(jx + dx, y, (58, 52, 58))
+                fixture(jx + R + dx, y, (104, 96, 100))
+                fixture(jx + 2 * R + dx, y, (58, 52, 58))
+    for y in range(15 * R, 32 * R):
+        for dx in range(R):
+            fixture(150 * R + dx, y, (52, 46, 50))
+            fixture(151 * R + dx, y, (78, 70, 74))
+            fixture(152 * R + dx, y, (30, 27, 32))
+    for a in range(0, 360, 3):
+        px, py = 151 * R + 6.0 * R * math.cos(math.radians(a)), 36 * R + 6.0 * R * math.sin(math.radians(a))
         fixture(int(round(px)), int(round(py)), (96, 88, 90))
     for a in range(0, 360, 60):
-        for t in range(0, 6):
-            fixture(int(round(151 + t * math.cos(math.radians(a)))), int(round(36 + t * math.sin(math.radians(a)))), (70, 64, 66))
-    for y in range(16, 66):
-        t = (y - 16) / 50.0
-        for x in range(103, 108):
-            put(img, x + int(2.0 * math.sin(y * 0.3)), y, (16, 12, 16, int(90 * (1.0 - t) * (0.5 + 0.5 * math.sin(x * 2.1)))))
+        for t in range(0, 6 * R):
+            fixture(int(round(151 * R + t * math.cos(math.radians(a)))), int(round(36 * R + t * math.sin(math.radians(a)))), (70, 64, 66))
+    for jx in (104 * R, 300 * R):
+        for y in range(16 * R, 66 * R):
+            t = (y - 16 * R) / (50.0 * R)
+            for x in range(jx - 1, jx + 5 * R):
+                put(img, x + int(2.0 * R * math.sin(y * 0.15)), y, (16, 12, 16, int(90 * (1.0 - t) * (0.5 + 0.5 * math.sin(x * 1.1)))))
 
     # A cable slung from the flex across to the right wall, sagging.
-    for x in range(int(ROOM_LAMP_X) + 4, ROOM_RW):
-        t = (x - ROOM_LAMP_X - 4) / (ROOM_RW - ROOM_LAMP_X - 4)
-        y = int(round(2 + 6 * t + 14 * 4 * t * (1 - t)))
-        fixture(x, y, (30, 27, 32))
-        fixture(x, y + 1, (14, 13, 16), a=0.7)
+    for x in range(int(ROOM_LAMP_X) + 4 * R, ROOM_RW):
+        t = (x - ROOM_LAMP_X - 4 * R) / (ROOM_RW - ROOM_LAMP_X - 4 * R)
+        y = int(round((2 + 6 * t + 14 * 4 * t * (1 - t)) * R))
+        for dy in range(R):
+            fixture(x, y + dy, (30, 27, 32))
+        fixture(x, y + R, (14, 13, 16), a=0.7)
 
-    # A vent low on the right wall, louvred, breathing whatever the building breathes.
-    VX0, VX1, VY0, VY1 = 306, 346, 112, 132
+    # A louvred vent low on the right wall.
+    VX0, VX1, VY0, VY1 = 306 * R, 346 * R, 112 * R, 132 * R
     for y in range(VY0, VY1 + 1):
         for x in range(VX0, VX1 + 1):
-            if x in (VX0, VX1) or y in (VY0, VY1):
+            if x < VX0 + R or x > VX1 - R or y < VY0 + R or y > VY1 - R:
                 fixture(x, y, (60, 56, 62))
-            elif (y - VY0) % 4 == 1:
+            elif ((y - VY0) // R) % 4 == 1:
                 fixture(x, y, (58, 54, 60))
-            elif (y - VY0) % 4 == 2:
+            elif ((y - VY0) // R) % 4 == 2:
                 fixture(x, y, (12, 11, 14))
             else:
                 fixture(x, y, (26, 24, 29))
-    for y in range(VY1 + 1, VY1 + 18):
-        t = (y - VY1) / 18.0
-        for x in (VX0 + 3, VX0 + 4, VX1 - 5, VX1 - 4):
+    for y in range(VY1 + 1, VY1 + 18 * R):
+        t = (y - VY1) / (18.0 * R)
+        for x in list(range(VX0 + 3 * R, VX0 + 5 * R)) + list(range(VX1 - 5 * R, VX1 - 3 * R)):
             put(img, x, y, (14, 11, 14, int(70 * (1.0 - t))))
 
-    # A camera in the corner, up on the right where it can see the whole table, with
-    # its one red light. The box is not the only thing watching.
-    CX_, CY_ = 384, 100
-    for y in range(CY_, CY_ + 9):
-        for x in range(CX_ - 2, CX_ + 12):
-            fixture(x, y, (30, 28, 34) if not (x in (CX_ - 2, CX_ + 11) or y in (CY_, CY_ + 8)) else (18, 17, 21))
-    for y in range(CY_ + 2, CY_ + 7):
-        for x in range(CX_ - 6, CX_ - 1):
-            d = math.hypot(x - (CX_ - 3.5), y - (CY_ + 4))
+    # A camera in the corner, up on the right, with its one red light.
+    CX_, CY_ = 384 * R, 100 * R
+    for y in range(CY_, CY_ + 9 * R):
+        for x in range(CX_ - 2 * R, CX_ + 12 * R):
+            edge = x < CX_ - 2 * R + R or x >= CX_ + 12 * R - R or y < CY_ + R or y >= CY_ + 9 * R - R
+            fixture(x, y, (30, 28, 34) if not edge else (18, 17, 21))
+    for y in range(CY_ + 2 * R, CY_ + 7 * R):
+        for x in range(CX_ - 6 * R, CX_ - R):
+            d = math.hypot(x - (CX_ - 3.5 * R), y - (CY_ + 4 * R)) / R
             if d <= 2.6:
                 fixture(x, y, (12, 12, 16) if d > 1.4 else (40, 44, 56))
-    put(img, CX_ + 9, CY_ + 2, (200, 40, 36, 255))
-    put(img, CX_ + 9, CY_ + 3, (120, 24, 22, 160))
-    for y in range(CY_ + 9, CY_ + 16):
-        fixture(CX_ + 4, y, (22, 21, 26))
-    for x in range(CX_ + 4, ROOM_RW):
-        fixture(x, CY_ + 15, (22, 21, 26))
+    for dx in range(R):
+        for dy in range(R):
+            put(img, CX_ + 9 * R + dx, CY_ + 2 * R + dy, (200, 40, 36, 255))
+            put(img, CX_ + 9 * R + dx, CY_ + 3 * R + dy, (120, 24, 22, 160))
+    for y in range(CY_ + 9 * R, CY_ + 16 * R):
+        for dx in range(R):
+            fixture(CX_ + 4 * R + dx, y, (22, 21, 26))
+    for x in range(CX_ + 4 * R, ROOM_RW):
+        for dy in range(R):
+            fixture(x, CY_ + 15 * R + dy, (22, 21, 26))
 
-    # Tally marks scratched into the paint under the vent by whoever sat here before,
-    # in fives. Nobody knows what they were counting. Rounds, probably.
+    # Tally marks scratched under the vent, in fives.
     def tally(x0, y0, groups):
         for gi in range(groups):
-            gx = x0 + gi * 11
+            gx = x0 + gi * 11 * R
             for i in range(4):
-                for y in range(y0, y0 + 8):
-                    fixture(gx + i * 2, y, (110, 100, 100), a=0.55)
-            for i in range(8):
-                fixture(gx + i, y0 + 7 - i, (110, 100, 100), a=0.55)
-    tally(248, 118, 3)
-    tally(248, 132, 2)
+                for y in range(y0, y0 + 8 * R):
+                    fixture(gx + i * 2 * R, y, (110, 100, 100), a=0.55)
+            for i in range(8 * R):
+                fixture(gx + i, y0 + 8 * R - 1 - i, (110, 100, 100), a=0.55)
+    tally(248 * R, 118 * R, 3)
+    tally(248 * R, 132 * R, 2)
 
-    # A crack down from the top corner on the right, and one up from the table on the
-    # left of her, where the wall has taken a knock.
-    for (sx, sy, ex_, ey_, wob) in ((318, 0, 296, 58, 3.0), (66, ROOM_HORIZON - 1, 74, 118, 2.0)):
-        n = int(abs(ey_ - sy))
+    # Cracks, each branching once.
+    def crack(sx, sy, ex_, ey_, wob, branch=True):
+        n = int(max(abs(ey_ - sy), abs(ex_ - sx)))
         for i in range(n):
             t = i / float(n)
-            x = int(round(sx + (ex_ - sx) * t + wob * math.sin(t * 9.0) + math.sin(t * 23.0)))
+            x = int(round(sx + (ex_ - sx) * t + wob * math.sin(t * 9.0) + math.sin(t * 23.0) * R))
             y = int(round(sy + (ey_ - sy) * t))
             put(img, x, y, (ROOM_SEAM[0], ROOM_SEAM[1], ROOM_SEAM[2], int(200 * (1.0 - 0.6 * t))))
             if i % 5 == 0:
                 put(img, x + 1, y, (70, 62, 66, 60))
+            if branch and i == n // 2:
+                crack(x, y, x + int((ex_ - sx) * 0.3) + 8 * R, y + int((ey_ - sy) * 0.25), wob * 0.5, branch=False)
+    crack(318 * R, 0, 296 * R, 58 * R, 3.0 * R)
+    crack(66 * R, ROOM_HORIZON - 1, 74 * R, 118 * R, 2.0 * R)
+    crack(120 * R, 0, 128 * R, 30 * R, 2.0 * R, branch=False)
+    crack(360 * R, 60 * R, 372 * R, 96 * R, 2.5 * R)
 
-    # 4. The lamp: flex, shade, and the filament under it.
-    for y in range(0, 13):
-        put(img, int(ROOM_LAMP_X), y, (26, 24, 29, 255))
-    for y in range(12, 20):
-        half = int((y - 11) * 1.8)
+    # 4. The lamp: flex, shade, filament, and the haze under it.
+    for y in range(0, 13 * R):
+        for dx in range(R):
+            put(img, int(ROOM_LAMP_X) + dx, y, (26, 24, 29, 255))
+    for y in range(12 * R, 20 * R):
+        half = int((y - 11 * R) * 1.8)
         for sx in range(int(ROOM_LAMP_X) - half, int(ROOM_LAMP_X) + half + 1):
             t = abs(sx - ROOM_LAMP_X) / max(1.0, half)
             put(img, sx, y, lerp_color((64, 57, 58, 255), (22, 20, 24, 255), t))
-    for sx in range(int(ROOM_LAMP_X) - 4, int(ROOM_LAMP_X) + 5):
-        a = int(255 * (1.0 - abs(sx - ROOM_LAMP_X) / 5.0))
-        put(img, sx, 20, (255, 232, 196, a))
-        put(img, sx, 21, (ROOM_LAMP[0], ROOM_LAMP[1], ROOM_LAMP[2], a // 2))
+    for sx in range(int(ROOM_LAMP_X) - 4 * R, int(ROOM_LAMP_X) + 5 * R):
+        a = int(255 * (1.0 - abs(sx - ROOM_LAMP_X) / (5.0 * R)))
+        for dy in range(R):
+            put(img, sx, 20 * R + dy, (255, 232, 196, a))
+            put(img, sx, 21 * R + dy, (ROOM_LAMP[0], ROOM_LAMP[1], ROOM_LAMP[2], a // 2))
+    for y in range(21 * R, ROOM_HORIZON):
+        t = (y - 21 * R) / float(ROOM_HORIZON - 21 * R)
+        spread = 6 * R + t * 90 * R
+        for sx in range(int(ROOM_LAMP_X - spread), int(ROOM_LAMP_X + spread) + 1):
+            k = 1.0 - abs(sx - ROOM_LAMP_X) / spread
+            put(img, sx, y, (ROOM_LAMP[0], ROOM_LAMP[1], ROOM_LAMP[2], int(26 * k * k * (1.0 - t) * (0.85 + 0.15 * dust.at(sx, y)))))
 
-    # 5. The table. Its far lip is the brightest edge in the room because it is the closest
-    #    thing to the lamp that faces it, and the surface runs away into the dark toward the
-    #    player -- which is what leaves the box a black shape to read against.
+    # 5. The table. The far lip is the brightest edge in the room and the surface runs
+    #    off into the dark toward the player, which is what the box reads against.
+    tgrain = _Noise(rng, ROOM_RW, ROOM_RH, 3 * R)
     for y in range(ROOM_HORIZON, ROOM_HORIZON + ROOM_LIP):
         for sx in range(ROOM_RW):
             edge = abs(sx - ROOM_LAMP_X) / (ROOM_RW / 2)
-            c = shade(ROOM_TABLE_LIP, (1.0 - 0.70 * edge ** 1.5) * (1.0 - 0.07 * (y - ROOM_HORIZON)))
+            c = shade(ROOM_TABLE_LIP, (1.0 - 0.70 * edge ** 1.5) * (1.0 - 0.07 * (y - ROOM_HORIZON) / R))
+            c = shade(c, 1.0 + 0.10 * tgrain.at(sx * 0.15, y))
             put(img, sx, y, c)
 
     for y in range(ROOM_HORIZON + ROOM_LIP, ROOM_RH):
-        # Depth, compressed the way a receding plane is: most of the table's length is in
-        # the first few rows under the lip.
         depth = ((y - ROOM_HORIZON - ROOM_LIP) / float(ROOM_RH - ROOM_HORIZON - ROOM_LIP)) ** 0.62
         for sx in range(ROOM_RW):
-            spread = 1.0 + depth * 1.9              # the pool widens as it comes forward
+            spread = 1.0 + depth * 1.9
             across = abs(sx - ROOM_LAMP_X) / (ROOM_RW / 2 * spread)
             pool = max(0.0, 1.0 - across ** 1.7) * (1.0 - depth) ** 1.5
-
             c = lerp_color(ROOM_TABLE_NEAR, ROOM_TABLE_FAR, min(1.0, pool * 1.35))
+            # The grain runs across the table, stretched by the perspective.
+            g = tgrain.at(sx * 0.12, y * 0.9)
+            c = shade(c, 1.0 + 0.12 * g * (0.3 + 0.7 * pool))
+            # The sheen: the lamp lying on the surface just past the lip.
+            sheen = max(0.0, 1.0 - (y - ROOM_HORIZON - ROOM_LIP) / (26.0 * R)) * pool
+            c = lerp_color(c, ROOM_TABLE_LIP, 0.18 * sheen * sheen)
             put(img, sx, y, c)
 
-    # Scuffs, pulled along the direction people reach across a table, and only where the
-    # light lands. The first draft scattered them evenly and the table read as static.
-    for _ in range(900):
+    # Scuffs along the reach direction, only where the light lands, and a couple of rings.
+    for _ in range(900 * R * R):
         sy = rng.randrange(ROOM_HORIZON + ROOM_LIP, ROOM_RH)
         sx = rng.randrange(ROOM_RW)
         depth = ((sy - ROOM_HORIZON - ROOM_LIP) / float(ROOM_RH - ROOM_HORIZON - ROOM_LIP)) ** 0.62
@@ -976,67 +1005,34 @@ def build_room(seed=5150):
         pool = max(0.0, 1.0 - across ** 1.7) * (1.0 - depth) ** 1.5
         if rng.random() > pool * 0.75:
             continue
-        for i in range(rng.randint(2, 7)):
+        for i in range(rng.randint(2 * R, 7 * R)):
             put(img, sx + i, sy, (150, 134, 122, rng.randint(10, 34)))
+    for (rx, ry, rr) in ((300 * R, 190 * R, 9 * R), (110 * R, 200 * R, 7 * R)):
+        for a in range(0, 360, 2):
+            x = int(round(rx + rr * math.cos(math.radians(a))))
+            y = int(round(ry + rr * 0.35 * math.sin(math.radians(a))))
+            put(img, x, y, (150, 134, 122, 22))
 
     write_png(os.path.join(OUT, "room.png"), img)
 
 
 
 # --------------------------------------------------------------------------- #
-# opponent-sheet.png -- the figure across the table: 6 poses across, 3 injuries down
+# opponent-sheet.png -- the first opponent: 6 poses across, one row, 107x100 a frame
 #
-# Columns: the three idles (hostile, even, open), talking, reaching into the box, hurt.
-# Rows: untouched, hurt once, hurt twice -- StartingLives minus the lives they hold.
-#
-# Every cell is one finished picture. Nothing animates: a pose is a state the game
-# switches to, not a sequence it plays, so there is no blink sheet. What the player
-# reads is that the face is not the one that was there a moment ago.
-#
-# She is the one sprite in the game that is not drawn by this script. She is cut from
-# her character sheet: the portrait in its corner, keyed off the sheet's background and
-# sampled down to art pixels, is the even pose, and every other cell is that same
-# picture with a few pixels moved. I drew her twice before this -- a lit height map,
-# then a painted head to the sheet's palette -- and both were a likeness of her, which
-# is not the same thing as her. The sheet is the design, so the sheet is the sprite.
-# The source is tools/source/opponent-portrait.png, the portrait alone at the sheet's
-# own resolution, and the whole sheet stays out of the build.
-#
-# She is a reference to Nikki from Obsession (2025): meant to resemble her, not to be
-# her. The sheet gives the face and the hair -- long, straight, parted down the middle,
-# hanging in front of the shoulders -- and four things the sheet does not have make it
-# her: the hair is black, the skin is a shade toward grey, the oatmeal knit is
-# recoloured to a dark top, and the near ear is tucked out of the hair with a hoop in
-# it. All of it is done to the sampled picture before any pose is, and all of it is
-# done as edits of what is there rather than paint over it: the hair keeps every
-# streak the sheet gave it, the top keeps every fold and rib of the knit, and the ear
-# takes its skin from the cheek beside it.
-#
-# The sheet's pixels are not on a clean grid (they run about five image pixels to the
-# art pixel, and not evenly), so it is box-sampled at four image pixels per art pixel:
-# a little finer than it was made at, which keeps the face rather than smearing it. At
-# 6x on screen that puts her where the last one stood, the table lip to the top of the
-# wall.
-#
-# The poses are pixel edits, and they are small on purpose. A smile lifts the corners
-# of the mouth by a pixel; the hostile grin lifts them two and widens the line and puts
-# a row of teeth under it; talking drops the lower lip two rows and opens the dark
-# between; hurt paints the lids over the eyes and pulls the mouth open and down. The
-# eyes are seven pixels wide and the mouth is ten, and one pixel is a whole expression
-# at that size. Anything bigger than that and it stops being her face.
-#
-# Tilting the head bends the picture rather than turning it. Every row above the chin
-# turns by the full angle about the base of the neck and the rows down through the
-# neck turn less and less until the shoulders, which do not move -- so the hair that
-# hangs in front of them stays joined to the hair on her head, and the shoulders stay
-# on the table. It is sampled backwards, one source pixel per frame pixel, so nothing
-# is blended and there are no holes.
+# Columns: hostile, even, open, talk, reach, hurt. Every opponent's sheet has these six
+# columns in this order; OpponentSprite cuts them at the size and scale Opponents.cs says.
+# She is not drawn here. The portrait off her character sheet (tools/source/
+# opponent-portrait.png) is keyed and box-sampled at 4 image px per art px, and each
+# pose is a few pixels moved. I drew her twice before this and both were a likeness,
+# not her, so the sheet is the sprite. Five recolour edits make her the reference
+# (Nikki from Obsession): black hair, pale skin, East Asian eyes, dark top, ear + hoop.
 # --------------------------------------------------------------------------- #
 
 OPP_OW, OPP_OH = 107, 100
 
 OPP_POSES = ("hostile", "even", "open", "talk", "reach", "hurt")
-OPP_INJURIES = (0, 1, 2)
+OPP_INJURIES = (0,)
 
 OPP_SOURCE = os.path.join(ROOT, "tools", "source", "opponent-portrait.png")
 
@@ -1050,30 +1046,26 @@ OPP_BG_TOL = 7
 #: Where the portrait sits in the frame. Its bottom row is the table lip.
 OPP_OX, OPP_OY = 11, 8
 
-# Landmarks in the portrait, in art pixels, read off the sampled picture. The eyes are
-# not quite level -- her head is a touch over to one side on the sheet -- so each has
-# its own rows.
-OPP_EYE_L = (27, 35, 29, 33)    # x0, x1, the lash-line row, the lower-lid row
+# Landmarks in art pixels. The eyes are not quite level on the sheet, so each has its own rows.
+OPP_EYE_L = (27, 35, 29, 33)    # x0, x1, the lash-line row on the sheet, the lower-lid row
 OPP_EYE_R = (43, 51, 30, 33)
+#: Rows opp_edit_eye_shape moves the lash line. Zero now; see there.
+OPP_LID_DROP = 0
 OPP_MOUTH_Y = 46                # the line between the lips
 OPP_MOUTH_X0, OPP_MOUTH_X1 = 33, 42
 OPP_FACE_C = (38.0, 40.0)       # the middle of the face, for the paling and the bruise
 OPP_NECK = (32, 46, 55, 70)     # x0, x1, y0, y1
 
-#: The base of the neck, which the head bends about, and the rows the bend runs over:
-#: full angle above the first, none below the second.
+#: The base of the neck the head bends about, and the rows the bend runs over.
 OPP_PIVOT = (39.0, 66.0)
 OPP_BEND_TOP, OPP_BEND_BOTTOM = 56, 72
 
-#: The first row of the knit's band on the sheet, and the two ends of the dark top it
-#: becomes. Everything under that row that is knit-coloured is recoloured; the skin of
-#: the shoulders is a good deal warmer than the knit and is told apart by that.
+#: First row of the knit's band, and the dark ramp it is recoloured to.
 OPP_TEE_TOP = 79
 OPP_TEE_D = (14, 12, 18, 255)
 OPP_TEE_L = (78, 74, 92, 255)
 
-#: The near ear: its centre, and its half-size. It sits against the edge of the cheek,
-#: where the hair on the sheet hangs in front of it.
+#: The near ear: centre and half-size.
 OPP_EAR = (23.5, 35.5, 2.0, 4.0)
 OPP_GOLD = (204, 160, 84, 255)
 OPP_GOLD_D = (112, 84, 40, 255)
@@ -1086,30 +1078,34 @@ OPP_BLOOD      = (134, 22, 24, 255)
 OPP_BRUISE     = (92, 50, 90, 255)
 OPP_SKIN_PALE  = (216, 194, 182, 255)
 
-# Per pose: how far the head bends (degrees, negative is toward her left, the near
-# side), how far it leans toward the box and drops, what the eyes are doing, and what
-# the mouth is doing.
+# Per pose: head tilt in degrees (negative is toward the near side), lean toward the
+# box, drop, and what the eyes and mouth are doing.
 OPP_POSE = {
-    # Hostile is the wrong smile: head over to one side, eyes too open, the grin wider
-    # than the mouth is. Nothing about it is angry. That is what is wrong.
+    # Hostile is the wrong smile: head over, eyes too open, grin too wide. Not angry, that is the point.
     "hostile": dict(tilt=-9.0, lean=0, drop=0, eyes="wide", mouth="grin"),
-    "even":    dict(tilt=0.0, lean=0, drop=0, eyes="rest", mouth="rest"),
-    "open":    dict(tilt=3.0, lean=0, drop=0, eyes="rest", mouth="smile"),
-    "talk":    dict(tilt=0.0, lean=0, drop=0, eyes="rest", mouth="talk"),
+    # Idle leans toward the box a little, like someone who has been sitting a while.
+    "even":    dict(tilt=4.0, lean=1, drop=1, eyes="rest", mouth="rest"),
+    "open":    dict(tilt=7.0, lean=1, drop=0, eyes="rest", mouth="smile"),
+    # Talking lifts and leans in, so a line landing is a posture change, not just a mouth.
+    "talk":    dict(tilt=-3.0, lean=-3, drop=-1, eyes="rest", mouth="talk"),
     # Reaching: leant toward the box, eyes down on what the hand is doing.
     "reach":   dict(tilt=5.0, lean=4, drop=3, eyes="down", mouth="rest"),
     # Hurt: head down and away, eyes shut, mouth open.
     "hurt":    dict(tilt=-7.0, lean=-2, drop=4, eyes="shut", mouth="cry"),
 }
 
+#: All the landmarks in one table so the pose edits can take any face. Portrait pixels, except origin.
+OPP_FACE = dict(
+    origin=(OPP_OX, OPP_OY),
+    eye_l=OPP_EYE_L, eye_r=OPP_EYE_R, lid_drop=OPP_LID_DROP,
+    mouth=(OPP_MOUTH_X0, OPP_MOUTH_X1, OPP_MOUTH_Y), teeth=OPP_TEETH,
+    centre=OPP_FACE_C, neck=OPP_NECK,
+    pivot=OPP_PIVOT, bend=(OPP_BEND_TOP, OPP_BEND_BOTTOM),
+)
+
 
 def read_png(path):
-    """
-    Decodes an 8-bit, non-interlaced PNG into rows of [r, g, b, a].
-
-    The mirror of write_png above, and just as small: it is here so the one sprite
-    that comes from a picture needs no more than CPython to build, same as the rest.
-    """
+    """Decodes an 8-bit non-interlaced PNG into rows of [r, g, b, a]. The mirror of write_png."""
     data = open(path, "rb").read()
     assert data[:8] == b"\x89PNG\r\n\x1a\n", path
     pos, idat, plte, trns = 8, b"", None, None
@@ -1170,14 +1166,9 @@ def read_png(path):
 
 def opp_load_portrait():
     """
-    The portrait off the sheet, keyed and sampled down to art pixels.
-
-    The background is found by flooding in from the border over everything within
-    tolerance of the sheet's grey, rather than by colour alone: the darkest hair is
-    nearly that grey and it is inside the figure, and the flood never reaches it. Each
-    art pixel is the mean of the source pixels under it that are not background, with
-    the fraction that are as its coverage, so the edge of her keeps the sheet's own
-    soft dark rim.
+    The portrait off the sheet, keyed and sampled down to art pixels. The background is
+    flood-filled in from the border rather than keyed by colour alone, because the darkest
+    hair is nearly the same grey. Coverage becomes alpha, so her edge keeps the sheet's rim.
     """
     src = read_png(OPP_SOURCE)
     H, W = len(src), len(src[0])
@@ -1221,28 +1212,21 @@ def opp_load_portrait():
 # --------------------------------------------------------------------------- #
 
 def _is_knit(px):
-    # Knit is the skin's warmth with the colour taken out: for the same red it carries
-    # more blue. The red-minus-green test alone let the sunlit ribs through, which are
-    # as warm as skin in absolute terms and nowhere near it in proportion.
+    # Knit is skin with the colour taken out: more blue for the same red. Red-minus-green
+    # alone let the sunlit ribs through.
     return px[3] > 0 and px[0] >= 110 and (px[2] / float(px[0]) >= 0.455 or px[0] - px[1] <= 60)
 
 
 def opp_edit_dress(img):
     """
-    The knit made a dark top.
-
-    Every knit-coloured pixel from the band down is moved onto a dark ramp by its
-    brightness, so the ribs and the folds of the sheet's band are still there, in
-    charcoal. The shoulders stay bare: the sheet's top is off the shoulder and so is a
-    tee that has slipped, which is near enough to the one she wears.
+    The knit made a dark top: knit pixels from the band down go onto a dark ramp by
+    brightness, so the ribs and folds survive. The shoulders stay bare.
     """
     for y in range(OPP_TEE_TOP, len(img)):
         for x in range(len(img[0])):
             px = img[y][x]
-            # From the band's second row down everything that is not hair is top: the
-            # sheet shows a sliver of chest where the band dips in the middle, and left
-            # as skin it read as a hole in the cloth. The first row is sorted by colour,
-            # because the shoulders are still on it.
+            # From the band's second row down everything that is not hair is top; the
+            # sliver of chest read as a hole in the cloth. The first row is sorted by colour.
             if px[3] == 0 or px[0] < 60:
                 continue
             if y <= OPP_TEE_TOP + 1 and not _is_knit(px):
@@ -1252,14 +1236,29 @@ def opp_edit_dress(img):
             img[y][x] = [c[0], c[1], c[2], px[3]]
 
 
+def opp_edit_eye_shape(img):
+    """
+    The eyes made East Asian: the crease above the lid painted over with the lid's own
+    skin (a monolid), and the outer corner lifted a pixel. I tried dropping the lid a row
+    too and at eight pixels of eye that looked asleep.
+    """
+    for side, (x0, x1, lash, lower) in (("L", OPP_EYE_L), ("R", OPP_EYE_R)):
+        outer = (x1 - 1, x1) if side == "R" else (x0, x0 + 1)
+        # The crease becomes lid, in the cheek's skin, a touch darker for the brow's shadow.
+        for x in range(x0, x1 + 1):
+            c = img[lower + 2][x]
+            img[lash - 1][x] = list(shade((c[0], c[1], c[2], 255), 0.86))
+        # The outer corner lifts a pixel.
+        for x in outer:
+            img[lash - 1][x] = list(img[lash][x])
+            c = img[lower + 2][x]
+            img[lash][x] = list(shade((c[0], c[1], c[2], 255), 0.90))
+
+
 def opp_edit_ear(img):
     """
-    The near ear tucked out of the hair, and the hoop hanging off it.
-
-    The ear is an oval painted over the hair against the edge of the cheek, in the
-    skin from the cheek's own edge a row at a time, so it is lit the way the face is
-    there: dark. A hollow in the middle and a darker rim make it an ear and not a
-    patch. The hoop is a ring three pixels across with a hole in it, bright on top and dull below.
+    The near ear tucked out of the hair, with a hoop. An oval painted in the skin from
+    the cheek's edge on each row, with a hollow and a darker rim so it reads as an ear.
     """
     ex, ey, rx, ry = OPP_EAR
     for y in range(int(ey - ry) - 1, int(ey + ry) + 2):
@@ -1308,17 +1307,13 @@ def _blend(img, x, y, rgba, k):
         img[y][x] = list(lerp_color(tuple(img[y][x]), rgba, min(1.0, k)))
 
 
-def opp_edit_eyes(img, mode, injury):
+def opp_edit_eyes(img, mode, injury, face):
     """
-    What the eyes are doing, by moving the rows they are made of.
-
-    wide lifts the brow and the lash line a row and doubles the row under them, so the
-    eye is a pixel taller than it was. down moves the whole eye down a row under the
-    lid. shut paints the lids over with the skin from the cheek below and lays a lash
-    line across. The far eye, after the second hit, has its lid a row lower than the
-    near one whatever the pose: it is swelling shut.
+    What the eyes are doing, by moving rows. wide lifts brow and lash a row; down moves
+    the eye down under the lid; shut paints the lids over with cheek skin plus a lash line.
     """
-    for side, (x0, x1, lash, lower) in (("L", OPP_EYE_L), ("R", OPP_EYE_R)):
+    for side, (x0, x1, lash, lower) in (("L", face["eye_l"]), ("R", face["eye_r"])):
+        lash += face["lid_drop"]
         if mode == "shut":
             for y in range(lash, lower + 1):
                 for x in range(x0, x1 + 1):
@@ -1344,18 +1339,15 @@ def opp_edit_eyes(img, mode, injury):
                 img[lash][x] = list(img[lash - 1][x])
 
 
-def opp_edit_mouth(img, mode):
+def opp_edit_mouth(img, mode, face):
     """
-    What the mouth is doing.
-
-    Everything is done to the ten columns of the lips. The corners are the outer three
-    columns each side, and lifting or dropping them by a row is the whole difference
-    between the sheet's mouth and a smile or a frown. Opening the mouth moves the lower
-    lip down and puts the dark of the mouth, with or without teeth, in the gap.
+    What the mouth is doing, on the ten columns of the lips. The corners are the outer
+    three columns each side; one row up or down is the whole difference.
     """
     if mode == "rest":
         return
-    x0, x1, my = OPP_MOUTH_X0, OPP_MOUTH_X1, OPP_MOUTH_Y
+    x0, x1, my = face["mouth"]
+    teeth = face["teeth"]
     cx = (x0 + x1) / 2.0
 
     def lift(x, rows):
@@ -1377,9 +1369,8 @@ def opp_edit_mouth(img, mode):
         _blend(img, x1 + 1, my - 1, tuple(img[my - 1][x1]), 0.6)
 
     elif mode == "grin":
-        # The corners up like the smile, then the line run on two columns past each
-        # corner, and a straight row of teeth pushed in between the lips: the lower
-        # lip goes down a row to make room. Wider than the mouth is, and held.
+        # Corners up like the smile, the line run two columns past each corner, and a
+        # row of teeth pushed in between the lips.
         for x in range(x0, x1 + 1):
             if abs(x - cx) >= 2.5:
                 lift(x, -1)
@@ -1389,13 +1380,13 @@ def opp_edit_mouth(img, mode):
         _shift_block(img, x0, my + 1, x1, my + 3, 0, 1)
         for x in range(x0 + 1, x1):
             y = my + (0 if abs(x - cx) >= 2.5 else 1)
-            img[y][x] = list(OPP_TEETH if x % 2 else shade(OPP_TEETH, 0.84))
+            img[y][x] = list(teeth if x % 2 else shade(teeth, 0.84))
             _blend(img, x, y + 1, OPP_MOUTH_DARK, 0.45)
 
     elif mode == "talk":
         _shift_block(img, x0 - 1, my + 1, x1 + 1, my + 3, 0, 2)
         for x in range(x0, x1 + 1):
-            img[my + 1][x] = list(OPP_TEETH if x % 2 else shade(OPP_TEETH, 0.84)) if x0 + 2 <= x <= x1 - 2 else list(OPP_MOUTH_DARK)
+            img[my + 1][x] = list(teeth if x % 2 else shade(teeth, 0.84)) if x0 + 2 <= x <= x1 - 2 else list(OPP_MOUTH_DARK)
             img[my + 2][x] = list(OPP_MOUTH_DARK)
 
     elif mode == "cry":
@@ -1413,24 +1404,25 @@ def _is_skin(px):
     return px[3] > 0 and px[0] > 120 and px[0] - px[1] > 40 and px[1] > px[2]
 
 
-def opp_edit_injury(img, injury):
+def opp_edit_injury(img, injury, face):
     """
-    What has already been taken off her.
-
-    Asymmetric and starting at a wound, because symmetry reads as decoration. The colour
-    goes out of the face a little each time, and the face only: the sheet's skin is a
-    warm ramp and the paling is a lerp toward grey on every pixel of it inside the
-    oval of the face and the column of the neck.
+    What has been taken off her: the face pales a little each time, and a cut opens.
+    Asymmetric on purpose, symmetry reads as decoration. (Unused now, OPP_INJURIES is one row.)
     """
     if injury <= 0:
         return
 
-    fx, fy = OPP_FACE_C
+    fx, fy = face["centre"]
+    nx0, nx1, ny0, ny1 = face["neck"]
+    ex0, _, elash, _ = face["eye_l"]
+    rx0, rx1, rlash, _ = face["eye_r"]
+    mx0, mx1, my = face["mouth"]
+    mc = (mx0 + mx1) // 2
     pale = 0.12 * injury
     for y in range(len(img)):
         for x in range(len(img[0])):
             in_face = ((x - fx) / 15.0) ** 2 + ((y - fy) / 19.0) ** 2 <= 1.0
-            in_neck = OPP_NECK[0] <= x <= OPP_NECK[1] and OPP_NECK[2] <= y <= OPP_NECK[3]
+            in_neck = nx0 <= x <= nx1 and ny0 <= y <= ny1
             if (in_face or in_neck) and _is_skin(img[y][x]):
                 _blend(img, x, y, OPP_SKIN_PALE, pale)
 
@@ -1442,24 +1434,23 @@ def opp_edit_injury(img, injury):
             c = lerp_color(OPP_BLOOD, OPP_BLOOD_D, t ** 0.6)
             _blend(img, r(x), y0 + i, c, 0.9 - 0.5 * t)
 
-    # One cut, through the outer end of the near brow, opened the first time something
-    # landed, and the run off it down the temple past the corner of the eye.
+    # One cut through the outer end of the near brow, and the run off it down the temple.
+    cx, cy = ex0 - 1, elash - 4
     for i in range(5):
-        _blend(img, 26 + i, 25 + (i // 3), OPP_BLOOD, 0.95)
-        _blend(img, 26 + i, 26 + (i // 3), OPP_BLOOD_D, 0.8)
-    run(27, 27, 15, -0.08)
-    run(29, 28, 6, 0.05)
+        _blend(img, cx + i, cy + (i // 3), OPP_BLOOD, 0.95)
+        _blend(img, cx + i, cy + 1 + (i // 3), OPP_BLOOD_D, 0.8)
+    run(cx + 1, cy + 2, 15, -0.08)
+    run(cx + 3, cy + 3, 6, 0.05)
 
     if injury < 2:
         return
 
-    # The second time, it split the lip, started the nose bleeding, and closed the far
-    # eye: the lid is moved in opp_edit_eyes, the bruise is painted here.
-    for x in range(38, 42):
-        _blend(img, x, OPP_MOUTH_Y + 1, OPP_BLOOD_D, 0.85)
-    run(40, OPP_MOUTH_Y + 2, 4, 0.1)
-    run(36, 43, 3, 0.0)
-    ex, ey = (OPP_EYE_R[0] + OPP_EYE_R[1]) / 2.0, OPP_EYE_R[2] + 1.0
+    # Second hit: split lip, nosebleed, and a bruise over the far eye (its lid moves in opp_edit_eyes).
+    for x in range(mc + 1, mc + 5):
+        _blend(img, x, my + 1, OPP_BLOOD_D, 0.85)
+    run(mc + 3, my + 2, 4, 0.1)
+    run(mc - 1, my - 3, 3, 0.0)
+    ex, ey = (rx0 + rx1) / 2.0, rlash + 1.0
     for y in range(int(ey) - 5, int(ey) + 6):
         for x in range(int(ex) - 7, int(ex) + 8):
             d = ((x - ex) / 6.5) ** 2 + ((y - ey) / 4.5) ** 2
@@ -1467,22 +1458,18 @@ def opp_edit_injury(img, injury):
                 _blend(img, x, y, OPP_BRUISE, 0.55 * (1.0 - d))
 
 
-def opp_bend(img, tilt, lean, drop):
+def opp_bend(img, tilt, lean, drop, face):
     """
-    Bends the head about the base of the neck, and leans and drops it.
-
-    Sampled backwards: every frame pixel asks which source pixel lands on it, so there
-    is exactly one and no holes. The amount of turn, lean and drop is the full pose
-    above the chin, nothing at the shoulders, and a straight blend down the neck
-    between -- the hair in front of the shoulders bends with the neck and stays joined
-    at both ends. It runs on the whole frame, not the portrait: the hair reaches the
-    portrait's own edge, and bent inside that it was cut off in a straight line.
+    Bends the head about the base of the neck, and leans and drops it. Full amount above
+    the chin, none at the shoulders, blended down the neck. Sampled backwards so there are
+    no holes. Runs on the whole frame so the hair is not cut off at the portrait's edge.
     """
     if abs(tilt) < 0.01 and lean == 0 and drop == 0:
         return img
     h, w = len(img), len(img[0])
-    px, py = OPP_PIVOT[0] + OPP_OX, OPP_PIVOT[1] + OPP_OY
-    top, bottom = OPP_BEND_TOP + OPP_OY, OPP_BEND_BOTTOM + OPP_OY
+    ox, oy = face["origin"]
+    px, py = face["pivot"][0] + ox, face["pivot"][1] + oy
+    top, bottom = face["bend"][0] + oy, face["bend"][1] + oy
     out = new_image(w, h)
     for Y in range(h):
         wgt = 1.0 if Y <= top else max(0.0, (bottom - Y) / float(bottom - top))
@@ -1503,24 +1490,18 @@ def opp_bend(img, tilt, lean, drop):
 # --------------------------------------------------------------------------- #
 # Her colouring
 #
-# The sheet has her hair brown and her skin warm. She is meant to resemble Nikki, not
-# to be her, and the two things that carry the resemblance without copying it are
-# the colour of the hair and the cast of the skin: the hair is black, and the skin is
-# a shade toward grey, the way a face goes under a lamp in a room with no windows.
-# Both are done to the sampled picture as recolourings of what is there, so every
-# streak the sheet painted into the hair and every bit of blush in the cheek is still
-# there, at the new colour. The hair is the sheet's own -- long, straight, parted down
-# the middle, hanging in front of the shoulders -- because a wolf cut was tried and it
-# gave her more hair than face. She is supposed to be pretty. That is the sheet's job,
-# and the less done to it the better it does it.
+# The sheet has brown hair and warm skin. Black hair and greyed skin are what carry the
+# resemblance, and both are recolours of what is there so every streak and bit of blush
+# survives. I tried a wolf cut and it gave her more hair than face, so the hair is the
+# sheet's own.
 # --------------------------------------------------------------------------- #
 
 # Black, with a cool grey where the lamp catches it: black hair does not shine brown.
 OPP_HAIR_RAMP = ((5, 4, 7), (14, 12, 16), (27, 24, 30), (48, 44, 52), (82, 76, 88), (140, 132, 146))
 
-#: How far the skin goes toward grey, and the grey it goes toward.
-OPP_SKIN_GREY = 0.24
-OPP_SKIN_GREY_TONE = (196, 190, 196, 255)
+#: How far the skin goes toward grey, and the grey. Half way keeps the blush and the jaw shadow.
+OPP_SKIN_GREY = 0.50
+OPP_SKIN_GREY_TONE = (214, 210, 216, 255)
 
 
 def _ramp(ramp, v):
@@ -1556,13 +1537,8 @@ def _is_sheet_hair(px):
 
 def _is_hair_here(img, x, y):
     """
-    Whether the pixel at (x, y) is hair, by where it is as much as by what colour it is.
-
-    Above the body line, everything that is not the face or the neck is hair. Over
-    the shoulders the hair hangs in two falls between the chest and the bare shoulder,
-    and there anything not bright enough to be lit skin is hair. On the top, only the
-    dark warm strands are. Inside the oval of the face, the dark warm pixels at the
-    hairline and the temples are the hair's edge and go with it.
+    Whether (x, y) is hair, by position as much as colour: above the body line anything
+    that is not face or neck; over the shoulders anything not bright enough to be lit skin.
     """
     px = img[y][x]
     if px[3] == 0:
@@ -1571,9 +1547,8 @@ def _is_hair_here(img, x, y):
     dx = abs(x - fx)
     if _in_face(x, y):
         return _is_sheet_hair(px) and (y < 25 or dx > 12)
-    # The forehead runs above the oval of the face, and the temples outside it: lit
-    # skin there is skin, whatever the geometry says. The first draft blackened a band
-    # across her brow.
+    # Lit skin on the forehead and temples is skin whatever the geometry says; the first
+    # draft blackened a band across her brow.
     if y >= 13 and dx <= 17 and px[0] >= 150 and px[0] - px[1] >= 55:
         return False
     if dx <= 8 and y >= 55:
@@ -1581,8 +1556,7 @@ def _is_hair_here(img, x, y):
     if y < _body_top(x):
         return not (y > 24 and dx <= 16 and px[0] >= 100 and px[0] - px[1] > 45)
     if y < OPP_TEE_TOP:
-        # The falls over the shoulders: dark, or lit but not as warm as skin is. The
-        # first draft took a band of columns and painted the shoulder black with it.
+        # The falls over the shoulders: dark, or lit but not as warm as skin.
         return dx >= 9 and (px[0] < 110 or px[0] - px[1] < 58)
     return _is_sheet_hair(px)
 
@@ -1597,9 +1571,8 @@ def opp_edit_hair_black(img):
             px = img[y][x]
             lum = (0.3 * px[0] + 0.59 * px[1] + 0.11 * px[2]) / 255.0
             c = _ramp(OPP_HAIR_RAMP, 0.03 + 0.85 * lum)
-            # Inside the face the hairline is a blend of hair and the shadow it throws
-            # on the forehead; only what is plainly hair goes all the way to black, or
-            # she gets a hard black band across her brow.
+            # At the hairline only what is plainly hair goes all the way black, or she
+            # gets a hard band across her brow.
             k = 1.0
             if _in_face(x, y):
                 k = max(0.0, min(1.0, (85 - max(px[0], px[1], px[2])) / 35.0))
@@ -1609,38 +1582,48 @@ def opp_edit_hair_black(img):
 
 def opp_edit_skin(img):
     """
-    The skin, a shade toward grey.
-
-    Everything warm enough to be skin that is not hair or the top -- the face, the
-    neck, the shoulders, the lips too -- is pulled part of the way toward one cool
-    grey. The blush stays, fainter; it is what keeps her from looking ill rather than
-    kept.
+    The skin, pale: everything warm enough to be skin is pulled halfway toward one cool
+    tone. The pull is the same everywhere, so the shading and the blush survive.
     """
     h, w = len(img), len(img[0])
     for y in range(h):
         for x in range(w):
             px = img[y][x]
-            if px[3] == 0 or px[0] < 90 or px[0] - px[1] < 30 or px[2] >= px[0]:
+            # Skin: warm, warmer than the hair (neutral by now) and the top (cold).
+            if px[3] == 0 or px[0] < 60 or px[0] - px[1] < 18 or px[0] < px[2] + 10:
                 continue
             c = lerp_color((px[0], px[1], px[2], 255), OPP_SKIN_GREY_TONE, OPP_SKIN_GREY)
             img[y][x] = [c[0], c[1], c[2], px[3]]
 
 
-def build_opponent_frame(img, ox, oy, portrait, pose_name, injury):
+def build_opponent_frame(img, ox, oy, portrait, pose_name, injury, face):
     p = OPP_POSE[pose_name]
+    fx, fy = face["origin"]
     cell = [[list(px) for px in row] for row in portrait]
-    opp_edit_eyes(cell, p["eyes"], injury)
-    opp_edit_mouth(cell, p["mouth"])
-    opp_edit_injury(cell, injury)
+    opp_edit_eyes(cell, p["eyes"], injury, face)
+    opp_edit_mouth(cell, p["mouth"], face)
+    opp_edit_injury(cell, injury, face)
     frame = new_image(OPP_OW, OPP_OH)
     for y, row in enumerate(cell):
         for x, px in enumerate(row):
-            frame[OPP_OY + y][OPP_OX + x] = list(px)
-    frame = opp_bend(frame, p["tilt"], p["lean"], p["drop"] + injury)
+            frame[fy + y][fx + x] = list(px)
+    frame = opp_bend(frame, p["tilt"], p["lean"], p["drop"] + injury, face)
     for y, row in enumerate(frame):
         for x, px in enumerate(row):
             if px[3]:
                 img[oy + y][ox + x] = list(px)
+
+
+def write_opponent_sheet(name, portrait, face):
+    """One opponent's sheet: the six poses of one finished portrait, side by side."""
+    fx, fy = face["origin"]
+    assert fx + len(portrait[0]) <= OPP_OW and fy + len(portrait) == OPP_OH, \
+        (name + ": the portrait no longer fits the frame", len(portrait[0]), len(portrait))
+    img = new_image(OPP_OW * len(OPP_POSES), OPP_OH * len(OPP_INJURIES))
+    for row, injury in enumerate(OPP_INJURIES):
+        for col, pose in enumerate(OPP_POSES):
+            build_opponent_frame(img, col * OPP_OW, row * OPP_OH, portrait, pose, injury, face)
+    write_png(os.path.join(OUT, name), img)
 
 
 def build_opponent_sheet():
@@ -1648,43 +1631,640 @@ def build_opponent_sheet():
     opp_edit_dress(portrait)
     opp_edit_hair_black(portrait)
     opp_edit_skin(portrait)
+    opp_edit_eye_shape(portrait)
     opp_edit_ear(portrait)
-    assert OPP_OX + len(portrait[0]) <= OPP_OW and OPP_OY + len(portrait) == OPP_OH, \
-        ("the portrait no longer fits the frame", len(portrait[0]), len(portrait))
-    img = new_image(OPP_OW * len(OPP_POSES), OPP_OH * len(OPP_INJURIES))
-    for row, injury in enumerate(OPP_INJURIES):
-        for col, pose in enumerate(OPP_POSES):
-            build_opponent_frame(img, col * OPP_OW, row * OPP_OH, portrait, pose, injury)
-    write_png(os.path.join(OUT, "opponent-sheet.png"), img)
+    write_opponent_sheet("opponent-sheet.png", portrait, OPP_FACE)
+
+
+# --------------------------------------------------------------------------- #
+# opponent-second-sheet.png -- the default opponent, off her picture, 140x120 a frame at 4x
+#
+# She is tools/source/opponent-second-portrait.png with the wall keyed out (it is cool,
+# she is warm; leaks into the dark hair closed, largest piece kept, which drops the
+# stain), the plate and box in the picture filled down from the rows above, and then
+# four things done to her before she is sampled down: the scar and the dirt cleaned
+# off her face (dark specks inside the face swapped for the skin around them, eyes,
+# nose and mouth left alone), the skin pulled toward a pale grey, the eye sockets put
+# in shadow from the brow down, and four picture pixels to the art pixel, drawn at 4x.
+# That is what makes her read as less beat up and more wrong, and it lost the fine
+# detail the first cut of her had. Five columns are that picture; talk is the head
+# bent up and toward the player (no mouth edit -- I tried one and it looked pasted on).
+# Frame size and scale are also on Opponents.First and have to agree.
+# --------------------------------------------------------------------------- #
+
+OPP2_SOURCE = os.path.join(ROOT, "tools", "source", "opponent-second-portrait.png")
+
+#: The row of the picture that is the table's far edge. Her frame ends there.
+OPP2_LIP = 480
+
+#: The columns of the picture that are the frame, at picture size, and the pitch it is
+#: sampled at. 560x480 at 4 is the 140x120 frame Opponents.First names.
+OPP2_FRAME_X0, OPP2_FRAME_W = 40, 560
+OPP2_FRAME_H = OPP2_LIP
+OPP2_PITCH = 4
+OPP2_ART_W, OPP2_ART_H = OPP2_FRAME_W // OPP2_PITCH, OPP2_FRAME_H // OPP2_PITCH
+
+#: What is in front of her, x0, y0, x1, y1 exclusive: the plate (a little past its right
+#: edge, the last letter overhangs it) and the box.
+OPP2_HIDDEN = ((0, 388, 254, 508), (382, 382, 606, 508))
+
+#: The wall: cool, darker than skin, and its stain a shade warmer than the rest.
+OPP2_WALL_MAX = 110
+OPP2_STAIN_MIN = 36
+
+#: The fill under the furniture: rows it is run from, and how much darker by the bottom.
+OPP2_FILL_BAND = 30
+OPP2_FILL_DARK = 0.28
+
+#: The face in picture pixels: the oval the cleaning runs inside (centre and radii), and
+#: the boxes inside it that are left alone (brows and eyes, nose, mouth). The scar is on
+#: the cheek between them.
+OPP2_FACE_C = (322, 212)
+OPP2_FACE_R = (62, 88)
+OPP2_FACE_KEEP = ((266, 128, 324, 190), (326, 130, 378, 190), (300, 184, 350, 252), (280, 236, 354, 274))
+
+#: Cleaning: the window (half-size) the local skin is taken from, and how far under it a
+#: pixel has to be to count as dirt or scar.
+OPP2_CLEAN_HALF = 5
+OPP2_CLEAN_DARK = 0.80
+
+#: The skin: where it is looked for (the face oval, wider than the cleaning one, and the
+#: neck and chest), what counts as it (warm, and the pull fades in between these two
+#: brightnesses so the hair's dark is left alone and there is no hard edge), the grey it
+#: goes toward, and how far.
+OPP2_SKIN_FACE_R = (78, 108)
+OPP2_SKIN_BODY = (160, 240, 560, 392)
+OPP2_SKIN_WARMTH = 12
+OPP2_SKIN_LUM0, OPP2_SKIN_LUM1 = 38, 85
+OPP2_SKIN_PALE = (198, 200, 212, 255)
+OPP2_SKIN_PALE_T = 0.55
+
+#: The eye sockets, in picture pixels, and how dark they are at the brow (1 is untouched
+#: at the lower lid). Darker eyes on paler skin is most of the scary.
+OPP2_EYES = ((266, 140, 324, 194), (326, 142, 378, 194))
+OPP2_HOOD = 0.42
+OPP2_HOOD_EDGE = 8
+
+#: The talking pose, in art pixels: bent about the base of the neck like the first
+#: opponent (opp_bend), up and toward the player. The pivot is the neck base, the bend
+#: runs from the chin to the shoulders.
+OPP2_FACE = dict(origin=(0, 0), pivot=(70.5, 87.5), bend=(72, 96))
+OPP2_TALK = dict(tilt=-5.0, lean=-3, drop=-2)
+
+
+def _opp2_hidden(x, y):
+    return any(x0 <= x < x1 and y0 <= y < y1 for x0, y0, x1, y1 in OPP2_HIDDEN)
+
+
+def _opp2_is_wall(px):
+    # Cool: more blue than green. The stain has a little red in it and is told from
+    # the hair by being lit where hair that dark is not.
+    rd, gn, bl = px[0], px[1], px[2]
+    if gn - bl > -3 or max(rd, gn, bl) > OPP2_WALL_MAX:
+        return False
+    return rd - bl <= 2 or (rd - bl <= 8 and max(rd, gn, bl) >= OPP2_STAIN_MIN)
+
+
+def _lum(px):
+    return 0.3 * px[0] + 0.59 * px[1] + 0.11 * px[2]
+
+
+def _in_box(x, y, boxes):
+    return any(x0 <= x < x1 and y0 <= y < y1 for x0, y0, x1, y1 in boxes)
+
+
+def opp2_load_portrait():
+    """
+    The second opponent off her picture at picture size: keyed, kept, and filled in
+    under the furniture. Returns the frame, OPP2_FRAME_W by OPP2_FRAME_H.
+    """
+    src = read_png(OPP2_SOURCE)
+    H, W = len(src), len(src[0])
+
+    # The wall: flood in from the border over everything cool.
+    bg = [[False] * W for _ in range(H)]
+    stack = [(x, y) for x in range(W) for y in (0, H - 1)] + [(x, y) for y in range(H) for x in (0, W - 1)]
+    while stack:
+        x, y = stack.pop()
+        if x < 0 or y < 0 or x >= W or y >= H or bg[y][x] or _opp2_hidden(x, y):
+            continue
+        if not _opp2_is_wall(src[y][x]):
+            continue
+        bg[y][x] = True
+        stack.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
+
+    # Close the leaks into the hair: wall with most of its neighbours in her is her.
+    for _ in range(2):
+        closed = [row[:] for row in bg]
+        for y in range(1, H - 1):
+            for x in range(1, W - 1):
+                if not bg[y][x]:
+                    continue
+                n = sum(1 for dy in (-1, 0, 1) for dx in (-1, 0, 1)
+                        if (dx or dy) and not bg[y + dy][x + dx] and not _opp2_hidden(x + dx, y + dy))
+                if n >= 5:
+                    closed[y][x] = False
+        bg = closed
+
+    # Keep the largest piece of what is not wall: her, and not the stain.
+    seen = [[False] * W for _ in range(H)]
+    keep, best = None, 0
+    for sy in range(H):
+        for sx in range(W):
+            if seen[sy][sx] or bg[sy][sx] or _opp2_hidden(sx, sy):
+                continue
+            piece, stack = [], [(sx, sy)]
+            seen[sy][sx] = True
+            while stack:
+                x, y = stack.pop()
+                piece.append((x, y))
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < W and 0 <= ny < H and not seen[ny][nx] and not bg[ny][nx] and not _opp2_hidden(nx, ny):
+                        seen[ny][nx] = True
+                        stack.append((nx, ny))
+            if len(piece) > best:
+                keep, best = piece, len(piece)
+    her = [[False] * W for _ in range(H)]
+    for x, y in keep:
+        her[y][x] = True
+
+    # The frame: her pixels as they are, from the lip up, with the furniture unknown.
+    frame = new_image(OPP2_FRAME_W, OPP2_FRAME_H)
+    for y in range(OPP2_FRAME_H):
+        for x in range(OPP2_FRAME_W):
+            sx = OPP2_FRAME_X0 + x
+            if her[y][sx] and not _opp2_hidden(sx, y):
+                frame[y][x] = [src[y][sx][0], src[y][sx][1], src[y][sx][2], 255]
+
+    # Nothing of her may be cut off by the frame's sides.
+    for y in range(OPP2_FRAME_H):
+        for sx in list(range(0, OPP2_FRAME_X0)) + list(range(OPP2_FRAME_X0 + OPP2_FRAME_W, W)):
+            assert not her[y][sx] or _opp2_hidden(sx, y), ("she is wider than the frame", sx, y)
+
+    # Fill down under the furniture from the rows above it.
+    for x in range(OPP2_FRAME_W):
+        sx = OPP2_FRAME_X0 + x
+        last = None
+        for y in range(OPP2_FRAME_H):
+            if not _opp2_hidden(sx, y):
+                last = y if frame[y][x][3] else None
+                continue
+            if last is None:
+                continue
+            band = [frame[yy][x] for yy in range(max(0, last - OPP2_FILL_BAND + 1), last + 1)]
+            mean = tuple(sum(px[i] for px in band) // len(band) for i in range(3)) + (255,)
+            period = max(1, 2 * len(band) - 2)
+            i = (y - last - 1) % period
+            if i >= len(band):
+                i = period - i
+            px = band[len(band) - 1 - i]
+            c = lerp_color((px[0], px[1], px[2], 255), mean, 0.5)
+            c = shade(c, 1.0 - OPP2_FILL_DARK * min(1.0, (y - last) / 90.0))
+            frame[y][x] = [c[0], c[1], c[2], 255]
+
+    return frame
+
+
+def opp2_clean_face(frame):
+    """
+    Takes the scar and the dirt off her face. Inside the face oval, and outside the eyes,
+    nose and mouth, any pixel much darker than the skin around it becomes that skin: the
+    pixel of middling brightness in the window round it. Two passes, for the wider marks.
+    """
+    fx, fy = OPP2_FACE_C[0] - OPP2_FRAME_X0, OPP2_FACE_C[1]
+    rx, ry = OPP2_FACE_R
+    keep = [(x0 - OPP2_FRAME_X0, y0, x1 - OPP2_FRAME_X0, y1) for x0, y0, x1, y1 in OPP2_FACE_KEEP]
+    h, w = len(frame), len(frame[0])
+
+    def in_region(x, y):
+        return ((x - fx) / rx) ** 2 + ((y - fy) / ry) ** 2 <= 1.0 and not _in_box(x, y, keep) and frame[y][x][3] > 0
+
+    for _ in range(2):
+        out = [[list(px) for px in row] for row in frame]
+        for y in range(max(0, fy - ry), min(h, fy + ry + 1)):
+            for x in range(max(0, fx - rx), min(w, fx + rx + 1)):
+                if not in_region(x, y):
+                    continue
+                window = [frame[yy][xx] for yy in range(max(0, y - OPP2_CLEAN_HALF), min(h, y + OPP2_CLEAN_HALF + 1))
+                          for xx in range(max(0, x - OPP2_CLEAN_HALF), min(w, x + OPP2_CLEAN_HALF + 1)) if in_region(xx, yy)]
+                window.sort(key=_lum)
+                mid = window[len(window) // 2]
+                if _lum(frame[y][x]) < _lum(mid) * OPP2_CLEAN_DARK:
+                    out[y][x] = [mid[0], mid[1], mid[2], 255]
+        frame = out
+    return frame
+
+
+def opp2_make_pale(frame):
+    """
+    The skin toward grey and the eye sockets into shadow. Skin is anything bright enough
+    and warmer than the knit; the sockets darken from the brow down to the lower lid, with
+    the sides feathered so there is no box.
+    """
+    fx, fy = OPP2_FACE_C[0] - OPP2_FRAME_X0, OPP2_FACE_C[1]
+    rx, ry = OPP2_SKIN_FACE_R
+    bx0, by0, bx1, by1 = OPP2_SKIN_BODY[0] - OPP2_FRAME_X0, OPP2_SKIN_BODY[1], OPP2_SKIN_BODY[2] - OPP2_FRAME_X0, OPP2_SKIN_BODY[3]
+    out = [[list(px) for px in row] for row in frame]
+    for y, row in enumerate(frame):
+        for x, px in enumerate(row):
+            if px[3] == 0 or px[0] - px[2] < OPP2_SKIN_WARMTH:
+                continue
+            if ((x - fx) / rx) ** 2 + ((y - fy) / ry) ** 2 > 1.0 and not (bx0 <= x < bx1 and by0 <= y < by1):
+                continue
+            t = (_lum(px) - OPP2_SKIN_LUM0) / float(OPP2_SKIN_LUM1 - OPP2_SKIN_LUM0)
+            t = max(0.0, min(1.0, t))
+            t = t * t * (3.0 - 2.0 * t)
+            c = lerp_color((px[0], px[1], px[2], 255), OPP2_SKIN_PALE, OPP2_SKIN_PALE_T * t)
+            out[y][x] = [c[0], c[1], c[2], 255]
+    for x0, y0, x1, y1 in OPP2_EYES:
+        x0, x1 = x0 - OPP2_FRAME_X0, x1 - OPP2_FRAME_X0
+        for y in range(y0, y1):
+            down = (y - y0) / float(y1 - y0)
+            f = OPP2_HOOD + (1.0 - OPP2_HOOD) * down ** 1.5
+            for x in range(x0, x1):
+                edge = min(x - x0, x1 - 1 - x) / float(OPP2_HOOD_EDGE)
+                ff = f + (1.0 - f) * max(0.0, 1.0 - edge)
+                px = out[y][x]
+                if px[3]:
+                    c = shade((px[0], px[1], px[2], 255), ff)
+                    out[y][x] = [c[0], c[1], c[2], 255]
+    return out
+
+
+def opp2_sample(frame):
+    """Box-samples the picture-size frame down to art pixels, with coverage as alpha."""
+    P = OPP2_PITCH
+    out = new_image(OPP2_ART_W, OPP2_ART_H)
+    for by in range(OPP2_ART_H):
+        for bx in range(OPP2_ART_W):
+            acc, n = [0, 0, 0], 0
+            for y in range(by * P, by * P + P):
+                for x in range(bx * P, bx * P + P):
+                    px = frame[y][x]
+                    if px[3]:
+                        acc[0] += px[0]
+                        acc[1] += px[1]
+                        acc[2] += px[2]
+                        n += 1
+            if n:
+                out[by][bx] = [acc[0] // n, acc[1] // n, acc[2] // n, 255 * n // (P * P)]
+    return out
+
+
+def build_second_opponent_sheet():
+    base = opp2_sample(opp2_make_pale(opp2_clean_face(opp2_load_portrait())))
+    talking = opp_bend(base, OPP2_TALK["tilt"], OPP2_TALK["lean"], OPP2_TALK["drop"], OPP2_FACE)
+    img = new_image(OPP2_ART_W * len(OPP_POSES), OPP2_ART_H)
+    for col, pose in enumerate(OPP_POSES):
+        cell = talking if pose == "talk" else base
+        for y, row in enumerate(cell):
+            for x, px in enumerate(row):
+                if px[3]:
+                    img[y][col * OPP2_ART_W + x] = list(px)
+    write_png(os.path.join(OUT, "opponent-second-sheet.png"), img)
 
 
 
 # --------------------------------------------------------------------------- #
-# hand-sheet.png -- the player's own arm, 5 frames from a curled hand to an open one
+# token-sheet.png -- the steel tag the box pays with, 8 frames of it turning, 24x24
 #
-# Seen from behind and above, because it is the player's arm and that is where it
-# is. It comes in from the bottom-right corner of the screen on a diagonal: the way
-# your right arm crosses your own view when you reach for something in front of you.
-# Frame 0 is a hand still half-curled from the table and frame 4 is open and fanned,
-# which is the pose the box is waiting for.
+# Eight frames turn it through a half circle, which for a shape with two matching ends
+# is a whole one. It lies flat so the lamp lights it evenly; the spin is sold by the
+# brushed grain and the sheen, which turn with it, and the bevel on the top-left edge,
+# which does not. Drawn at 3x and averaged down, like the hand.
+# --------------------------------------------------------------------------- #
+
+TOKEN_SIZE = 24
+TOKEN_FRAMES = 8
+TOKEN_SS = 3
+
+TOKEN_STEEL   = (146, 142, 150)
+TOKEN_STEEL_D = (58, 54, 62)
+TOKEN_STEEL_L = (222, 218, 226)
+TOKEN_RIM     = (12, 9, 14)
+TOKEN_RED     = (172, 54, 40)
+
+#: Half the tag's length and half its width, in frame pixels, and the corner radius.
+TOKEN_HALF_L, TOKEN_HALF_W, TOKEN_CORNER = 8.0, 4.4, 2.0
+
+#: Where the hole is along the tag, and how big.
+TOKEN_HOLE_X, TOKEN_HOLE_R = -5.0, 1.15
+
+
+def _tag_inside(u, v):
+    """How far inside the rounded oblong (u, v) is, in frame pixels; negative is outside."""
+    qx = abs(u) - (TOKEN_HALF_L - TOKEN_CORNER)
+    qy = abs(v) - (TOKEN_HALF_W - TOKEN_CORNER)
+    outside = math.hypot(max(qx, 0.0), max(qy, 0.0))
+    inside = min(max(qx, qy), 0.0)
+    return TOKEN_CORNER - (outside + inside)
+
+
+def build_token_frame(img, ox, angle):
+    S = TOKEN_SS
+    ca, sa = math.cos(angle), math.sin(angle)
+    cx = cy = TOKEN_SIZE / 2.0
+    cells = []
+    for Y in range(TOKEN_SIZE * S):
+        row = []
+        py = (Y + 0.5) / S - cy
+        for X in range(TOKEN_SIZE * S):
+            px = (X + 0.5) / S - cx
+            # Into the tag's own frame, which turns with it.
+            u = px * ca + py * sa
+            v = -px * sa + py * ca
+            d = _tag_inside(u, v)
+            if d <= 0.0 or math.hypot(u - TOKEN_HOLE_X, v) < TOKEN_HOLE_R:
+                row.append(None)
+                continue
+            # Brushed steel: the grain runs along the tag and catches the light in bands.
+            grain = 0.5 + 0.5 * math.sin(v * 5.5 + u * 0.4) * 0.5 + 0.25 * math.sin(v * 13.0 + 2.0)
+            t = 0.35 + 0.45 * grain
+            # The sheen: a band of light across the tag that turns with it.
+            t += 0.35 * math.exp(-((u * 0.55 + v * 0.8 - 1.5) / 2.6) ** 2)
+            # The bevel: lit top-left, dark bottom-right, and it does not turn.
+            if d < 1.1:
+                lit = (-px - py) / max(1.0, math.hypot(px, py))
+                t += 0.45 * lit
+            # The box's red on the end nearest it, which is up the screen.
+            red = max(0.0, -py / TOKEN_HALF_L) * 0.18
+            c = lerp_color(TOKEN_STEEL_D + (255,), TOKEN_STEEL + (255,), min(1.0, t))
+            if t > 1.0:
+                c = lerp_color(TOKEN_STEEL + (255,), TOKEN_STEEL_L + (255,), min(1.0, t - 1.0))
+            c = lerp_color(c, TOKEN_RED + (255,), red)
+            # The rim of the hole, in shadow.
+            if math.hypot(u - TOKEN_HOLE_X, v) < TOKEN_HOLE_R + 0.6:
+                c = lerp_color(c, TOKEN_RIM + (255,), 0.6)
+            row.append(c)
+        cells.append(row)
+
+    for y in range(TOKEN_SIZE):
+        for x in range(TOKEN_SIZE):
+            acc, n = [0, 0, 0], 0
+            for Y in range(y * S, y * S + S):
+                for X in range(x * S, x * S + S):
+                    c = cells[Y][X]
+                    if c is None:
+                        continue
+                    acc[0] += c[0]
+                    acc[1] += c[1]
+                    acc[2] += c[2]
+                    n += 1
+            if n:
+                img[y][ox + x] = [acc[0] // n, acc[1] // n, acc[2] // n, 255 * n // (S * S)]
+    # The dark rim the sheet has round everything.
+    for y in range(TOKEN_SIZE):
+        for x in range(TOKEN_SIZE):
+            p = img[y][ox + x]
+            if p[3] < 40:
+                continue
+            for xx, yy in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if xx < 0 or yy < 0 or xx >= TOKEN_SIZE or yy >= TOKEN_SIZE or img[yy][ox + xx][3] < 40:
+                    img[y][ox + x] = list(lerp_color(tuple(p), TOKEN_RIM + (p[3],), 0.5))
+                    break
+
+
+def build_token_sheet():
+    img = new_image(TOKEN_SIZE * TOKEN_FRAMES, TOKEN_SIZE)
+    for f in range(TOKEN_FRAMES):
+        build_token_frame(img, f * TOKEN_SIZE, math.pi * f / TOKEN_FRAMES)
+    write_png(os.path.join(OUT, "token-sheet.png"), img)
+
+
+# --------------------------------------------------------------------------- #
+# sight-sheet.png, ember-sheet.png, steady-bar.png -- the three checks' furniture
 #
-# It is meant to look like a photograph of a hand shrunk to pixels, the way she does,
-# and not like a drawing of one. So it is not drawn: it is modelled and lit. The arm
-# is a height field -- the forearm and the back of the hand flattened tubes, each
-# finger three rounded segments with a nail set into the last, the thumb two, the
-# knuckles bumps that rise as the hand closes, the tendons low ridges up the back of
-# the hand -- and every pixel is coloured by the angle that surface makes with the
-# lamp, with the skin going red where the light comes through the edge of a finger
-# and dark where two fingers meet. It is rendered at three times the size and
-# averaged down, which is what gives it the soft pixels of a picture rather than the
-# hard ones of a drawing. The light comes from the far end: the lamp is over the box,
-# and the box is what the hand is going into, so the fingertips are the bright end
-# and the elbow is in the dark near you.
+# The sight is a bone-white ring with four ticks, 24x24, four frames turning a quarter
+# of the way round (which for four ticks is all the way). The ember is a coal that
+# breathes, 16x16, four frames. The bar is the groove the ember sits in, 145x8, with the
+# lit band in the middle (SteadyCheck has the same band numbers). All drawn at 3x and
+# averaged down.
+# --------------------------------------------------------------------------- #
+
+SIGHT_SIZE, SIGHT_FRAMES, SIGHT_SS = 24, 4, 3
+SIGHT_BONE = (232, 224, 210)
+SIGHT_RIM = (14, 10, 12)
+
+EMBER_SIZE, EMBER_FRAMES, EMBER_SS = 16, 4, 3
+EMBER_CORE = (255, 236, 170)
+EMBER_HOT = (250, 150, 60)
+EMBER_RED = (176, 44, 28)
+EMBER_CRUST = (48, 20, 18)
+
+BAR_W, BAR_H = 145, 8
+BAR_BAND_START, BAR_BAND_WIDTH = 54, 37
+BAR_GROOVE = (26, 24, 30)
+BAR_GROOVE_L = (58, 54, 62)
+BAR_BAND = (120, 100, 72)
+BAR_BAND_L = (196, 168, 118)
+BAR_TICK = (232, 210, 160)
+
+
+def _downsample_into(img, ox, cells, size, ss):
+    for y in range(size):
+        for x in range(size):
+            acc, n = [0, 0, 0, 0], 0
+            for Y in range(y * ss, y * ss + ss):
+                for X in range(x * ss, x * ss + ss):
+                    c = cells[Y][X]
+                    if c is None:
+                        continue
+                    acc[0] += c[0]
+                    acc[1] += c[1]
+                    acc[2] += c[2]
+                    acc[3] += c[3]
+                    n += 1
+            if n:
+                img[y][ox + x] = [acc[0] // n, acc[1] // n, acc[2] // n, acc[3] // (ss * ss)]
+
+
+def build_sight_frame(img, ox, turn):
+    S = SIGHT_SS
+    c = SIGHT_SIZE / 2.0
+    cells = []
+    for Y in range(SIGHT_SIZE * S):
+        row = []
+        py = (Y + 0.5) / S - c
+        for X in range(SIGHT_SIZE * S):
+            px = (X + 0.5) / S - c
+            d = math.hypot(px, py)
+            ang = math.atan2(py, px)
+            a = 0.0
+            # The ring, a pixel and a half thick.
+            if abs(d - 9.2) < 0.8:
+                a = 1.0
+            # Four ticks, turned by this frame, from just inside the ring to well outside.
+            for k in range(4):
+                ta = turn + k * math.pi / 2.0
+                along = px * math.cos(ta) + py * math.sin(ta)
+                across = -px * math.sin(ta) + py * math.cos(ta)
+                if 7.2 <= along <= 11.6 and abs(across) < 0.75:
+                    a = 1.0
+            # The dot in the middle.
+            if d < 1.1:
+                a = 1.0
+            if a <= 0.0:
+                row.append(None)
+                continue
+            row.append((SIGHT_BONE[0], SIGHT_BONE[1], SIGHT_BONE[2], 255))
+        cells.append(row)
+    _downsample_into(img, ox, cells, SIGHT_SIZE, S)
+    # The dark rim, so it reads over her face as well as over the dark.
+    for y in range(SIGHT_SIZE):
+        for x in range(SIGHT_SIZE):
+            p = img[y][ox + x]
+            if p[3] >= 40:
+                continue
+            for xx, yy in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if 0 <= xx < SIGHT_SIZE and 0 <= yy < SIGHT_SIZE and img[yy][ox + xx][3] >= 120:
+                    img[y][ox + x] = [SIGHT_RIM[0], SIGHT_RIM[1], SIGHT_RIM[2], max(p[3], 150)]
+                    break
+
+
+def build_sight_sheet():
+    img = new_image(SIGHT_SIZE * SIGHT_FRAMES, SIGHT_SIZE)
+    for f in range(SIGHT_FRAMES):
+        build_sight_frame(img, f * SIGHT_SIZE, (math.pi / 2.0) * f / SIGHT_FRAMES)
+    write_png(os.path.join(OUT, "sight-sheet.png"), img)
+
+
+def build_ember_frame(img, ox, breath, rng):
+    S = EMBER_SS
+    c = EMBER_SIZE / 2.0
+    radius = 4.6 + 0.9 * breath
+    cells = []
+    for Y in range(EMBER_SIZE * S):
+        row = []
+        py = (Y + 0.5) / S - c
+        for X in range(EMBER_SIZE * S):
+            px = (X + 0.5) / S - c
+            # A lumpy coal rather than a ball: the radius wanders round the edge.
+            ang = math.atan2(py, px)
+            r = radius * (1.0 + 0.10 * math.sin(ang * 3.0 + 0.7) + 0.06 * math.sin(ang * 5.0 + breath * 4.0))
+            d = math.hypot(px, py) / r
+            if d > 1.35:
+                row.append(None)
+                continue
+            if d > 1.0:
+                # The corona: light off the coal, fading fast.
+                k = (1.35 - d) / 0.35
+                row.append((EMBER_HOT[0], EMBER_HOT[1], EMBER_HOT[2], int(120 * k * k * (0.7 + 0.3 * breath))))
+                continue
+            t = d * d
+            col = lerp_color(EMBER_CORE + (255,), EMBER_HOT + (255,), min(1.0, t * 1.6))
+            col = lerp_color(col, EMBER_RED + (255,), max(0.0, (t - 0.55) / 0.45))
+            # The crust: dark patches where the coal is not glowing through; they move as it breathes.
+            crust = 0.5 + 0.5 * math.sin(px * 1.9 + breath * 2.0) * math.sin(py * 2.3 - breath)
+            if crust > 0.78 and d > 0.35:
+                col = lerp_color(col, EMBER_CRUST + (255,), 0.75)
+            row.append(col)
+        cells.append(row)
+    _downsample_into(img, ox, cells, EMBER_SIZE, S)
+
+
+def build_ember_sheet():
+    img = new_image(EMBER_SIZE * EMBER_FRAMES, EMBER_SIZE)
+    rng = random.Random(3131)
+    for f in range(EMBER_FRAMES):
+        build_ember_frame(img, f * EMBER_SIZE, 0.5 + 0.5 * math.sin(math.pi * 2.0 * f / EMBER_FRAMES), rng)
+    write_png(os.path.join(OUT, "ember-sheet.png"), img)
+
+
+def build_steady_bar():
+    img = new_image(BAR_W, BAR_H)
+    for y in range(BAR_H):
+        for x in range(BAR_W):
+            edge = x == 0 or x == BAR_W - 1 or y == 0 or y == BAR_H - 1
+            in_band = BAR_BAND_START <= x < BAR_BAND_START + BAR_BAND_WIDTH
+            if edge:
+                c = BAR_GROOVE_L if y == 0 else BAR_GROOVE
+                c = (c[0] // 2, c[1] // 2, c[2] // 2)
+            elif in_band:
+                # Lit, brightest along the middle of the groove.
+                k = 1.0 - abs((y - 3.5) / 3.5) ** 2
+                c = lerp_color(BAR_BAND + (255,), BAR_BAND_L + (255,), 0.6 * k)[:3]
+            else:
+                k = 1.0 - abs((y - 3.5) / 3.5) ** 2
+                c = lerp_color(BAR_GROOVE + (255,), BAR_GROOVE_L + (255,), 0.35 * k)[:3]
+            put(img, x, y, (c[0], c[1], c[2], 255))
+    # A tick at each end of the band.
+    for x in (BAR_BAND_START, BAR_BAND_START + BAR_BAND_WIDTH - 1):
+        for y in range(1, BAR_H - 1):
+            put(img, x, y, BAR_TICK + (255,))
+    write_png(os.path.join(OUT, "steady-bar.png"), img)
+
+
+# --------------------------------------------------------------------------- #
+# hearts.png -- what a side has left to lose: a heart, full and hollow
 #
-# The first sheet was a hand on its own and it floated; the second was this arm, drawn
-# with a distance field, and it read as a glove. Fingers are not tubes. The ridge of
-# the tendon, the crease at the joint, the flat of the nail with its rim of skin, the
-# bump of the knuckle: those are what a hand is, at any size, and they are all here.
+# Twelve pixels, drawn at 3x on the heading. Full is the red of the box's light, dark
+# at the rim and lit at the upper left where the lamp is; hollow is the same shape as
+# an outline in the heading's grey, so a spent heart is still counted.
+# --------------------------------------------------------------------------- #
+
+HEART_SIZE = 12
+HEART_SS = 3
+HEART_RED = (168, 34, 40)
+HEART_RED_D = (86, 12, 20)
+HEART_RED_L = (232, 104, 96)
+HEART_RIM = (14, 6, 10)
+HEART_HOLLOW = (96, 88, 92)
+
+
+def _heart_inside(u, v):
+    """Signed: inside a heart drawn in a box from -1 to 1, positive in."""
+    # Two lobes and a point: the classic implicit heart, scaled to fit the frame.
+    x, y = u * 1.15, -v * 1.15 + 0.15
+    f = (x * x + y * y - 1.0) ** 3 - x * x * y * y * y
+    return -f
+
+
+def build_hearts():
+    img = new_image(HEART_SIZE * 2, HEART_SIZE)
+    S = HEART_SS
+    for frame in range(2):
+        cells = []
+        for Y in range(HEART_SIZE * S):
+            row = []
+            v = ((Y + 0.5) / S) / HEART_SIZE * 2.0 - 1.0
+            for X in range(HEART_SIZE * S):
+                u = ((X + 0.5) / S) / HEART_SIZE * 2.0 - 1.0
+                d = _heart_inside(u, v)
+                if d <= 0.0:
+                    row.append(None)
+                    continue
+                if frame == 1:
+                    # Hollow: only the rim.
+                    if d < 0.25:
+                        row.append(HEART_HOLLOW + (255,))
+                    else:
+                        row.append(None)
+                    continue
+                if d < 0.14:
+                    row.append(HEART_RIM + (255,))
+                    continue
+                # Lit at the upper left, dark toward the lower right.
+                t = 0.5 + 0.5 * (-(u + 0.2) - (v + 0.3)) / 1.6
+                c = lerp_color(HEART_RED_D + (255,), HEART_RED + (255,), min(1.0, max(0.0, t * 1.4)))
+                if u < -0.15 and v < -0.2 and d > 0.5:
+                    c = lerp_color(c, HEART_RED_L + (255,), 0.55)
+                row.append(c)
+            cells.append(row)
+        _downsample_into(img, frame * HEART_SIZE, cells, HEART_SIZE, S)
+    write_png(os.path.join(OUT, "hearts.png"), img)
+
+
+# --------------------------------------------------------------------------- #
+# hand-sheet.png -- the player's own arm, 5 frames of 96x96, curled hand to open hand
+#
+# Seen from the side and a little above, modelled on a photo of a hand doing this:
+# forearm up from the bottom-right, wrist turned, fingers out to the left stacked one
+# above the next, thumb along the top. Frame 0 is curled like a hand resting on a
+# table, frame 4 is open. It is not drawn, it is modelled and lit: a height field (tubes
+# for the arm and fingers, bumps for knuckles, ridges for tendons, nails set in) shaded
+# by its angle to the lamp, then rendered at 3x and averaged down so it looks like a
+# photo shrunk to pixels. The lamp is over the box, so the fingertips are the bright end.
 # --------------------------------------------------------------------------- #
 
 HAND_HW, HAND_HH = 96, 96
@@ -1693,7 +2273,7 @@ HAND_REACH = 5
 #: Rendered at this many times the frame size and averaged down.
 HAND_SS = 3
 
-HAND_SKIN      = (224, 178, 150)        # albedo: light, warm
+HAND_SKIN      = (232, 196, 172)        # albedo: light, a little pink
 HAND_SKIN_RED  = (206, 110, 92)         # what it goes toward where the light comes through
 HAND_KNUCKLE   = (212, 148, 126)
 HAND_VEIN      = (160, 150, 176)
@@ -1707,29 +2287,34 @@ HAND_RED       = (172, 54, 40)
 HAND_RIM       = (10, 6, 10)
 
 HAND_LAMP      = (-0.30, -0.62, 0.72)   # over the box, which is up and left of the arm
-HAND_AMBIENT   = (0.20, 0.17, 0.22)
+HAND_AMBIENT   = (0.30, 0.28, 0.32)
 HAND_KEY       = (1.00, 0.92, 0.80)
 
-# The line the arm lies along, from the elbow (off the bottom-right corner) to the
-# wrist. Everything else is placed along it or across it.
-HAND_ELBOW = (88.0, 104.0)
-HAND_WRIST = (52.0, 50.0)
+# The forearm line, elbow (off the bottom-right corner) to wrist, and the back-of-hand
+# line, wrist to top. They are not the same line: the wrist turns.
+HAND_ELBOW = (100.0, 112.0)
+HAND_WRIST = (62.0, 58.0)
+HAND_TOP = (52.0, 22.0)
 
-#: Where the tip of the middle finger is in the open frame, computed from the skeleton
-#: and checked when the sheet is built. HandSprite anchors by it.
-HAND_FINGERTIP = (27, 20)
+#: The middle fingertip in the open frame, checked when built. HandSprite.Fingertip anchors by it.
+HAND_FINGERTIP = (17, 25)
 
-# How far past the wrist the knuckles are, and how wide the hand is across them.
-HAND_PALM = 17.0
-HAND_KNUCKLE_HW = 11.5
-
-# Per finger: offset across the knuckles (negative is the thumb side), length, and how
-# far it swings outward when the hand fans open, in degrees.
-HAND_FINGERS = ((-8.2, 19.0, -13.0), (-2.8, 21.5, -4.0), (2.8, 20.3, 4.0), (8.2, 16.5, 13.0))
+# Per finger: knuckle position on the left edge of the hand, direction (x right, y down),
+# and open length. Index first.
+HAND_FINGERS = (
+    ((44.5, 27.0), (-0.96, -0.28), 26.0),
+    ((43.5, 32.0), (-1.00, -0.08), 28.0),
+    ((44.0, 37.0), (-0.99, 0.12), 26.0),
+    ((46.5, 42.0), (-0.95, 0.30), 21.0),
+)
 
 #: The three segments of a finger as fractions of its length, and the radius at each joint.
 HAND_SEGMENTS = (0.44, 0.31, 0.25)
-HAND_RADII = (2.95, 2.65, 2.4, 1.95)
+HAND_RADII = (3.0, 2.7, 2.45, 2.0)
+
+#: How far the middle and last segments bend toward the palm, in degrees, open and curled.
+HAND_BEND_OPEN = (10.0, 22.0)
+HAND_BEND_CURLED = (34.0, 58.0)
 
 # Tags for what a pixel belongs to, which picks its albedo.
 HAND_T_SKIN, HAND_T_NAIL, HAND_T_CLOTH = 1, 2, 3
@@ -1824,10 +2409,7 @@ class _Field:
                 self.h[Y][X] += amount * k
 
     def nail(self, x, y, ux, uy, length, width):
-        """
-        A nail set into the end of a finger: an oval on the top of it, flattened, with
-        a rim of skin round it and a fine cuticle line at its base.
-        """
+        """A nail set into the end of a finger: a flattened oval with a rim of skin and a cuticle line."""
         S = HAND_SS
         nx, ny = -uy, ux
         m = max(length, width) + 1.0
@@ -1842,7 +2424,6 @@ class _Field:
                 e = a * a + b * b
                 if e <= 1.0:
                     self.tag[Y][X] = HAND_T_NAIL
-                    # The nail is flatter than the finger under it and sits a little proud.
                     self.h[Y][X] = self.h[Y][X] * 0.92 + 0.35 * (1.0 - e)
                     self.tint[(X, Y)] = (a, e)
                 elif e <= 1.5:
@@ -1868,84 +2449,86 @@ def build_hand_frame(img, ox, openness, rng):
 
     ex, ey = HAND_ELBOW
     wx, wy = HAND_WRIST
+    tx_, ty_ = HAND_TOP
     length = math.hypot(wx - ex, wy - ey)
-    ux, uy = (wx - ex) / length, (wy - ey) / length      # along the arm, toward the box
-    nx, ny = -uy, ux                                     # across it, toward the pinky side
+    ux, uy = (wx - ex) / length, (wy - ey) / length      # along the forearm, toward the box
+    nx, ny = -uy, ux                                     # across it
     if nx < 0:
         nx, ny = -nx, -ny
 
-    # Forearm and the back of the hand are one body, widening from the wrist out to
-    # the knuckles, both flattened: seen from above an arm is wider than it is tall.
-    kx, ky = wx + ux * HAND_PALM, wy + uy * HAND_PALM
-    f.capsule(ex, ey, wx, wy, 13.5, 8.8, 0.55, HAND_T_SKIN)
-    f.capsule(wx, wy, kx, ky, 8.8, HAND_KNUCKLE_HW, 0.48, HAND_T_SKIN)
-    # The back of the hand domes up in the middle, over the metacarpals.
-    f.bump(wx + ux * HAND_PALM * 0.55, wy + uy * HAND_PALM * 0.55, 6.0, 1.2)
+    # The forearm, a flattened tube up to the wrist, and the back of the hand, a flatter
+    # one from the wrist to the top.
+    f.capsule(ex, ey, wx, wy, 11.5, 7.0, 0.52, HAND_T_SKIN)
+    f.capsule(wx, wy, tx_, ty_, 8.0, 6.8, 0.42, HAND_T_SKIN)
+    # The knuckle ridge along the left edge of the hand, where the fingers come off it.
+    f.ridge(HAND_FINGERS[0][0][0] + 2.0, HAND_FINGERS[0][0][1], HAND_FINGERS[3][0][0] + 2.0, HAND_FINGERS[3][0][1], 2.2, 0.5 + 0.6 * curl)
+    # The wrist bone, the little knob on the outside of the wrist.
+    f.bump(wx + 5.0, wy - 1.0, 2.2, 0.55)
 
-    # Fingers: three segments each from the knuckle out, swinging away from the middle
-    # as the hand fans. Curled, they are foreshortened -- from above, a folded finger
-    # is its knuckle, its first joint, and not much else -- and the knuckles stand up.
+    # Fingers: three segments each, off the left edge, each bending a little more toward
+    # the palm than the one before, and more when the hand is curled.
     tips, nails = [], []
-    for n_, (off, flen, swing) in enumerate(HAND_FINGERS):
-        bx, by = kx + nx * off, ky + ny * off
-        reach = flen * (0.40 + 0.60 * openness)
-        dx, dy = _rot(ux, uy, swing * openness)
+    bend_mid = HAND_BEND_OPEN[0] + (HAND_BEND_CURLED[0] - HAND_BEND_OPEN[0]) * curl
+    bend_end = HAND_BEND_OPEN[1] + (HAND_BEND_CURLED[1] - HAND_BEND_OPEN[1]) * curl
+    for n_, ((bx, by), (dx, dy), flen) in enumerate(HAND_FINGERS):
+        reach = flen * (0.72 + 0.28 * openness)
         thin = 0.92 if n_ == 3 else 1.0
         joints = [(bx, by)]
-        acc = 0.0
-        for seg in HAND_SEGMENTS:
-            acc += seg
-            joints.append((bx + dx * reach * acc, by + dy * reach * acc))
+        dirs = [(dx, dy)]
+        x, y = bx, by
+        for s, seg in enumerate(HAND_SEGMENTS):
+            d = dirs[-1]
+            if s == 1:
+                d = _rot(d[0], d[1], bend_mid)
+            elif s == 2:
+                d = _rot(d[0], d[1], bend_end)
+            dirs.append(d)
+            x, y = x + d[0] * reach * seg, y + d[1] * reach * seg
+            joints.append((x, y))
         for s in range(3):
             (x0, y0), (x1, y1) = joints[s], joints[s + 1]
             f.capsule(x0, y0, x1, y1, HAND_RADII[s] * thin, HAND_RADII[s + 1] * thin, 0.9, HAND_T_SKIN)
-        # The knuckle at the base, and the joints along it: bumps, higher when curled,
-        # each with a crease across the finger just past it.
-        f.bump(bx, by, 2.4 * thin, 0.5 + 1.1 * curl)
+        f.bump(bx, by, 2.2 * thin, 0.4 + 0.9 * curl)
         for s in (1, 2):
             jx, jy = joints[s]
-            f.bump(jx, jy, 1.7 * thin, 0.25 + 0.6 * curl)
-            f.ridge(jx - nx * 2.6 * thin, jy - ny * 2.6 * thin, jx + nx * 2.6 * thin, jy + ny * 2.6 * thin, 0.45, -0.45, taper=False)
+            d = dirs[s]
+            f.bump(jx, jy, 1.6 * thin, 0.2 + 0.5 * curl)
+            f.ridge(jx + d[1] * 2.4 * thin, jy - d[0] * 2.4 * thin, jx - d[1] * 2.4 * thin, jy + d[0] * 2.4 * thin, 0.42, -0.4, taper=False)
         tips.append(joints[3])
-        # The nail sits in the last segment, and shows once the finger is out enough.
         if openness > 0.25:
             (x2, y2), (x3, y3) = joints[2], joints[3]
+            d = dirs[3]
             seg = math.hypot(x3 - x2, y3 - y2)
-            cx_, cy_ = x2 + dx * seg * 0.58, y2 + dy * seg * 0.58
-            nails.append((cx_, cy_, dx, dy, seg * 0.42, HAND_RADII[3] * thin * 0.70))
+            nails.append((x2 + d[0] * seg * 0.58, y2 + d[1] * seg * 0.58, d[0], d[1], seg * 0.42, HAND_RADII[3] * thin * 0.62))
 
-    # The thumb: off the wrist on its own side, tucked along the index when the hand is
-    # curled and swung out wide when it opens. Two segments, with the nail on the far one.
-    tbx, tby = wx + ux * 4.5 - nx * 7.4, wy + uy * 4.5 - ny * 7.4
-    tdx, tdy = _rot(ux, uy, -(16.0 + 26.0 * openness))
-    if tdx * nx + tdy * ny > 0:
-        tdx, tdy = _rot(ux, uy, 16.0 + 26.0 * openness)
-    tlen = 13.0 + 2.0 * openness
+    # The thumb along the top edge, two segments, the second bending in over the index
+    # as the hand curls.
+    tbx, tby = 57.0, 34.0
+    tdx, tdy = _norm3h((-0.30, -0.95, 0.0))[:2]
+    tlen = 15.0 + 2.0 * openness
     tmx, tmy = tbx + tdx * tlen * 0.55, tby + tdy * tlen * 0.55
-    ttx, tty = tbx + tdx * tlen, tby + tdy * tlen
-    f.capsule(tbx, tby, tmx, tmy, 4.0, 3.3, 0.85, HAND_T_SKIN)
-    f.capsule(tmx, tmy, ttx, tty, 3.3, 2.5, 0.85, HAND_T_SKIN)
-    # The web of the thumb, filling the corner between it and the hand.
-    f.capsule(tbx + tdx * 2.0, tby + tdy * 2.0, wx + ux * 8.0, wy + uy * 8.0, 4.0, 5.0, 0.35, HAND_T_SKIN)
-    f.bump(tmx, tmy, 1.8, 0.3 + 0.4 * curl)
-    f.ridge(tmx - 2.8 * tdy, tmy + 2.8 * tdx, tmx + 2.8 * tdy, tmy - 2.8 * tdx, 0.45, -0.4, taper=False)
+    d2 = _rot(tdx, tdy, -18.0 - 30.0 * curl)
+    ttx, tty = tmx + d2[0] * tlen * 0.45, tmy + d2[1] * tlen * 0.45
+    f.capsule(tbx, tby, tmx, tmy, 3.7, 3.2, 0.85, HAND_T_SKIN, lift=-0.6)
+    f.capsule(tmx, tmy, ttx, tty, 3.2, 2.4, 0.85, HAND_T_SKIN, lift=-0.6)
+    f.bump(tmx, tmy, 1.7, 0.25 + 0.4 * curl)
     if openness > 0.25:
         seg = tlen * 0.45
-        nails.append((tmx + tdx * seg * 0.58, tmy + tdy * seg * 0.58, tdx, tdy, seg * 0.42, 2.5 * 0.68))
+        nails.append((tmx + d2[0] * seg * 0.6, tmy + d2[1] * seg * 0.6, d2[0], d2[1], seg * 0.4, 2.4 * 0.62))
 
-    # Tendons up the back of the hand from the wrist to each knuckle, and the two
-    # creases across the wrist.
-    for off, _, _ in HAND_FINGERS:
-        f.ridge(wx + nx * off * 0.45, wy + ny * off * 0.45, kx + nx * off * 0.92 - ux * 2.0, ky + ny * off * 0.92 - uy * 2.0, 0.9, 0.28)
-    for i in (-1.0, 1.4):
-        f.ridge(wx + ux * i - nx * 7.5, wy + uy * i - ny * 7.5, wx + ux * i + nx * 7.5, wy + uy * i + ny * 7.5, 0.5, -0.35)
+    # Tendons up the back of the hand to each knuckle, and the crease across the wrist.
+    for (bx, by), _, _ in HAND_FINGERS:
+        f.ridge(wx - 2.0, wy - 3.0, bx + 3.0, by, 0.85, 0.26)
+    hx, hy = tx_ - wx, ty_ - wy
+    hl = math.hypot(hx, hy) or 1.0
+    px_, py_ = -hy / hl, hx / hl
+    for i in (-1.0, 1.6):
+        f.ridge(wx + hx / hl * i - px_ * 7.0, wy + hy / hl * i - py_ * 7.0, wx + hx / hl * i + px_ * 7.0, wy + hy / hl * i + py_ * 7.0, 0.5, -0.35)
 
     for cx_, cy_, dx, dy, ln, wd in nails:
         f.nail(cx_, cy_, dx, dy, ln, wd)
 
-    # The cuff of a sleeve over the near end of the forearm: cloth wrapped round the arm
-    # a little proud of it, with folds running down it and a hem at the far edge. It is
-    # what makes this an arm coming out of a person rather than one lying on the table.
+    # The cuff of a sleeve over the near end of the forearm.
     cuff_cells = {}
     for Y in range(f.H):
         py = (Y + 0.5) / S
@@ -1953,22 +2536,21 @@ def build_hand_frame(img, ox, openness, rng):
             px = (X + 0.5) / S
             sp = (px - ex) * ux + (py - ey) * uy
             ap = (px - ex) * nx + (py - ey) * ny
-            if -14.0 <= sp <= 23.0 and abs(ap) <= 16.5:
-                rr = 13.5 + (8.8 - 13.5) * max(0.0, sp / length)
+            if -16.0 <= sp <= 24.0 and abs(ap) <= 15.0:
+                rr = 11.5 + (7.0 - 11.5) * max(0.0, sp / length)
                 rr += 1.4
                 if abs(ap) >= rr:
                     continue
-                z = math.sqrt(rr * rr - ap * ap) * 0.55 + 0.6
-                for fold in (-8.5, 1.0, 9.0):
+                z = math.sqrt(rr * rr - ap * ap) * 0.52 + 0.6
+                for fold in (-7.5, 0.5, 8.0):
                     z += 0.35 * math.exp(-((ap - fold - 1.2 * math.sin(sp * 0.25)) / 1.1) ** 2)
-                if sp > 21.2:
+                if sp > 22.2:
                     z += 0.5
                 f.h[Y][X] = z
                 f.tag[Y][X] = HAND_T_CLOTH
                 cuff_cells[(X, Y)] = sp
 
-    # Now light it. Normals from the height field, the height scaled up because the
-    # field is in pixels and a finger is rounder than it is wide on this screen.
+    # Now light it.
     ZS = 1.6
     out = [[[0, 0, 0, 0] for _ in range(f.W)] for _ in range(f.H)]
     noise = [[rng.uniform(-1.0, 1.0) for _ in range(f.W // 3 + 2)] for _ in range(f.H // 3 + 2)]
@@ -1977,7 +2559,6 @@ def build_hand_frame(img, ox, openness, rng):
         if 0 <= X < f.W and 0 <= Y < f.H:
             v = f.h[Y][X]
             return v if v > 0.0 else -3.0
-        # Off the bottom or right edge the arm keeps going, off the screen.
         if X >= f.W or Y >= f.H:
             return f.h[min(f.H - 1, Y)][min(f.W - 1, X)]
         return -3.0
@@ -1993,7 +2574,6 @@ def build_hand_frame(img, ox, openness, rng):
             dzdy = (hat(X, Y + 1) - hat(X, Y - 1)) * 0.5 * S
             n = _norm3h((-dzdx * ZS, -dzdy * ZS, 1.0))
 
-            # Cavities: where something nearby stands higher, the light does not reach.
             ao = 1.0
             for ddx, ddy in ((3, 0), (-3, 0), (0, 3), (0, -3), (5, 0), (-5, 0), (0, 5), (0, -5)):
                 nb = hat(X + ddx * S // 2, Y + ddy * S // 2)
@@ -2001,8 +2581,6 @@ def build_hand_frame(img, ox, openness, rng):
                     ao -= 0.09 * min(1.0, (nb - z - 0.6) / 1.5)
             ao = max(0.45, ao)
 
-            # How far along the arm: 0 at the elbow, 1 at the wrist, on past that to the
-            # tips. The far end is the lit end.
             s = ((px - ex) * ux + (py - ey) * uy) / length
             reachlit = 0.55 + 0.45 * max(0.0, min(1.0, s / 1.6)) ** 1.1
             tag = f.tag[Y][X]
@@ -2010,18 +2588,15 @@ def build_hand_frame(img, ox, openness, rng):
             if tag == HAND_T_CLOTH:
                 sp = cuff_cells.get((X, Y), 0.0)
                 alb = HAND_CLOTH
-                if sp > 21.2:
+                if sp > 22.2:
                     alb = HAND_CLOTH_L
-                c = hand_shade(alb, n, 0.0, 0.0, ao * (0.5 + 0.5 * max(0.0, min(1.0, (sp + 14.0) / 37.0))))
+                c = hand_shade(alb, n, 0.0, 0.0, ao * (0.5 + 0.5 * max(0.0, min(1.0, (sp + 16.0) / 38.0))))
             else:
                 alb = HAND_SKIN
-                # The skin is not one colour: a little mottling, redder over the
-                # knuckles, a vein or two showing through the back of the hand.
                 nz = noise[Y // 3][X // 3] * 0.5 + noise[(Y // 3 + 1) % len(noise)][(X // 3 + 1) % len(noise[0])] * 0.25
                 alb = tuple(max(0, min(255, int(alb[i] * (1.0 + 0.085 * nz)))) for i in range(3))
-                for off, _, _ in HAND_FINGERS:
-                    kxx, kyy = kx + nx * off, ky + ny * off
-                    kk = math.exp(-((px - kxx) ** 2 + (py - kyy) ** 2) / 9.0)
+                for (bx, by), _, _ in HAND_FINGERS:
+                    kk = math.exp(-((px - bx) ** 2 + (py - by) ** 2) / 9.0)
                     alb = lerp_color(alb + (255,), HAND_KNUCKLE + (255,), 0.5 * kk)[:3]
                 if tag == HAND_T_NAIL:
                     a_, e_ = f.tint.get((X, Y), (0.0, 0.0))
@@ -2031,21 +2606,19 @@ def build_hand_frame(img, ox, openness, rng):
                     if a_ < -0.62 and e_ > 0.72:
                         alb = HAND_CUTICLE
                 else:
-                    for off in (-3.4, 2.6):
-                        vx0, vy0 = wx + nx * off * 0.6, wy + ny * off * 0.6
-                        vx1, vy1 = kx + nx * off * 1.4 - ux * 3.0, ky + ny * off * 1.4 - uy * 3.0
+                    # A vein or two, up the back of the hand from the wrist.
+                    for off in (-3.0, 2.5):
+                        vx0, vy0 = wx + px_ * off * 0.6, wy + py_ * off * 0.6
+                        vx1, vy1 = tx_ + px_ * off * 1.3 + 2.0, ty_ + py_ * off * 1.3 + 6.0
                         lx, ly = vx1 - vx0, vy1 - vy0
                         t = max(0.0, min(1.0, ((px - vx0) * lx + (py - vy0) * ly) / (lx * lx + ly * ly)))
                         dv = math.hypot(px - (vx0 + lx * t), py - (vy0 + ly * t)) + 0.6 * math.sin(t * 9.0 + off)
                         alb = lerp_color(alb + (255,), HAND_VEIN + (255,), 0.22 * math.exp(-(dv / 0.8) ** 2) * math.sin(math.pi * t))[:3]
-                # Where the surface turns away from the lamp at a thin edge, the light
-                # comes through the skin, red.
                 ndl = max(0.0, n[0] * HAND_LAMP[0] + n[1] * HAND_LAMP[1] + n[2] * HAND_LAMP[2])
                 thin = max(0.0, 1.0 - z / 2.4)
-                red = 0.16 * thin * (1.0 - ndl) * reachlit
+                red = 0.10 * thin * (1.0 - ndl) * reachlit
                 spec = 0.10 if tag == HAND_T_NAIL else 0.035
                 c = hand_shade(alb, n, spec, red, ao)
-                # The box's own red on whatever is nearest it.
                 glow = max(0.0, (s - 1.15) / 0.6)
                 if glow > 0:
                     c = list(lerp_color(tuple(c) + (255,), HAND_RED + (255,), min(0.30, glow * 0.30))[:3])
@@ -2053,8 +2626,6 @@ def build_hand_frame(img, ox, openness, rng):
             c = [int(v * reachlit) for v in c]
             out[Y][X] = [c[0], c[1], c[2], 255]
 
-    # Average down to the frame, then the dark rim the sheet has round everything --
-    # not along the bottom or right edge, where the arm leaves the screen.
     for y in range(HAND_HH):
         for x in range(HAND_HW):
             acc, n_ = [0, 0, 0], 0
@@ -2083,7 +2654,6 @@ def build_hand_frame(img, ox, openness, rng):
 
 def build_hand_sheet():
     img = new_image(HAND_HW * HAND_REACH, HAND_HH)
-    rng = random.Random(9090)
     tip = None
     for fr in range(HAND_REACH):
         tip = build_hand_frame(img, fr * HAND_HW, fr / (HAND_REACH - 1), random.Random(9090))
@@ -2093,6 +2663,64 @@ def build_hand_sheet():
     assert abs(tip[0] - HAND_FINGERTIP[0]) <= 1.5 and abs(tip[1] - HAND_FINGERTIP[1]) <= 1.5, \
         ("the fingertip moved", tip, HAND_FINGERTIP)
     write_png(os.path.join(OUT, "hand-sheet.png"), img)
+
+
+# --------------------------------------------------------------------------- #
+# box-lid.png -- the box's mouth shut: the plate over the opening, 76x76
+#
+# Only seen in the close-up, where two jaws of the same concrete as the shell draw back
+# into the rim. This is the plate they are cut from, the exact size of the opening in
+# black-box.png, with the seam lit on the top jaw and dark on the bottom one.
+# --------------------------------------------------------------------------- #
+
+LID_W, LID_H = 76, 76
+LID_SHELL = (32, 30, 37)
+LID_SHELL_LT = (58, 55, 65)
+LID_SHELL_DK = (13, 12, 16)
+LID_SEAM = (4, 3, 6)
+
+#: The radius of the opening's corners in black-box.png, which the plate matches.
+LID_CORNER = 12
+
+
+def build_box_lid(seed=4242):
+    rng = random.Random(seed)
+    img = new_image(LID_W, LID_H)
+    for y in range(LID_H):
+        for x in range(LID_W):
+            # Poured concrete: grain, a little darker toward the seam and the edges.
+            g = rng.uniform(-1.0, 1.0)
+            c = LID_SHELL
+            if g > 0.82:
+                c = LID_SHELL_LT
+            elif g < -0.75:
+                c = LID_SHELL_DK
+            # Rounded corners to match the opening, dark just inside the radius.
+            cx_ = min(x, LID_W - 1 - x)
+            cy_ = min(y, LID_H - 1 - y)
+            corner = 0.0
+            if cx_ < LID_CORNER and cy_ < LID_CORNER:
+                corner = math.hypot(LID_CORNER - cx_, LID_CORNER - cy_) - LID_CORNER
+            if corner > 0.5:
+                continue
+            edge = min(x, LID_W - 1 - x, y, LID_H - 1 - y)
+            if edge < 2 or corner > -1.5:
+                c = lerp_color(c + (255,), LID_SHELL_DK + (255,), 0.6)[:3]
+            # The seam: top jaw's lower edge lit, bottom jaw's upper edge in shadow, dark between.
+            if y == LID_H // 2 - 1:
+                c = lerp_color(c + (255,), LID_SHELL_LT + (255,), 0.7)[:3]
+            elif y == LID_H // 2:
+                c = LID_SEAM
+            elif y == LID_H // 2 + 1:
+                c = lerp_color(c + (255,), LID_SHELL_DK + (255,), 0.8)[:3]
+            put(img, x, y, c + (255,))
+    # A few chips out of the seam, where the jaws have met hard before.
+    for _ in range(9):
+        x = rng.randrange(4, LID_W - 4)
+        y = LID_H // 2 + rng.choice((-2, 2))
+        put(img, x, y, LID_SHELL_DK + (255,))
+        put(img, x + 1, y, LID_SHELL_DK + (255,))
+    write_png(os.path.join(OUT, "box-lid.png"), img)
 
 
 
@@ -2109,5 +2737,12 @@ if __name__ == "__main__":
     build_panel()
     build_room()
     build_opponent_sheet()
+    build_second_opponent_sheet()
     build_hand_sheet()
+    build_token_sheet()
+    build_sight_sheet()
+    build_ember_sheet()
+    build_steady_bar()
+    build_hearts()
+    build_box_lid()
     print("Done.")

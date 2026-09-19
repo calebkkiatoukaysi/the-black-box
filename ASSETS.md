@@ -18,9 +18,25 @@ Content/room.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedu
 
 Content/opponent-sheet.png - built by tools/generate_assets.py from tools/source/opponent-portrait.png: the portrait off the opponent's character sheet, keyed and sampled to art pixels, with each pose and injury made as pixel edits on it; the character sheet was supplied by Caleb Kiatoukaysi for The Black Box
 
-tools/source/opponent-portrait.png - the portrait from the opponent's character sheet, supplied by Caleb Kiatoukaysi for The Black Box; the only picture the generator reads rather than draws
+tools/source/opponent-portrait.png - the portrait from the opponent's character sheet, supplied by Caleb Kiatoukaysi for The Black Box; one of the two pictures the generator reads rather than draws
+
+Content/opponent-second-sheet.png - built by tools/generate_assets.py from tools/source/opponent-second-portrait.png: the default opponent's picture keyed off the wall behind her, cleaned up, paled and sampled to art pixels, six columns of it with the head bent on the talking one; the picture was supplied by Caleb Kiatoukaysi for The Black Box
+
+tools/source/opponent-second-portrait.png - a picture of the second opponent at the table, supplied by Caleb Kiatoukaysi for The Black Box; the other picture the generator reads rather than draws
 
 Content/hand-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
+Content/token-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
+Content/sight-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
+Content/ember-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
+Content/steady-bar.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
+Content/hearts.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
+Content/box-lid.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
 
 Content/Spectral/Spectral-Light.ttf - Spectral font created by Production Type, released on Google Fonts (https://fonts.google.com/specimen/Spectral) under the SIL Open Font License
 
