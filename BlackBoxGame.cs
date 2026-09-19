@@ -5,6 +5,8 @@ using System.Text;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using TheBlackBox.Checks;
+using TheBlackBox.Collisions;
 
 namespace TheBlackBox;
 
@@ -13,45 +15,15 @@ namespace TheBlackBox;
 /// </summary>
 public partial class BlackBoxGame : Game
 {
-    /// <summary>
-    /// Which of the screens built on the title scene the player is looking at.
-    /// </summary>
-    /// <remarks>
-    /// All of them are drawn over the same box: nothing here swaps the scene out, it only
-    /// changes what is laid on top of it and which controls are listening. That is why this
-    /// is one field rather than a stack of screen classes -- there is one scene, and the box
-    /// should keep breathing through every one of these.
-    /// </remarks>
-    private enum Screen
-    {
-        /// <summary>The title, with START and EXIT under it.</summary>
-        Title,
 
-        /// <summary>The save form, over a veiled title screen.</summary>
-        SlotSelect,
-
-        /// <summary>Naming a run that has not been named, over a veiled title screen.</summary>
-        NameEntry,
-
-        /// <summary>A run: the table, the opponent across it, and the round being played.</summary>
-        Run,
-    }
-
-    private const int ScreenWidth = 1600;
-    private const int ScreenHeight = 900;
+    internal const int ScreenWidth = 1600;
+    internal const int ScreenHeight = 900;
 
     // box center position
     private const float BoxCenterY = 500f;
 
-    /// <summary>
-    /// Where the box sits once the player is at the table.
-    /// </summary>
-    /// <remarks>
-    /// Centred, and sitting on the table rather than hanging in front of it -- see
-    /// <see cref="BlackBoxSprite.DrawContactShadow"/> for what makes it rest there. At
-    /// <see cref="BlackBoxSprite.TableScale"/> its bottom edge lands on the surface with the
-    /// opponent's face clear above it.
-    /// </remarks>
+    /// <summary>Where the box sits once the player is at the table.</summary>
+    /// <remarks>At TableScale this puts its bottom edge on the table with the opponent's face clear above it.</remarks>
     private const float RunBoxCenterY = 656f;
 
     /// <summary>How much ash is caught in the pull at any one time.</summary>
@@ -72,139 +44,136 @@ public partial class BlackBoxGame : Game
     /// <summary>Gap between the two buttons, in screen pixels.</summary>
     private const float ButtonGap = 36f;
 
-    /// <summary>
-    /// Where the table cuts the opponent off, which is what they are anchored by.
-    /// </summary>
+    /// <summary>Where the table cuts the opponent off. The bottom middle of their frame goes here.</summary>
     /// <remarks>
-    /// <para>
-    /// The far lip of the table in room.png, which is exactly where a person sitting behind
-    /// it stops. Lower down and the bottom of their coat is drawn on the surface in front
-    /// of them, which reads as a shoulder resting on the table rather than a body behind it.
-    /// </para>
-    /// <para>
-    /// Left of centre rather than on it. The box owns the middle of the table, and a figure
-    /// drawn straight behind it is a figure the box covers from the collar down. Off to one
-    /// side, the box covers one shoulder and the rest of them is in the open: the face, the
-    /// raised hand, the near shoulder. It is also the composition every visitor in the games
-    /// this one is built on uses -- the person on one side, what they are saying on the other.
-    /// </para>
+    /// The Y is the far lip of the table in room.png (ROOM_HORIZON in the generator). Left of
+    /// centre so the box only covers one shoulder instead of everything from the collar down.
+    /// The scale is on the roster now (Opponent.Scale) since the two opponents are drawn differently.
     /// </remarks>
     private static readonly Vector2 OpponentFoot = new(600f, 640f);
 
-    /// <summary>
-    /// How far a frame of the opponent is blown up. A whole number, so the pixels stay square.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Big. At 6x a frame of <c>opponent-sheet.png</c> runs from the table lip to the top of
-    /// the wall, which makes the opponent the thing the room is about and the box the thing
-    /// between the two of you. The first sheet was a head and a collar drawn at 5x, and at
-    /// that size the box could have swallowed it -- the fix was not a bigger number but a
-    /// bigger person, drawn to fill the frame. It is 6x rather than the room's 4x because she
-    /// is now cut from her character sheet at the sheet's own pixel size, and that portrait
-    /// is 92 pixels tall: 6x is the whole number that puts her back where the drawn one stood.
-    /// </para>
-    /// <para>
-    /// Two numbers hold this together: this, and <c>ROOM_HORIZON</c> in
-    /// <c>tools/generate_assets.py</c>, which is the table line and the bottom of them.
-    /// The top of the frame has to clear the run's bookkeeping along the top edge, so the
-    /// sheet's height is cut to exactly that distance at this scale.
-    /// </para>
-    /// </remarks>
-    private const float OpponentScale = 6f;
-
-    /// <summary>
-    /// How far the player's own arm is blown up.
-    /// </summary>
-    /// <remarks>
-    /// The same whole number as everything else, so the pixels match. It is nearer the
-    /// camera than anything on the table, but that is drawn into the sheet -- the arm is big
-    /// in its own pixels, elbow to fingertips across most of a 96-pixel frame -- rather than
-    /// bought with a bigger multiplier, because a sprite blown up further than its neighbours
-    /// reads as a different game pasted over this one.
-    /// </remarks>
+    /// <summary>How far the player's own arm is blown up. Same whole number as the rest so the pixels match.</summary>
     private const float HandScale = 4f;
 
-    /// <summary>
-    /// Where the fingertips wait before the hand is offered: off the bottom of the screen,
-    /// right of centre.
-    /// </summary>
+    /// <summary>Where the fingertips wait before the hand is offered: off the bottom of the screen, right of centre.</summary>
     /// <remarks>
-    /// This and <see cref="HandMouth"/> lie on the line the arm is drawn along, so that the
-    /// arm slides out along its own length. Moved anywhere else it would drift sideways as it
-    /// came in, and an arm that drifts is not attached to anybody. The whole frame is below
-    /// the screen at this point, sleeve and all, so nothing is seen until the offer.
+    /// This and HandMouth are on the line the arm is drawn along, so it slides out along its own
+    /// length instead of drifting sideways. The whole frame is off screen here.
     /// </remarks>
     private static readonly Vector2 HandRest = new(1058f, 997f);
 
-    /// <summary>
-    /// Where the fingertips end up: inside the mouth of the box, a little left of its centre.
-    /// </summary>
-    /// <remarks>
-    /// Far enough in that the opening has closed over the fingers, and left of centre because
-    /// a right hand reaching straight ahead lands there. With the tips here the elbow end of
-    /// the frame is still off the bottom-right corner, which is the point of the diagonal.
-    /// </remarks>
+    /// <summary>Where the fingertips end up: inside the mouth of the box, a little left of centre.</summary>
     private static readonly Vector2 HandMouth = new(792f, 598f);
 
     /// <summary>How long the hand takes to go in, in seconds.</summary>
     private const float ReachSeconds = 1.35f;
 
+    /// <summary>The close-up of the box: where it sits, how big it is, and where the hands go.</summary>
+    /// <remarks>
+    /// When a hand is offered the table goes away and the box fills the view at 6x. The hands are
+    /// drawn at 6x too so the arm going in matches what it is going into.
+    /// </remarks>
+    private static readonly Vector2 BoxViewCentre = new(610f, 440f);
+    private const float BoxViewScale = 6f;
+    private const float BoxHandScale = 6f;
+    private static readonly Vector2 BoxHandRest = new(1560f, 1120f);
+    private static readonly Vector2 BoxHandMouth = new(540f, 470f);
+    private static readonly Vector2 BoxTokenLaunch = new(610f, 520f);
+    private const float BoxCatchTipY = 640f;
+    private const float BoxCatchMinX = 300f;
+    private const float BoxCatchMaxX = 1300f;
+
+    /// <summary>How long the box takes to open its mouth once a hand is offered, in seconds.</summary>
+    private const float LidSeconds = 0.8f;
+
+    /// <summary>Where the tag leaves the box: the mouth, a little below where the fingers went in.</summary>
+    /// <remarks>The catch is meant to be short and fair. A hand on the keys can get across the table in time.</remarks>
+    private static readonly Vector2 TokenLaunch = new(800f, 640f);
+
+    /// <summary>How fast the tag leaves the mouth down the table, in screen pixels a second.</summary>
+    private const float TokenLaunchSpeed = 90f;
+
+    /// <summary>The most sideways drift the tag can leave with, either way, in screen pixels a second.</summary>
+    private const float TokenDrift = 360f;
+
+    /// <summary>How far down the screen the catching hand's fingertips sit.</summary>
+    private const float CatchTipY = 790f;
+
+    /// <summary>How far left and right the palm can go: the width of the table, less the hand.</summary>
+    private const float CatchMinX = 240f;
+    private const float CatchMaxX = 1360f;
+
+    /// <summary>The dark past the near edge of the table. A tag that gets there is gone.</summary>
+    /// <remarks>Starts a little under the bottom of the screen so the tag is seen to leave, not cut off halfway.</remarks>
+    private static readonly BoundingRectangle TheDark = new(0f, ScreenHeight + 10f, ScreenWidth, 400f);
+
+    /// <summary>Where the aim check's sight has to land: the middle of the face, plus the clean and miss radii.</summary>
+    /// <remarks>
+    /// Where the face is comes off the roster (Opponent.Face) since the two opponents are different sizes,
+    /// so EnterRun hands it to the check after the seat is filled.
+    /// </remarks>
+    private Vector2 AimTarget => OpponentFoot + _opponent.Who.Face;
+    private const float AimInner = 44f;
+    private const float AimOuter = 150f;
+
+    /// <summary>Where the steady check's groove and the read check's tags go: the table left of the box, above the pockets.</summary>
+    private static readonly Vector2 CheckBarOrigin = new(40f, 672f);
+    private static readonly Vector2 CheckLaneStart = new(88f, 690f);
+    private const float CheckLaneLength = 484f;
+
     /// <summary>How long the box holds the hand before it pays, in seconds.</summary>
     private const float TakeSeconds = 0.9f;
 
-    /// <summary>
-    /// The fixed part of how long a line of the player's own is held. See <see cref="SayingSeconds"/>.
-    /// </summary>
+    // How long the player's own line is held: a base, a bit per character, and a floor and
+    // ceiling. The clock keeps running through it, so a reply costs the time it takes to say.
     private const float SayingBase = 0.9f;
-
-    /// <summary>How much longer each character of it is worth. See <see cref="SayingSeconds"/>.</summary>
     private const float SayingPerCharacter = 0.032f;
-
-    /// <summary>The shortest a reply is ever held, so that a two-word one is still a beat.</summary>
     private const float SayingMin = 1.3f;
-
-    /// <summary>
-    /// The longest, so that no single sentence eats the box's patience.
-    /// </summary>
-    /// <remarks>
-    /// The clock does not stop for any of this. A reply costs the player the time it takes to
-    /// say, exactly as it would across a real table, and four exchanges of it come out of the
-    /// same <see cref="DialogueScript.Seconds"/> that everything else does.
-    /// </remarks>
     private const float SayingMax = 3.4f;
 
-    /// <summary>
-    /// How long the opponent's mouth stays open after a line of theirs lands, in seconds.
-    /// </summary>
-    /// <remarks>
-    /// A beat, not the length of the line. There is no audio to flap a jaw against and the
-    /// player reads at their own pace, so holding the talking frame for as long as the words
-    /// are on screen would leave them gaping through a silence. Struck when the line arrives
-    /// and dropped again while it is still being read.
-    /// </remarks>
+    /// <summary>How long the opponent's mouth stays open after a line of theirs lands, in seconds.</summary>
+    /// <remarks>A beat, not the whole line. There is no audio, so holding it longer just leaves them gaping.</remarks>
     private const float SpeakSeconds = 0.75f;
+
+    // The colours the table's own text is set in. The shared ones are in Palette.
+    private static readonly Color TitleColor = new(240, 235, 240);
+    private static readonly Color TitleShadow = new(104, 12, 17);
+    private static readonly Color HintColor = new(150, 140, 142);
+    private static readonly Color PlateColor = new Color(6, 5, 9) * 0.80f;
+    private static readonly Color PlateLip = new(64, 58, 66);
+    private static readonly Color LineLive = new(226, 216, 210);
+    private static readonly Color LineSaid = new(162, 150, 150);
+    private static readonly Color EndingLineColor = new(170, 158, 160);
+    private static readonly Vector2 EndingShadowOffset = new(3f, 3f);
+
+    /// <summary>Room left either side of the verdict before it is shrunk to fit.</summary>
+    private const float EndingMargin = 80f;
+
+    /// <summary>How far above the pockets a save error is printed.</summary>
+    private const float StatusRise = 30f;
+
+    /// <summary>The gap between a name and its hearts, and how far the hearts sit below the names' top.</summary>
+    private const float HeartsGap = 12f;
+    private const float HeartsDrop = 2f;
+
+    /// <summary>How much of the plate's padding is left under its last line.</summary>
+    private const float PlateBottomPad = 0.6f;
 
     /// <summary>The thin line of run bookkeeping along the top edge.</summary>
     private const float RunStatusY = 14f;
 
-    /// <summary>
-    /// The plate the conversation is written on, on the wall to the right of the opponent.
-    /// </summary>
+    /// <summary>How dark the veil over the table is at the end of a run, and where the verdict sits.</summary>
+    private const float EndingVeilOpacity = 0.78f;
+    private const float EndingTitleY = 300f;
+    private const float EndingLineY = 446f;
+
+    /// <summary>How far along the heading from the left margin "THEM" and their hearts start.</summary>
+    private const float HeartsThemX = 262f;
+
+    /// <summary>The plate the conversation is written on, on the wall to the right of the opponent.</summary>
     /// <remarks>
-    /// <para>
-    /// The words used to be stacked into the strip of wall above the opponent's head, and
-    /// the opponent's head now reaches the top of the wall. So the words moved to where the
-    /// wall is empty: the right-hand side, beside them, on a dark plate that grows downward
-    /// as a line wraps. It is the composition of the reference this table was built from --
-    /// the figure on one side of the frame, what is being said on the other.
-    /// </para>
-    /// <para>
-    /// The name sits at the top of the plate, the patience bar under it (drawn by
-    /// <see cref="DialogueWheel"/>, at a rectangle that has to agree with these numbers), and
-    /// the line under that. Anchored by its top rather than its bottom because there is
-    /// nothing under it to collide with any more.
-    /// </para>
+    /// It used to sit above their head, but the head reaches the top of the wall now. It grows
+    /// downward as lines wrap. DialogueWheel's patience bar rectangle has to agree with these numbers.
     /// </remarks>
     private static readonly Rectangle DialoguePlate = new(1000, 56, 580, 0);
 
@@ -246,48 +215,13 @@ public partial class BlackBoxGame : Game
     /// <summary>Size of a decision plate. Three of them have to fit between the pocket rows.</summary>
     private static readonly Point DecideSize = new(240, 84);
 
-    /// <summary>
-    /// Which part of a round the table is in.
-    /// </summary>
-    /// <remarks>
-    /// The order is the round: both sides talk, both sides pay, the box deals, the player
-    /// takes their turn, what happened is read back, and it comes round again -- unless
-    /// somebody is out of lives, in which case it stops.
-    /// </remarks>
-    private enum RoundPhase
-    {
-        /// <summary>The discussion period. See <see cref="DiscussionPeriod"/>.</summary>
-        Discussion,
-
-        /// <summary>The box is waiting for a hand.</summary>
-        Offer,
-
-        /// <summary>A hand is going in, or being held.</summary>
-        Reaching,
-
-        /// <summary>
-        /// The player's turn: the box has paid, and the player can play what is in their
-        /// pockets and then decide about what is in their hand.
-        /// </summary>
-        PlayerTurn,
-
-        /// <summary>What has happened, read one line at a time.</summary>
-        Resolving,
-
-        /// <summary>Somebody is out of lives and the run is finished.</summary>
-        Over,
-    }
-
     /// <summary>Not quite black, so the box itself still reads as the darkest thing on screen.</summary>
     private static readonly Color VoidColor = new(10, 8, 16);
 
-    /// <summary>
-    /// Additive blending for premultiplied-alpha content. In this case this is for the eye glow.
-    /// </summary>
+    /// <summary>Additive blending for premultiplied-alpha content. In this case this is for the eye glow.</summary>
     /// <remarks>
-    /// The content pipeline premultiplies alpha, but the stock <see cref="BlendState.Additive"/>
-    /// still multiplies the source by its alpha on the way in. That applies alpha twice and
-    /// leaves the glow far dimmer than authored, so the source factor is forced to One here.
+    /// The stock BlendState.Additive multiplies by alpha again on the way in, which the pipeline
+    /// already did, so the glow came out dim. Forcing the source factor to One fixes it.
     ///
     /// Author Note for Grader: This code was developed and generated by AI. It is intended to handle additive blending
     ///  correctly for premultiplied-alpha content. (the Eye Glow) Thank you for understanding! -Caleb (Pretty cool too!)
@@ -316,6 +250,26 @@ public partial class BlackBoxGame : Game
 
     private OpponentSprite _opponent;
     private HandSprite _hand;
+
+    /// <summary>The tag the box pays with, while it is on the table.</summary>
+    private TokenSprite _token;
+
+    /// <summary>The player's other hand, out to catch it.</summary>
+    private CatchHandSprite _catchHand;
+
+    /// <summary>The hearts on the heading, both sides.</summary>
+    private HeartsSprite _hearts;
+
+    /// <summary>The three checks, made once and asked again each time an item calls for one.</summary>
+    private AimCheck _aimCheck;
+    private SteadyCheck _steadyCheck;
+    private ReadCheck _readCheck;
+
+    /// <summary>The check being played, or null unless one is.</summary>
+    private SkillCheckGame _check;
+
+    /// <summary>What to do with the check's result once it is in.</summary>
+    private Action<float> _afterCheck;
     private DialogueWheel _wheel;
 
     /// <summary>The player's three pockets, and the opponent's.</summary>
@@ -340,15 +294,8 @@ public partial class BlackBoxGame : Game
     /// <summary>The line of the round currently on screen, or null.</summary>
     private string _logLine;
 
-    /// <summary>
-    /// Whether the log being read leads back to the player's turn rather than on to the
-    /// next round.
-    /// </summary>
-    /// <remarks>
-    /// A pocket played mid-turn is read out and then the turn carries on; a decision about
-    /// the hand is read out and then the opponent has theirs. Both go through the same
-    /// reading, so this is what tells them apart at the end of it.
-    /// </remarks>
+    /// <summary>Whether the log being read leads back to the player's turn instead of on to the next round.</summary>
+    /// <remarks>A pocket played mid-turn and a decision about the hand both go through the same reading, so this tells them apart.</remarks>
     private bool _resumeTurn;
 
     /// <summary>What the opponent had the last time their face was checked, so a wound can be shown.</summary>
@@ -360,6 +307,15 @@ public partial class BlackBoxGame : Game
     /// <summary>How far the hand has gone in, from 0 to 1, and then how long it is held.</summary>
     private float _reach;
     private float _held;
+
+    /// <summary>Whether the table has given way to the close-up of the box.</summary>
+    private bool _boxView;
+
+    /// <summary>How far open the box's mouth is in the close-up, from 0 shut to 1.</summary>
+    private float _lidOpen;
+
+    /// <summary>The plate the box's jaws are cut from.</summary>
+    private Texture2D _lid;
 
     /// <summary>What the box deals from. Seeded by the clock like any other run.</summary>
     private readonly Random _random = new();
@@ -426,12 +382,11 @@ public partial class BlackBoxGame : Game
             _ashes[i] = new AshSprite { Center = _blackBox.Position };
         }
 
-        // The two ways out of this screen. Amber is the box making an offer; red is the
-        // colour of the light in it, saved for the choice that ends things.
+        // Amber is the box making an offer; red is saved for the choice that ends things.
         _startButton = new ButtonSprite(StartLabel, new Vector2(ScreenWidth / 2f, ButtonRowY), ButtonSprite.Amber);
         _exitButton = new ButtonSprite(ExitLabel, new Vector2(ScreenWidth / 2f, ButtonRowY), ButtonSprite.EmberRed);
 
-        // Bone-white: walking away from the table is the one choice the box has no stake in.
+        // Bone-white, because walking away is the one choice the box has no stake in.
         _returnButton = new ButtonSprite(ReturnLabel, new Vector2(ScreenWidth / 2f, ButtonRowY), ButtonSprite.BoneWhite);
 
         _startButton.Clicked += OpenSlotMenu;
@@ -448,13 +403,18 @@ public partial class BlackBoxGame : Game
 
         _opponent = new OpponentSprite();
         _hand = new HandSprite();
+        _token = new TokenSprite();
+        _catchHand = new CatchHandSprite();
+        _hearts = new HeartsSprite();
+        _aimCheck = new AimCheck(AimTarget, AimInner, AimOuter);
+        _steadyCheck = new SteadyCheck(CheckBarOrigin);
+        _readCheck = new ReadCheck(CheckLaneStart, CheckLaneLength);
 
         _feedButton = new ButtonSprite(FeedLabel, new Vector2(ScreenWidth / 2f, RunButtonY),
             ButtonSprite.EmberRed);
         _feedButton.Clicked += OfferHand;
 
-        // Using is red because it spends something and cannot be taken back; keeping is
-        // amber, the box's own offer held onto; leaving is bone, the same as walking away.
+        // Same colour logic: red spends something, amber keeps the offer, bone walks away.
         _useButton = new ButtonSprite(UseLabel, new Vector2(DecideLeftX, RunButtonY),
             ButtonSprite.EmberRed, DecideSize);
         _keepButton = new ButtonSprite(KeepLabel, new Vector2(DecideMiddleX, RunButtonY),
@@ -469,8 +429,7 @@ public partial class BlackBoxGame : Game
         _leaveButton.Clicked += () => Decide(DealtChoice.Leave);
         _continueButton.Clicked += StepLog;
 
-        // Yours on the left, theirs on the right, in the same colours as the names on the
-        // plate: bone for the player, amber for whoever is across the table.
+        // Yours on the left, theirs on the right, in the same colours as the names on the plate.
         _playerPockets = new PocketStrip("YOUR POCKETS", new Vector2(PocketsMargin, PocketsY), ButtonSprite.BoneWhite);
         _opponentPockets = new PocketStrip("THEIR POCKETS",
             new Vector2(ScreenWidth - PocketsMargin - PocketStrip.Width, PocketsY), ButtonSprite.Amber);
@@ -479,8 +438,7 @@ public partial class BlackBoxGame : Game
         _wheel = new DialogueWheel();
         _wheel.Chosen += Answer;
 
-        // Characters come from the window rather than from polling the keyboard, so the form
-        // never has to know anything about layouts or modifier keys.
+        // Characters come from the window, so the form never has to deal with layouts or shift.
         Window.TextInput += (_, e) => _nameEntry.TypeCharacter(e.Character);
 
         base.Initialize();
@@ -514,6 +472,13 @@ public partial class BlackBoxGame : Game
 
         _opponent.LoadContent(Content);
         _hand.LoadContent(Content);
+        _lid = Content.Load<Texture2D>("box-lid");
+        _token.LoadContent(Content);
+        _catchHand.LoadContent(Content);
+        _hearts.LoadContent(Content);
+        _aimCheck.LoadContent(Content);
+        _steadyCheck.LoadContent(Content);
+        _readCheck.LoadContent(Content);
         _feedButton.LoadContent(Content);
         _useButton.LoadContent(Content);
         _keepButton.LoadContent(Content);
@@ -524,14 +489,8 @@ public partial class BlackBoxGame : Game
         _wheel.LoadContent(Content, GraphicsDevice);
     }
 
-    /// <summary>
-    /// Centres the row of buttons on screen.
-    /// </summary>
-    /// <remarks>
-    /// This has to run after <c>LoadContent</c>, because until a button has measured its own
-    /// label it does not know how wide it is. Laying them out from those measurements rather
-    /// than from hardcoded positions means the row stays centred if a label ever changes.
-    /// </remarks>
+    /// <summary>Centres the row of buttons on screen.</summary>
+    /// <remarks>Has to run after LoadContent, since a button does not know its width until it has measured its label.</remarks>
     private void LayOutButtons()
     {
         float total = _startButton.Size.X + ButtonGap + _exitButton.Size.X;
@@ -550,9 +509,7 @@ public partial class BlackBoxGame : Game
     {
         KeyboardState keyboard = Keyboard.GetState();
 
-        // On the edge rather than while held: Escape means something different on each screen
-        // now, so a single press held down must not back out of the form and then close the
-        // game on the frame after.
+        // On the edge, not while held, or one press would back out of the form and then close the game.
         if (keyboard.IsKeyDown(Keys.Escape) && _lastKeyboard.IsKeyUp(Keys.Escape))
             Back();
 
@@ -560,14 +517,12 @@ public partial class BlackBoxGame : Game
 
         UpdateProof();
 
-        // The scene runs whatever is on top of it. The box does not stop looking at the player
-        // because a form opened over it.
+        // The box keeps running whatever screen is on top of it.
         foreach (var layer in _ashDrift) layer.Update(gameTime);
         _blackBox.Update(gameTime, GraphicsDevice.Viewport);
         foreach (var mote in _ashes) mote.Update(gameTime);
 
-        // Only the screen in front takes input, which is what stops a click meant for the form
-        // also landing on the START button still sitting underneath it.
+        // Only the screen in front takes input, so a click on the form does not also hit START underneath.
         switch (_screen)
         {
             case Screen.Title:
@@ -584,8 +539,7 @@ public partial class BlackBoxGame : Game
                 break;
 
             case Screen.Run:
-                // The clock the slot reports. It is counted here rather than from the system
-                // time so that time spent with the game closed never lands on the player.
+                // Playtime is counted here, not from the system clock, so time with the game closed does not count.
                 _run.Playtime += gameTime.ElapsedGameTime;
                 UpdateRound(gameTime);
                 break;
@@ -599,20 +553,17 @@ public partial class BlackBoxGame : Game
         BeginProofCapture();
         GraphicsDevice.Clear(VoidColor);
 
-        // 1 everything the eye light will fall on: the dead sky and the box itself.
-        // Point sampling keeps the upscaled pixel art crisp.
+        // 1. Everything the eye light falls on: the sky (or the room) and the box. Point sampling keeps the pixel art crisp.
         _spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
 
-        if (_screen == Screen.Run)
+        if (_screen == Screen.Run && !_boxView)
         {
-            // The room replaces the dead sky entirely. The drifting ash is the title
-            // screen's nowhere; this is somewhere, with a wall and a lamp in it.
+            // The room replaces the drifting ash sky on the table.
             _spriteBatch.Draw(_room, new Rectangle(0, 0, ScreenWidth, ScreenHeight), null,
                 Color.White, 0f, Vector2.Zero, SpriteEffects.None, Layers.Room);
 
-            // Both in this batch so the layer sort puts the opponent behind the box and the
-            // box on top of its own shadow, which is where all three of them are.
-            _opponent.Draw(_spriteBatch, OpponentFoot, OpponentScale);
+            // Same batch as the box so the layer sort puts the opponent behind it and the box over its own shadow.
+            _opponent.Draw(_spriteBatch, OpponentFoot);
             _blackBox.DrawContactShadow(_spriteBatch);
         }
         else
@@ -623,37 +574,44 @@ public partial class BlackBoxGame : Game
         _blackBox.DrawBody(gameTime, _spriteBatch);
         _spriteBatch.End();
 
-        // 2 the eye glow, added on top of the box so the light in the opening spills
-        // onto its rim. Linear sampling, because a glow should be soft rather than blocky.
+        // 2. The eye glow, additive so the light spills onto the rim. Linear sampling so it stays soft.
         _spriteBatch.Begin(SpriteSortMode.BackToFront, PremultipliedAdditive, SamplerState.LinearClamp);
         _blackBox.DrawEyeGlow(gameTime, _spriteBatch);
         _spriteBatch.End();
 
-        // 3 the eyes, over the glow rather than inside it, and the ash falling past
-        // in front of everything on its way in.
+        // 3. The eyes over the glow, and the ash falling past in front of everything.
         _spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
         _blackBox.DrawEyes(gameTime, _spriteBatch);
         foreach (var mote in _ashes) mote.Draw(gameTime, _spriteBatch);
 
-        // Over the box, because the arm is between the player and it.
-        _hand.Draw(_spriteBatch, HandRest, HandMouth, HandScale);
+        // The jaws in the close-up go over the eyes and under the hand.
+        if (_boxView) DrawLid();
+
+        // The arm is between the player and the box, so it goes over it.
+        if (_boxView) _hand.Draw(_spriteBatch, BoxHandRest, BoxHandMouth, BoxHandScale);
+        else _hand.Draw(_spriteBatch, HandRest, HandMouth, HandScale);
+
+        // The payout and the hand catching it, also in front of the box.
+        _catchHand.Draw(_spriteBatch);
+        _token.Draw(gameTime, _spriteBatch);
+
+        // A check draws its own furniture.
+        _check?.Draw(gameTime, _spriteBatch);
 
         _spriteBatch.End();
 
-        // 4 text, on top of everything and sampled linearly so the font stays smooth.
+        // 4. Text, sampled linearly so the font stays smooth. The ending veil and verdict go here too.
         _spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.LinearClamp);
         DrawInterface();
+        if (_screen == Screen.Run && _phase == RoundPhase.Over) DrawEnding();
         _spriteBatch.End();
 
-        // 5 the buttons, over everything. Point sampling, because the plates are pixel art
-        // upscaled by a whole number like the box is -- their labels are drawn at 1:1, so
-        // they stay crisp under it rather than needing a batch of their own.
+        // 5. The buttons. Point sampling because the plates are pixel art; the labels are 1:1 so they are fine under it.
         _spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
         DrawScreenButtons(gameTime);
         _spriteBatch.End();
 
-        // 6 the save form, in a batch of its own so its veil covers every one of the batches
-        // above it rather than sorting against only the sprites in one of them.
+        // 6. The forms, in their own batch so the veil covers everything above instead of sorting against one batch.
         _spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
         _slotMenu.Draw(gameTime, _spriteBatch);
         _nameEntry.Draw(gameTime, _spriteBatch);
@@ -670,23 +628,17 @@ public partial class BlackBoxGame : Game
         switch (_screen)
         {
             case Screen.Title:
-                //Button to start the game.
                 _startButton.Draw(gameTime, _spriteBatch);
-
-                //Button to exit the game.
                 _exitButton.Draw(gameTime, _spriteBatch);
                 break;
 
             case Screen.Run:
-                // The pockets are always on the table. What is in them is the one piece of
-                // the run that does not change with the phase, and the player should be able
-                // to plan around it while they are still talking.
-                _playerPockets.Draw(gameTime, _spriteBatch);
-                _opponentPockets.Draw(gameTime, _spriteBatch);
+                DrawHearts();
+                // The pockets are always on the table, so the player can plan around them while talking.
+                if (!_boxView) _playerPockets.Draw(gameTime, _spriteBatch);
+                if (!_boxView) _opponentPockets.Draw(gameTime, _spriteBatch);
 
-                // Exactly one thing to click at a time. While there is still something to
-                // say the four replies are it, and a fifth button beside them under a clock
-                // would only compete with them.
+                // Exactly one thing to click at a time.
                 if (_wheel.IsOpen)
                 {
                     _wheel.Draw(gameTime, _spriteBatch, _discussion?.Patience ?? 0f);
@@ -713,25 +665,18 @@ public partial class BlackBoxGame : Game
         }
     }
 
-    /// <summary>
-    /// Draws the title and the line under it -- the only text the buttons do not carry.
-    /// </summary>
+    /// <summary>Draws the title and the line under it, or the table's text when in a run.</summary>
     private void DrawInterface()
     {
-        // A tight, deep red offset rather than a hard black drop shadow. The serif is light
-        // enough that anything wider ghosts out around every stroke instead of sitting
-        // behind them, and the red ties the title back to what is looking out of the box.
-        // The face sits where the title does, and the title has already done its job by the
-        // time the player is at the table.
+        // The title gets a tight deep red shadow instead of black. The serif is light, and anything
+        // wider ghosts around the strokes. No title on the table; the face sits where it was.
         if (_screen != Screen.Run)
         {
-            DrawCentered(_titleFont, Title, TitleY, new Color(240, 235, 240), new Color(104, 12, 17), new Vector2(2f, 2f));
+            DrawCentered(_titleFont, Title, TitleY, TitleColor, TitleShadow, Palette.ShadowOffset);
 
-            // Escape still works, but it is a shortcut now rather than the way out, so it is
-            // stated once and quietly instead of pulsing for attention. What it is a shortcut
-            // for depends on the screen, so it says which.
+            // Escape is a shortcut now, so it is stated once and quietly. What it does depends on the screen.
             string hint = _screen == Screen.Title ? "ESC" : "ESC  ·  BACK";
-            DrawCentered(_uiFont, hint, EscapeHintY, new Color(150, 140, 142), Color.Black * 0.6f, new Vector2(2f, 2f));
+            DrawCentered(_uiFont, hint, EscapeHintY, HintColor, Palette.Shadow, Palette.ShadowOffset);
         }
         else
         {
@@ -739,46 +684,38 @@ public partial class BlackBoxGame : Game
         }
     }
 
-    /// <summary>
-    /// Draws the table: the bookkeeping along the top, and whatever is being said.
-    /// </summary>
+    /// <summary>Draws the table: the bookkeeping along the top, and whatever is being said.</summary>
     private void DrawRunState()
     {
-        // Lives on both sides, then the bookkeeping. Everything a player needs to read the
-        // table is on one line rather than spread around the edges of the screen. What is in
-        // the pockets is on the pockets.
+        // Everything the player needs to read the table is on one line along the top.
         string heading = string.Format(CultureInfo.InvariantCulture,
-            "{0}  {1}   ·   THEM  {2}   ·   ROUND {3}   ·   SLOT {4}  ·  {5:00}:{6:00}",
-            _run.PlayerName.ToUpperInvariant(), Pips(_run.PlayerLives), Pips(_run.OpponentLives),
-            _run.Round + 1, _runSlot + 1,
+            "CHAPTER {0}   ·   ROUND {1}   ·   {2:00}:{3:00}",
+            _run.Chapter, _run.Round + 1,
             (int)_run.Playtime.TotalHours, _run.Playtime.Minutes);
 
-        DrawCentered(_detailFont, heading, RunStatusY, new Color(122, 112, 114), Color.Black * 0.6f, new Vector2(2f, 2f));
+        DrawCentered(_detailFont, heading, RunStatusY, Palette.DimText, Palette.Shadow, Palette.ShadowOffset);
 
-        // The way out, in the corner with the rest of the bookkeeping. The bottom of the
-        // screen is where the buttons are now, and a hint under a button is a hint under a
-        // button.
+        // The names at the left, with room after each for its hearts (drawn in DrawHearts, in the pixel batch).
+        DrawText(_detailFont, _run.PlayerName.ToUpperInvariant(), PocketsMargin, RunStatusY,
+            Palette.DimText, Palette.Shadow);
+        DrawText(_detailFont, "THEM", PocketsMargin + HeartsThemX, RunStatusY,
+            Palette.DimText, Palette.Shadow);
+
+        // The way out, in the corner with the rest of the bookkeeping.
         DrawText(_detailFont, "ESC  ·  SAVE AND LEAVE", ScreenWidth - PocketsMargin, RunStatusY,
-            new Color(122, 112, 114), Color.Black * 0.6f, rightAligned: true);
+            Palette.DimText, Palette.Shadow, rightAligned: true);
 
         if (_runStatus is not null)
         {
-            DrawCentered(_detailFont, _runStatus, PocketsY - 30f, ButtonSprite.EmberRed,
-                Color.Black * 0.6f, new Vector2(2f, 2f));
+            DrawCentered(_detailFont, _runStatus, PocketsY - StatusRise, ButtonSprite.EmberRed,
+                Palette.Shadow, Palette.ShadowOffset);
         }
 
         DrawDialoguePlate();
     }
 
-    /// <summary>
-    /// Draws the plate on the wall and whatever is being said on it.
-    /// </summary>
-    /// <remarks>
-    /// Whoever is speaking owns the plate. Through the beat after a reply the line on screen
-    /// is the player's own, and a plate still carrying the opponent's name would be putting
-    /// the player's words in their mouth. Once the talking is over the plate is the box's:
-    /// what it wants, what it gave, what that did.
-    /// </remarks>
+    /// <summary>Draws the plate on the wall and whatever is being said on it.</summary>
+    /// <remarks>Whoever is speaking owns the plate: the opponent, the player for a beat after a reply, then the box.</remarks>
     private void DrawDialoguePlate()
     {
         string text = RunLine;
@@ -787,30 +724,29 @@ public partial class BlackBoxGame : Game
         string[] lines = Wrap(_uiFont, text, DialoguePlate.Width - 2 * DialoguePadding);
 
         // The plate closes a little under the last line, and never above the patience bar.
-        float bottom = DialogueLineY + Math.Max(1, lines.Length) * _uiFont.LineSpacing + DialoguePadding * 0.6f;
+        float bottom = DialogueLineY + Math.Max(1, lines.Length) * _uiFont.LineSpacing + DialoguePadding * PlateBottomPad;
         var plate = new Rectangle(DialoguePlate.X, DialoguePlate.Y, DialoguePlate.Width, (int)MathF.Round(bottom - DialoguePlate.Y));
 
-        _spriteBatch.Draw(_pixel, plate, null, new Color(6, 5, 9) * 0.80f,
+        _spriteBatch.Draw(_pixel, plate, null, PlateColor,
             0f, Vector2.Zero, SpriteEffects.None, Layers.DialoguePlate);
 
-        // A lit lip along the top edge, so the plate reads as the same concrete as the
-        // buttons rather than as a shadow that happens to be rectangular.
-        _spriteBatch.Draw(_pixel, new Rectangle(plate.X, plate.Y, plate.Width, 2), null, new Color(64, 58, 66),
+        // A lit lip along the top edge so the plate reads as concrete, not as a rectangular shadow.
+        _spriteBatch.Draw(_pixel, new Rectangle(plate.X, plate.Y, plate.Width, 2), null, PlateLip,
             0f, Vector2.Zero, SpriteEffects.None, Layers.TextShadow);
 
         (string speaker, Color speakerColour) = Speaker;
         float centre = plate.X + plate.Width / 2f;
 
-        DrawText(_uiFont, speaker, centre, DialogueNameY, speakerColour, Color.Black * 0.6f, centred: true);
+        DrawText(_uiFont, speaker, centre, DialogueNameY, speakerColour, Palette.Shadow, centred: true);
 
         Color colour = _phase == RoundPhase.Discussion && _discussionEnd is null
-            ? new Color(226, 216, 210)
-            : new Color(162, 150, 150);
+            ? LineLive
+            : LineSaid;
 
         for (int i = 0; i < lines.Length; i++)
         {
             DrawText(_uiFont, lines[i], centre, DialogueLineY + i * _uiFont.LineSpacing, colour,
-                Color.Black * 0.6f, centred: true);
+                Palette.Shadow, centred: true);
         }
     }
 
@@ -828,21 +764,12 @@ public partial class BlackBoxGame : Game
         }
     }
 
-    /// <summary>
-    /// Whether what is on screen is the player's own last line rather than the opponent's.
-    /// </summary>
+    /// <summary>Whether what is on screen is the player's own last line rather than the opponent's.</summary>
     private bool IsPlayerSpeaking =>
         _phase == RoundPhase.Discussion && _saidHold > 0f && _discussionEnd is null;
 
-    /// <summary>
-    /// What the table is saying right now: a line, or what the box just did.
-    /// </summary>
-    /// <remarks>
-    /// A blind deal is the one case where the game knows the answer and will not print it.
-    /// <see cref="ItemId.Rotgut"/> buys a life with sight, and this is the debt being
-    /// collected -- the item in <see cref="SaveData.Dealt"/> is real and will resolve
-    /// normally whatever the player was allowed to see.
-    /// </remarks>
+    /// <summary>What the table is saying right now: a line, or what the box just did.</summary>
+    /// <remarks>A blind deal is the one case where the game knows the item and will not print it. That is the Rotgut's debt.</remarks>
     private string RunLine
     {
         get
@@ -854,6 +781,12 @@ public partial class BlackBoxGame : Game
 
                 case RoundPhase.Reaching:
                     return _reach < 1f ? "..." : "IT HAS YOU.";
+
+                case RoundPhase.Catching:
+                    return "IT LETS GO.  CATCH WHAT IT GIVES YOU.";
+
+                case RoundPhase.SkillCheck:
+                    return _check?.Prompt ?? string.Empty;
 
                 case RoundPhase.Resolving:
                     return _logLine ?? string.Empty;
@@ -882,32 +815,42 @@ public partial class BlackBoxGame : Game
         }
     }
 
-    /// <summary>
-    /// Lives as marks rather than a number.
-    /// </summary>
-    /// <remarks>
-    /// Spent ones are still drawn, struck through, because what matters at this table is not
-    /// how many you have but how many you started with and have not got any more.
-    /// </remarks>
-    /// <param name="lives">What that side has left.</param>
-    private static string Pips(int lives)
+    /// <summary>The end of the run: a veil over the table, and what became of the player, large.</summary>
+    /// <remarks>Two endings, one screen. The chapter only turns when the player leaves, in LeaveRun.</remarks>
+    private void DrawEnding()
     {
-        var marks = new StringBuilder();
+        bool won = _run.PlayerLives > 0;
 
-        for (int i = 0; i < SaveData.StartingLives; i++)
-            marks.Append(i < lives ? "|" : "/");
+        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, ScreenWidth, ScreenHeight), null,
+            new Color(4, 3, 8) * EndingVeilOpacity, 0f, Vector2.Zero, SpriteEffects.None, Layers.Veil);
 
-        return marks.ToString();
+        string title = won ? "YOU ADVANCE" : "YOU HAVE BEEN CONSUMED BY THE BOX";
+        string line = won
+            ? "THE BOX LETS YOU UP. THERE IS ANOTHER TABLE."
+            : "IT DOES NOT LET GO. IT WILL BE WAITING.";
+
+        // The long verdict shrinks to fit rather than running off the edges.
+        DrawCenteredFitted(_titleFont, title, EndingTitleY, ScreenWidth - 2f * EndingMargin,
+            won ? ButtonSprite.BoneWhite : ButtonSprite.EmberRed, Palette.HeavyShadow, EndingShadowOffset);
+        DrawCentered(_uiFont, line, EndingLineY, EndingLineColor, Palette.FormShadow, Palette.ShadowOffset);
     }
 
-    /// <summary>
-    /// Breaks a line into as many lines as it takes to fit.
-    /// </summary>
-    /// <remarks>
-    /// Measured rather than counted in characters, because the font is proportional and a
-    /// wrap by character count would leave a ragged edge that moves depending on which
-    /// letters a written line happens to use.
-    /// </remarks>
+    /// <summary>Draws both sides' hearts on the heading, after their names.</summary>
+    /// <remarks>In the buttons' batch, not the text's, because they are pixel art. Measured off the name so a long name pushes them along.</remarks>
+    private void DrawHearts()
+    {
+        float y = RunStatusY + HeartsDrop;
+        float nameWidth = _detailFont.MeasureString(_run.PlayerName.ToUpperInvariant()).X;
+        _hearts.Draw(_spriteBatch, new Vector2(PocketsMargin + nameWidth + HeartsGap, y),
+            _run.PlayerLives, SaveData.StartingLives, Layers.ButtonLabel);
+
+        float themWidth = _detailFont.MeasureString("THEM").X;
+        _hearts.Draw(_spriteBatch, new Vector2(PocketsMargin + HeartsThemX + themWidth + HeartsGap, y),
+            _run.OpponentLives, SaveData.StartingLives, Layers.ButtonLabel);
+    }
+
+    /// <summary>Breaks a line into as many lines as it takes to fit.</summary>
+    /// <remarks>Measured with the font rather than by character count, since the font is proportional.</remarks>
     /// <param name="font">The SpriteFont the text will be drawn in.</param>
     /// <param name="text">The line to break.</param>
     /// <param name="width">How wide a line may be, in screen pixels.</param>
@@ -940,16 +883,13 @@ public partial class BlackBoxGame : Game
         return lines.ToArray();
     }
 
-    /// <summary>
-    /// Runs whichever part of the round the table is in.
-    /// </summary>
+    /// <summary>Runs whichever part of the round the table is in.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     private void UpdateRound(GameTime gameTime)
     {
         float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
-        // The pockets read straight off the run every frame, so nothing that changes them --
-        // a levy, a second hand, the opponent's turn -- has to remember to tell them.
+        // The pockets read off the run every frame, so nothing that changes them has to remember to tell them.
         _playerPockets.Show(_run.Banked, revealed: true, interactive: _phase == RoundPhase.PlayerTurn);
         _opponentPockets.Show(_run.OpponentBanked, revealed: _run.SeesOpponentPockets, interactive: false);
 
@@ -965,6 +905,14 @@ public partial class BlackBoxGame : Game
 
             case RoundPhase.Reaching:
                 UpdateReach(elapsed);
+                break;
+
+            case RoundPhase.Catching:
+                UpdateCatch(gameTime);
+                break;
+
+            case RoundPhase.SkillCheck:
+                UpdateCheck(gameTime);
                 break;
 
             case RoundPhase.PlayerTurn:
@@ -984,9 +932,7 @@ public partial class BlackBoxGame : Game
         }
     }
 
-    /// <summary>
-    /// Runs the discussion period and the wheel over it.
-    /// </summary>
+    /// <summary>Runs the discussion period and the wheel over it.</summary>
     /// <param name="elapsed">Seconds since the last frame.</param>
     /// <param name="gameTime">The frame's timing, for the plates.</param>
     private void UpdateDiscussion(float elapsed, GameTime gameTime)
@@ -1008,24 +954,25 @@ public partial class BlackBoxGame : Game
         DiscussionState before = _discussion.State;
         _discussion.Update(elapsed);
 
-        // The clock ran out between frames. Nothing was clicked, and that is the point.
+        // The clock ran out between frames.
         if (before == DiscussionState.Running && _discussion.State != DiscussionState.Running)
             EndDiscussion();
 
         if (_wheel.IsOpen) _wheel.Update(gameTime);
     }
 
-    /// <summary>
-    /// Puts the hand in, holds it there, and then pays.
-    /// </summary>
-    /// <remarks>
-    /// The hold between arriving and being paid is the whole point of the beat. Dealing the
-    /// instant the fingers cross the rim would make the box a vending machine; the pause is
-    /// what makes it something that has taken hold of you and is deciding.
-    /// </remarks>
+    /// <summary>Puts the hand in, holds it there, and then pays.</summary>
+    /// <remarks>The hold before paying is the point. Dealing the instant the fingers cross the rim made it a vending machine.</remarks>
     /// <param name="elapsed">Seconds since the last frame.</param>
     private void UpdateReach(float elapsed)
     {
+        // The mouth opens first.
+        if (_lidOpen < 1f)
+        {
+            _lidOpen = MathF.Min(1f, _lidOpen + elapsed / LidSeconds);
+            return;
+        }
+
         if (_reach < 1f)
         {
             _reach = MathF.Min(1f, _reach + elapsed / ReachSeconds);
@@ -1037,9 +984,7 @@ public partial class BlackBoxGame : Game
         if (_held >= TakeSeconds) Deal();
     }
 
-    /// <summary>
-    /// Says one of the four replies.
-    /// </summary>
+    /// <summary>Says one of the four replies.</summary>
     /// <param name="corner">Which corner of the wheel was clicked.</param>
     private void Answer(int corner)
     {
@@ -1051,39 +996,25 @@ public partial class BlackBoxGame : Game
         _run.OpponentDisposition = _discussion.Disposition;
         foreach (string flag in _discussion.FlagsRaised) _run.SetFlag(flag);
 
-        // The player has the floor. The wheel comes down -- a beat is not something to be
-        // clicked through, and four live plates under a line the player is still reading is
-        // how a conversation turns back into a menu. The temper the reply earned lands now
-        // rather than after it, so what the player watches while they are still speaking is
-        // it arriving on the face across the table.
+        // The wheel comes down while the player's line is up, and the new temper lands on the
+        // face now so they see it arrive while they are still speaking.
         _wheel.Hide();
         StopTalking();
 
         _saidHold = SayingSeconds(_discussion.Said);
     }
 
-    /// <summary>
-    /// How long a line of the player's own stays up before it is answered.
-    /// </summary>
-    /// <remarks>
-    /// Off the length of the line, because one fixed beat is either too short for the long
-    /// replies or dead air after a two-word one. It is a read rather than a performance --
-    /// there is no audio to wait out, so this only has to be as long as taking the sentence
-    /// in.
-    /// </remarks>
+    /// <summary>How long a line of the player's own stays up before it is answered.</summary>
+    /// <remarks>Off the length of the line. One fixed beat was too short for long replies and dead air after short ones.</remarks>
     /// <param name="line">The line being held on screen.</param>
     /// <returns>How long to hold it, in seconds.</returns>
     private static float SayingSeconds(string line) => Math.Clamp(
         SayingBase + (line?.Length ?? 0) * SayingPerCharacter, SayingMin, SayingMax);
 
-    /// <summary>
-    /// Ends the beat the player's line was held for, and gives the table back.
-    /// </summary>
+    /// <summary>Ends the beat the player's line was held for, and gives the table back.</summary>
     /// <remarks>
-    /// The one place a discussion is allowed to end on the player's own words. An option with
-    /// nothing after it used to close the period on the frame it was clicked, which threw the
-    /// line away -- the last thing a player said in a discussion was the one line of theirs
-    /// that never reached the screen at all.
+    /// The one place a discussion can end on the player's own words. It used to close on the
+    /// click, which threw the last line away before it was ever shown.
     /// </remarks>
     private void FinishSaying()
     {
@@ -1102,16 +1033,8 @@ public partial class BlackBoxGame : Game
         _speakHold = SpeakSeconds;
     }
 
-    /// <summary>
-    /// Shuts their mouth and puts the temper back on their face.
-    /// </summary>
-    /// <remarks>
-    /// The pose is cleared before the disposition is handed over, because a face that is
-    /// doing something ignores what it is told to think -- see
-    /// <see cref="OpponentSprite.SetDisposition"/>. That ordering is also what delays a
-    /// change of temper until the mouth has shut, so the new face arrives with the pause
-    /// after the line rather than underneath it.
-    /// </remarks>
+    /// <summary>Shuts their mouth and puts the temper back on their face.</summary>
+    /// <remarks>The pose has to be cleared first: SetDisposition ignores a face that is busy doing something.</remarks>
     private void StopTalking()
     {
         _speakHold = 0f;
@@ -1150,21 +1073,14 @@ public partial class BlackBoxGame : Game
 
         _hand.Reach = 0f;
         _hand.IsVisible = true;
+        EnterBoxView();
 
-        // Both hands go in together. Theirs is never drawn -- the arm is behind the box --
-        // so the lean and the raised shoulder are the whole of it.
+        // Both hands go in together. Theirs is never drawn, so the lean is the whole of it.
         _opponent.Pose = OpponentPose.Reaching;
     }
 
-    /// <summary>
-    /// Takes the hand, and pays for it.
-    /// </summary>
-    /// <remarks>
-    /// The items are written into the run rather than held in fields, so a player who closes
-    /// the game between being dealt and deciding comes back still holding theirs -- see
-    /// <see cref="EnterRun"/>. What the box gave is decided in <see cref="RoundEngine.DealBoth"/>,
-    /// and once.
-    /// </remarks>
+    /// <summary>Takes the hand, and pays for it.</summary>
+    /// <remarks>The items go into the run, not fields, so closing the game mid-decision does not lose them.</remarks>
     private void Deal()
     {
         RoundEngine.DealBoth(_run, _random);
@@ -1173,17 +1089,120 @@ public partial class BlackBoxGame : Game
         _opponent.Pose = OpponentPose.Even;
         _opponent.SetDisposition(_run.OpponentDisposition);
 
+        Payout();
+    }
+
+    /// <summary>Throws what the box dealt down the table, and puts the other hand out for it.</summary>
+    /// <remarks>Only when there is something to throw. If the box gave nothing the turn just starts.</remarks>
+    private void Payout()
+    {
+        if (!ItemCatalog.TryParse(_run.Dealt, out _))
+        {
+            BeginTurn();
+            return;
+        }
+
+        _phase = RoundPhase.Catching;
+
+        float drift = ((float)_random.NextDouble() * 2f - 1f) * TokenDrift;
+        if (_boxView)
+        {
+            _token.Launch(BoxTokenLaunch, new Vector2(drift, TokenLaunchSpeed));
+            _catchHand.Scale = BoxHandScale;
+            _catchHand.Show(BoxCatchTipY, BoxCatchMinX, BoxCatchMaxX);
+        }
+        else
+        {
+            _token.Launch(TokenLaunch, new Vector2(drift, TokenLaunchSpeed));
+            _catchHand.Scale = HandScale;
+            _catchHand.Show(CatchTipY, CatchMinX, CatchMaxX);
+        }
+    }
+
+    /// <summary>Takes the table away and brings the box up, shut, to fill the view.</summary>
+    private void EnterBoxView()
+    {
+        _boxView = true;
+        _lidOpen = 0f;
+        _blackBox.Position = BoxViewCentre;
+        _blackBox.Scale = BoxViewScale;
+    }
+
+    /// <summary>Puts the box back on the table and the table back on screen.</summary>
+    private void LeaveBoxView()
+    {
+        _boxView = false;
+        _blackBox.Position = new Vector2(ScreenWidth / 2f, RunBoxCenterY);
+        _blackBox.Scale = BlackBoxSprite.TableScale;
+    }
+
+    /// <summary>Draws the box's jaws over its opening, as far shut as they are.</summary>
+    /// <remarks>Two halves of one plate, each cut shorter as the mouth opens, so they draw back into the rim.</remarks>
+    private void DrawLid()
+    {
+        if (_lid is null || _lidOpen >= 1f) return;
+
+        Rectangle mouth = _blackBox.Aperture;
+        int half = _lid.Height / 2;
+        int showing = (int)MathF.Round(half * (1f - _lidOpen));
+        if (showing <= 0) return;
+
+        float scale = BoxViewScale;
+        var top = new Rectangle(0, 0, _lid.Width, showing);
+        var bottom = new Rectangle(0, _lid.Height - showing, _lid.Width, showing);
+
+        _spriteBatch.Draw(_lid, new Vector2(mouth.X, mouth.Y), top, Color.White, 0f,
+            Vector2.Zero, scale, SpriteEffects.None, Layers.Lid);
+        _spriteBatch.Draw(_lid, new Vector2(mouth.X, mouth.Bottom - showing * scale), bottom, Color.White, 0f,
+            Vector2.Zero, scale, SpriteEffects.None, Layers.Lid);
+    }
+
+    /// <summary>Moves the tag and the hand, and settles which of two things the tag hits first.</summary>
+    /// <remarks>The palm is tested before the edge, so a tag caught right on the lip counts. Same collision shapes as the tutorial.</remarks>
+    /// <param name="gameTime">The frame's timing.</param>
+    private void UpdateCatch(GameTime gameTime)
+    {
+        _token.Update(gameTime);
+        _catchHand.Update(gameTime);
+
+        if (CollisionHelper.Collides(_token.Bounds, _catchHand.Palm))
+            CatchToken();
+        else if (CollisionHelper.Collides(_token.Bounds, TheDark))
+            DropToken();
+    }
+
+    /// <summary>The tag landed in the palm. The item is in the hand, and the turn is the player's.</summary>
+    private void CatchToken()
+    {
+        _token.IsVisible = false;
+        _catchHand.IsVisible = false;
+        if (_boxView) LeaveBoxView();
         BeginTurn();
     }
 
-    /// <summary>
-    /// Hands the table to the player, with the three plates set for what is in their hand.
-    /// </summary>
-    /// <remarks>
-    /// KEEP IT is the one plate that can be refused, and it says why on itself rather than
-    /// vanishing: full pockets are a thing the player can do something about by playing one,
-    /// and a blind item is a debt the plate is there to remind them of.
-    /// </remarks>
+    /// <summary>The tag went over the edge. Same rule as LEAVE IT, said differently.</summary>
+    private void DropToken()
+    {
+        _token.IsVisible = false;
+        _catchHand.IsVisible = false;
+        if (_boxView) LeaveBoxView();
+
+        bool blind = _run.DealtBlind;
+        string name = ItemCatalog.TryParse(_run.Dealt, out ItemId item)
+            ? ItemCatalog.NameOf(item).ToUpperInvariant()
+            : "IT";
+
+        List<string> lines = RoundEngine.DecideDealt(_run, DealtChoice.Leave, _random);
+        if (lines.Count > 0) lines.RemoveAt(0);
+        lines.Insert(0, blind
+            ? "IT WENT OFF THE EDGE OF THE TABLE BEFORE YOU COULD LOOK AT IT."
+            : "THE " + name + " WENT OFF THE EDGE OF THE TABLE. THE BOX DOES NOT DEAL TWICE.");
+
+        AfterPlayerAction(lines);
+    }
+
+    /// <summary>Hands the table to the player, with the three plates set for what is in their hand.</summary>
+    /// <remarks>KEEP IT is the one plate that can be refused, and it says why on itself rather than vanishing.</remarks>
     private void BeginTurn()
     {
         _phase = RoundPhase.PlayerTurn;
@@ -1203,6 +1222,13 @@ public partial class BlackBoxGame : Game
         if (_phase != RoundPhase.PlayerTurn) return;
         if (choice == DealtChoice.Pocket && !RoundEngine.CanPocketDealt(_run)) return;
 
+        // Items that need a check go through it first. A blind item skips it, since the check would give it away.
+        if (choice == DealtChoice.Use && !_run.DealtBlind
+            && ItemCatalog.TryParse(_run.Dealt, out ItemId dealt)
+            && BeginCheck(ItemCatalog.CheckFor(dealt),
+                efficiency => AfterPlayerAction(RoundEngine.DecideDealt(_run, DealtChoice.Use, _random, efficiency))))
+            return;
+
         AfterPlayerAction(RoundEngine.DecideDealt(_run, choice, _random));
     }
 
@@ -1212,25 +1238,62 @@ public partial class BlackBoxGame : Game
     {
         if (_phase != RoundPhase.PlayerTurn) return;
 
+        if (slot >= 0 && slot < _run.Banked.Count
+            && ItemCatalog.TryParse(_run.Banked[slot], out ItemId pocketed)
+            && BeginCheck(ItemCatalog.CheckFor(pocketed),
+                efficiency => AfterPlayerAction(RoundEngine.PlayFromPocket(_run, slot, _random, efficiency))))
+            return;
+
         AfterPlayerAction(RoundEngine.PlayFromPocket(_run, slot, _random));
     }
 
-    /// <summary>
-    /// Reads out what the player just did, and works out what comes after it.
-    /// </summary>
+    /// <summary>Starts a check, if the item asks for one, and remembers what to do with the result.</summary>
+    /// <remarks>The item stays put until the check is over, so leaving mid-check just asks it again next time.</remarks>
+    /// <param name="kind">Which check the item asks for.</param>
+    /// <param name="then">What to do with the efficiency the check produces.</param>
+    /// <returns>True if a check began, false if the item asks nothing.</returns>
+    private bool BeginCheck(SkillCheck kind, Action<float> then)
+    {
+        _check = kind switch
+        {
+            SkillCheck.Aim => _aimCheck,
+            SkillCheck.Steady => _steadyCheck,
+            SkillCheck.Read => _readCheck,
+            _ => null,
+        };
+        if (_check is null) return false;
+
+        _afterCheck = then;
+        _check.Begin(_random);
+        _phase = RoundPhase.SkillCheck;
+        return true;
+    }
+
+    /// <summary>Runs the check, and when it is over, does what was waiting on it.</summary>
+    /// <param name="gameTime">The frame's timing.</param>
+    private void UpdateCheck(GameTime gameTime)
+    {
+        if (_check is null)
+        {
+            _phase = RoundPhase.PlayerTurn;
+            return;
+        }
+
+        _check.Update(gameTime);
+        if (!_check.IsDone) return;
+
+        float efficiency = _check.Efficiency;
+        Action<float> then = _afterCheck;
+        _check = null;
+        _afterCheck = null;
+
+        then?.Invoke(efficiency);
+    }
+
+    /// <summary>Reads out what the player just did, and works out what comes after it.</summary>
     /// <remarks>
-    /// <para>
-    /// Three things can. If somebody is out of lives the round closes on the spot -- the
-    /// opponent does not get a turn against a player who has already lost, or after they
-    /// have. If the player is still holding something, the turn is not over: a pocket was
-    /// played, or a second hand refilled the hand, and the table comes back to them once the
-    /// reading is done. Otherwise the hand has been decided, the opponent takes their turn
-    /// into whatever the player just did, and the round closes.
-    /// </para>
-    /// <para>
-    /// All of it goes into the one log and is read back a line at a time, so a round that
-    /// turns on a mirror is legible instead of arriving as a new set of numbers.
-    /// </para>
+    /// Three cases: somebody is out of lives and the round closes now; the player is still holding
+    /// something and gets the turn back; or the hand is decided and the opponent goes.
     /// </remarks>
     /// <param name="lines">What the player's action did.</param>
     private void AfterPlayerAction(List<string> lines)
@@ -1260,13 +1323,8 @@ public partial class BlackBoxGame : Game
         StepLog();
     }
 
-    /// <summary>
-    /// Puts whatever has just been taken off the opponent onto their face.
-    /// </summary>
-    /// <remarks>
-    /// Against what was last shown rather than against the start of the round, so a second
-    /// hit in the same turn is a second flinch and not the same one held.
-    /// </remarks>
+    /// <summary>Puts whatever has just been taken off the opponent onto their face.</summary>
+    /// <remarks>Compared to what was last shown, so a second hit in the same turn is a second flinch.</remarks>
     private void ShowWounds()
     {
         _opponent.SetLives(_run.OpponentLives);
@@ -1275,9 +1333,7 @@ public partial class BlackBoxGame : Game
         _opponentLivesShown = _run.OpponentLives;
     }
 
-    /// <summary>
-    /// Shows the next line of the log, or moves on if there are none left.
-    /// </summary>
+    /// <summary>Shows the next line of the log, or moves on if there are none left.</summary>
     private void StepLog()
     {
         if (_log.Count > 0)
@@ -1288,7 +1344,7 @@ public partial class BlackBoxGame : Game
 
         _logLine = null;
 
-        // Out of lives on either side and there is no next round to start.
+        // Out of lives on either side means no next round.
         if (RoundEngine.IsOver(_run))
         {
             _phase = RoundPhase.Over;
@@ -1306,15 +1362,8 @@ public partial class BlackBoxGame : Game
         StartDiscussion();
     }
 
-    /// <summary>
-    /// Gives the table back to the player after a mid-turn reading.
-    /// </summary>
-    /// <remarks>
-    /// If the hand has somehow emptied in the meantime there is nothing left to decide, and
-    /// the turn ends the way a decision would have ended it. Nothing does that today; it is
-    /// here so that an item which does cannot strand the round on three plates for an empty
-    /// hand.
-    /// </remarks>
+    /// <summary>Gives the table back to the player after a mid-turn reading.</summary>
+    /// <remarks>If the hand somehow emptied, the turn ends instead of stranding the round on three plates.</remarks>
     private void ResumeTurn()
     {
         if (ItemCatalog.TryParse(_run.Dealt, out _))
@@ -1326,18 +1375,14 @@ public partial class BlackBoxGame : Game
         AfterPlayerAction(new List<string>());
     }
 
-    /// <summary>
-    /// Opens the save form over the title screen.
-    /// </summary>
+    /// <summary>Opens the save form over the title screen.</summary>
     private void OpenSlotMenu()
     {
         _screen = Screen.SlotSelect;
         _slotMenu.Open();
     }
 
-    /// <summary>
-    /// Takes the player into the run held in a slot.
-    /// </summary>
+    /// <summary>Takes the player into the run held in a slot.</summary>
     /// <param name="slot">Which slot it came out of, and goes back into.</param>
     /// <param name="data">The run.</param>
     private void BeginRun(int slot, SaveData data)
@@ -1346,8 +1391,7 @@ public partial class BlackBoxGame : Game
         _run = data;
         _runStatus = null;
 
-        // A slot nobody has put a name to is a run that has not started yet, however many
-        // times it has been opened.
+        // No name yet means the run has not started, however many times the slot was opened.
         if (string.IsNullOrWhiteSpace(_run.PlayerName))
         {
             _screen = Screen.NameEntry;
@@ -1358,15 +1402,8 @@ public partial class BlackBoxGame : Game
         EnterRun();
     }
 
-    /// <summary>
-    /// Takes the name the player gave and starts the run with it.
-    /// </summary>
-    /// <remarks>
-    /// Written to disk immediately, for the same reason the slot itself was: the name is the
-    /// first thing the player has put into this run, and losing it would mean asking them for
-    /// it a second time. A failed write is reported rather than fatal -- they are already at
-    /// the table by then, and the run in memory is still the real one.
-    /// </remarks>
+    /// <summary>Takes the name the player gave and starts the run with it.</summary>
+    /// <remarks>Saved right away so the name is never asked for twice. A failed write is shown, not fatal.</remarks>
     /// <param name="name">What the player called themselves.</param>
     private void NameRun(string name)
     {
@@ -1378,21 +1415,13 @@ public partial class BlackBoxGame : Game
         EnterRun();
     }
 
-    /// <summary>
-    /// Puts the player at the table and moves the scene around them.
-    /// </summary>
-    /// <remarks>
-    /// A run that was saved mid-decision comes back mid-decision. The item is in the save,
-    /// so there is nothing to lose by honouring it -- and starting a fresh discussion instead
-    /// would deal over the top of it, which is a way of taking an item off a player for
-    /// closing the game.
-    /// </remarks>
+    /// <summary>Puts the player at the table and moves the scene around them.</summary>
+    /// <remarks>A run saved mid-decision comes back mid-decision, so closing the game never costs an item.</remarks>
     private void EnterRun()
     {
         _screen = Screen.Run;
 
-        // On the table the box is an object in a room rather than the whole picture, so it
-        // comes down in size as well as into place.
+        // On the table the box is an object in a room, so it comes down in size as well as into place.
         _blackBox.Position = new Vector2(ScreenWidth / 2f, RunBoxCenterY);
         _blackBox.Scale = BlackBoxSprite.TableScale;
         RecentreAsh();
@@ -1400,8 +1429,11 @@ public partial class BlackBoxGame : Game
         _returnButton.Center = new Vector2(ScreenWidth / 2f, RunButtonY);
         _returnButton.Reset();
 
+        // Between chapters the seat is empty and the roster fills it. Within one, the save says who is there.
         if (string.IsNullOrWhiteSpace(_run.OpponentId))
-            _run.OpponentId = DemoDiscussion.Script.OpponentId;
+            _run.OpponentId = Opponents.ForChapter(_run.Chapter).Id;
+        _opponent.Who = Opponents.ById(_run.OpponentId);
+        _aimCheck.Target = AimTarget;
 
         _log.Clear();
         _logLine = null;
@@ -1431,22 +1463,15 @@ public partial class BlackBoxGame : Game
         StartDiscussion();
     }
 
-    /// <summary>
-    /// Opens the discussion period for this round with whoever is across the table.
-    /// </summary>
-    /// <remarks>
-    /// A first meeting opens on whatever the script says the opponent is like before anyone
-    /// has spoken to them. Every meeting after that opens on what this run has already made
-    /// of them, which is the whole reason the disposition is on the save -- and on the beat
-    /// the script has written for this round, which is why the round is too.
-    /// </remarks>
+    /// <summary>Opens the discussion period for this round with whoever is across the table.</summary>
+    /// <remarks>A first meeting opens on the script's disposition. Every one after opens on what the save carries.</remarks>
     private void StartDiscussion()
     {
         _discussionEnd = null;
 
         Disposition? carried = _run.HasMetOpponent ? _run.OpponentDisposition : null;
 
-        _discussion = new DiscussionPeriod(DemoDiscussion.Script, _run.PlayerName, _run.Round, carried);
+        _discussion = new DiscussionPeriod(Opponents.ById(_run.OpponentId).Script, _run.PlayerName, _run.Round, carried);
 
         _saidHold = 0f;
         _opponent.Pose = OpponentPose.Even;
@@ -1458,16 +1483,17 @@ public partial class BlackBoxGame : Game
         ShowBeat();
     }
 
-    /// <summary>
-    /// Writes the run back to its slot and returns to the title screen.
-    /// </summary>
-    /// <remarks>
-    /// The player stays in the run if the write fails. Dropping them back to the title screen
-    /// on a failed save would throw away the only copy of the run that still exists, and they
-    /// can read what went wrong and try again from here.
-    /// </remarks>
+    /// <summary>Writes the run back to its slot and returns to the title screen.</summary>
+    /// <remarks>If the write fails the player stays in the run, since the copy in memory is the only one left.</remarks>
     private void LeaveRun()
     {
+        // A finished run is written back ready to play again: next chapter if they got up, same one if not.
+        if (RoundEngine.IsOver(_run))
+        {
+            if (_run.PlayerLives > 0) _run.Advance();
+            else _run.Restart();
+        }
+
         if (!SaveSystem.Write(_runSlot, _run))
         {
             _runStatus = "COULD NOT SAVE -- " + SaveSystem.LastError;
@@ -1484,19 +1510,18 @@ public partial class BlackBoxGame : Game
 
         _wheel.Hide();
         _hand.IsVisible = false;
+        _token.IsVisible = false;
+        _catchHand.IsVisible = false;
+        _check = null;
+        _afterCheck = null;
+        _boxView = false;
         _phase = RoundPhase.Discussion;
 
         ShowTitle();
     }
 
-    /// <summary>
-    /// Points the loose ash at wherever the box has moved to.
-    /// </summary>
-    /// <remarks>
-    /// The motes are pulled toward a centre they were handed when they were built, so without
-    /// this they carry on spiralling into the middle of the title screen after the box has
-    /// gone to sit on a table.
-    /// </remarks>
+    /// <summary>Points the loose ash at wherever the box has moved to.</summary>
+    /// <remarks>Without this the motes keep spiralling into the middle of the title screen after the box has left.</remarks>
     private void RecentreAsh()
     {
         foreach (var mote in _ashes) mote.Center = _blackBox.Position;
@@ -1512,15 +1537,12 @@ public partial class BlackBoxGame : Game
         _blackBox.Scale = BlackBoxSprite.DrawScale;
         RecentreAsh();
 
-        // Neither button has been updated since the form covered them, so both are frozen
-        // mid-animation and still remember a cursor that has since been somewhere else.
+        // The buttons were frozen mid-animation under the form, so reset them.
         _startButton.Reset();
         _exitButton.Reset();
     }
 
-    /// <summary>
-    /// Backs out of whatever is in front: the form, then the run, then the game.
-    /// </summary>
+    /// <summary>Backs out of whatever is in front: the form, then the run, then the game.</summary>
     private void Back()
     {
         switch (_screen)
@@ -1537,16 +1559,13 @@ public partial class BlackBoxGame : Game
                 LeaveRun();
                 break;
 
-            // The exit instructions on screen promise exactly this.
             default:
                 Exit();
                 break;
         }
     }
 
-    /// <summary>
-    /// Draws a line of text centred horizontally on the screen, over a hard offset shadow.
-    /// </summary>
+    /// <summary>Draws a line of text centred horizontally on the screen, over a hard offset shadow.</summary>
     /// <param name="font">The SpriteFont to measure and render with.</param>
     /// <param name="text">The text to draw.</param>
     /// <param name="y">Top of the line, in screen pixels.</param>
@@ -1562,9 +1581,27 @@ public partial class BlackBoxGame : Game
         _spriteBatch.DrawString(font, text, position, color, 0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.Text);
     }
 
-    /// <summary>
-    /// Draws a line of text against a point, over a hard offset shadow.
-    /// </summary>
+    /// <summary>Draws a line centred, scaled down if it would not fit in the width given.</summary>
+    /// <param name="font">The face to set it in.</param>
+    /// <param name="text">The line.</param>
+    /// <param name="y">Where the top of it goes, at full size; a scaled line is centred on the same middle.</param>
+    /// <param name="maxWidth">The widest it may be, in screen pixels.</param>
+    /// <param name="color">The colour of the text.</param>
+    /// <param name="shadow">The colour of its shadow.</param>
+    /// <param name="shadowOffset">How far the shadow sits from the text.</param>
+    private void DrawCenteredFitted(SpriteFont font, string text, float y, float maxWidth, Color color, Color shadow, Vector2 shadowOffset)
+    {
+        Vector2 size = font.MeasureString(text);
+        float scale = size.X > maxWidth ? maxWidth / size.X : 1f;
+        var position = new Vector2(
+            MathF.Round((ScreenWidth - size.X * scale) / 2f),
+            MathF.Round(y + size.Y * (1f - scale) / 2f));
+
+        _spriteBatch.DrawString(font, text, position + shadowOffset, shadow, 0f, Vector2.Zero, scale, SpriteEffects.None, Layers.TextShadow);
+        _spriteBatch.DrawString(font, text, position, color, 0f, Vector2.Zero, scale, SpriteEffects.None, Layers.Text);
+    }
+
+    /// <summary>Draws a line of text against a point, over a hard offset shadow.</summary>
     /// <param name="font">The SpriteFont to measure and render with.</param>
     /// <param name="text">The text to draw.</param>
     /// <param name="x">The left edge, the centre, or the right edge, depending on the flags.</param>

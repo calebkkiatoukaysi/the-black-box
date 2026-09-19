@@ -44,9 +44,16 @@ the pictures for a release get taken. It opens a scratch run that never touches 
 | `mote.png` | `AshSprite` | Ash spiralling into the mouth, accelerating as it is consumed |
 | `button.png` | `ButtonSprite` | Nine-sliced plate; idle smoulder, kindles on hover, sinks on press |
 | `panel.png` | `SaveSlotMenu`, `NameEntry` | Nine-sliced slab the forms are built on |
-| `room.png` | `BlackBoxGame` | The wall, the lamp and the table, and the room round them: a steel door, pipes, a vent, a camera, tally marks. One light, falling off by inverse square. `ROOM_HORIZON` is where the opponent is cut off |
-| `opponent-sheet.png` | `OpponentSprite` | The figure across the table: 6 poses across, 3 injuries down. Static |
-| `hand-sheet.png` | `HandSprite` | 5 frames of your own arm, elbow to fingertips, curled through offered |
+| `room.png` | `BlackBoxGame` | The room, drawn at twice the resolution of the rest of the table so it reads as a photograph: poured concrete under three sizes of noise, damp streaks and bloom, a rusting steel door, pipes, a vent, a camera, tally marks, and the one lamp with its haze. `ROOM_HORIZON` is where the opponent is cut off |
+| `opponent-second-sheet.png` | `OpponentSprite` | The default opponent, chapter one: her picture cleaned up, paled and sampled to art pixels at 4x, six columns of it, the talking one with the head bent up toward the player |
+| `opponent-sheet.png` | `OpponentSprite` | The opponent from the character sheet, chapter two: 6 poses across, one row. Static |
+| `hand-sheet.png` | `HandSprite`, `CatchHandSprite` | 5 frames of your own arm, elbow to fingertips, curled through offered; the open frame is also the hand that catches the payout |
+| `token-sheet.png` | `TokenSprite` | 8 frames of the steel tag the box pays with, spinning; slides down the table under its own physics |
+| `hearts.png` | `HeartsSprite` | A heart, full and hollow, for both sides' lives on the heading |
+| `box-lid.png` | `BlackBoxGame` | The box's jaws in the close-up: the plate over its mouth that draws back into the rim |
+| `sight-sheet.png` | `AimCheck`, `ReadCheck` | 4 frames of the sight's ticks turning; wanders over her on a tremor, or steps along the tags |
+| `ember-sheet.png` | `SteadyCheck` | 4 frames of the ember breathing; blown along the groove and pushed back |
+| `steady-bar.png` | `SteadyCheck` | The groove and the band of light the ember has to be held in |
 | `button.png` again | `PocketStrip` | Three pocket plates a side, live on your turn |
 
 Text is drawn with `spectral-title` (Spectral Light, 92pt), `spectral-ui` (Spectral Medium,
@@ -68,7 +75,7 @@ python tools/generate_assets.py
 ```
 
 It needs nothing but CPython - the PNG encoder is built into the script, and so is the decoder
-for the one picture it reads rather than draws (the opponent's portrait, see below). Every
+for the two pictures it reads rather than draws (the opponents' portraits, see below). Every
 drawing is seeded, so running it again produces the same bytes; only the sprite you changed
 changes.
 
@@ -80,7 +87,7 @@ rather than the title screen's `DrawScale`: on the title it is the whole picture
 table it is an object in a room with somebody behind it to be in front of. It casts a contact
 shadow, without which it reads as hanging in front of the table rather than resting on it.
 
-A round runs `Discussion` -> `Offer` -> `Reaching` -> `PlayerTurn` -> `Resolving`, and then
+A round runs `Discussion` -> `Offer` -> `Reaching` -> `Catching` -> `PlayerTurn` (with a `SkillCheck` inside it whenever an item asks for one) -> `Resolving`, and then
 either the next round or `Over`. The talking ends, the box asks for a hand, the hand goes in,
 the box holds it for a moment, and then it pays. The hold is the point of the beat: dealing the
 instant the fingers cross the rim would make the box a vending machine.
@@ -94,7 +101,7 @@ it. The fix was not a bigger number but a bigger person, drawn to fill the frame
 
 She is a reference to Nikki from *Obsession* (2025) -- specifically to what that film does with
 a lovely face, which is hold it perfectly still and smile with it a little too wide. She is the
-one sprite in the game that the generator does not draw. She is cut from her character sheet:
+first of the two sprites in the game that the generator does not draw. She is cut from her character sheet:
 the portrait in its corner, keyed off the sheet's background and box-sampled down to art
 pixels (four image pixels to one, a little finer than the sheet's own uneven grid), is the
 `Even` pose, and every other cell is that same picture with a few pixels moved. The source is
@@ -106,15 +113,20 @@ the same thing as her. The sheet is the design, so the sheet is the sprite.
 The sheet gives the face and the hair: long, straight, parted down the middle, hanging in
 front of the shoulders, and not much volume in it. She is meant to resemble Nikki, not to be
 her, and to be pretty, which is the sheet's job -- the less done to it the better it does it.
-Four things it does not have make her the reference, and all four are recolourings or small
+Five things it does not have make her the reference, and all five are recolourings or small
 edits of what is there rather than paint over it. The hair is black (`opp_edit_hair_black`):
 every pixel of it keeps its brightness and loses its colour, so every streak the sheet painted
 into it is still there, and the hairline blends into the forehead the way it did. The skin is
-a shade toward grey (`opp_edit_skin`), the way a face goes under a lamp in a room with no
-windows, with the blush left in fainter so she reads as kept rather than ill. The oatmeal knit
-is recoloured to a dark top, every rib and fold of it kept at the new colour
-(`opp_edit_dress`). And the near ear is tucked out of the hair with a hoop in it
-(`opp_edit_ear`), painted in the skin of the cheek beside it. A wolf cut was painted on for a
+pale (`opp_edit_skin`): everything warm enough to be skin, down to the shadow under the jaw, is
+pulled most of the way toward one pale cool tone, so what was darker stays darker, only
+closer, and the blush is left in fainter so she reads as kept rather than ill. The eyes are
+East Asian, as far as eight pixels of eye can be (`opp_edit_eye_shape`): the crease above the
+lid is painted over with the lid's own skin so it is one smooth lid from brow to lash, and the
+outer corner of the lash line lifts a pixel -- the opening is left the size the sheet drew
+it, because bringing the lid down a row as well made her look asleep. The oatmeal knit is
+recoloured to a dark top, every rib and fold of it kept at the new colour (`opp_edit_dress`).
+And the near ear is tucked out of the hair with a hoop in it (`opp_edit_ear`), painted in the
+skin of the cheek beside it.
 while and taken off again: it gave her more hair than face. The chain on the sheet is already
 hers. The hooded smoker she replaced
 had the hair over his face and nothing much under it; the point of her is that there is a
@@ -131,17 +143,18 @@ picture and the game switches between them; there is no blink, no loop, no timer
 blink on a loop reads as a screensaver. What the player is meant to notice is that the face is
 not the one that was there a moment ago.
 
-Two axes pick the picture. **Pose** is the column: the three `Warmth` bands while there is
-talking to do, plus `Talking`, `Reaching` (leant toward the box, eyes down on what the hand is
-doing) and `Hurt` (head down and away, eyes shut, mouth open and down). `Hostile` is the one
-to look at: it is not a scowl. The head goes over to one side, the eyes open a pixel wider
-than they should, and the grin runs past the corners of the mouth with a row of teeth in it,
-held. `Open` is the same face smiling properly, and the sheet is about how little separates
-the two. **Injury** is the row, and is `StartingLives` minus the lives they hold -- a cut
-through the outer end of the near brow, then a split lip, a nosebleed and the far eye
-bruised and swelling shut, with the head dropping and the colour draining out of the face as
-it goes. The two are independent, so somebody who is losing can still be pleased to see you,
-and somebody who is bleeding can still be smiling that smile.
+One axis picks the picture now. **Pose** is the column: the three `Warmth` bands while there
+is talking to do, plus `Talking`, `Reaching` and `Hurt`. None of them is square to the player.
+`Even` has the head over toward the box a little and down a touch, the way someone sits when
+they have been sitting a while; `Talking` comes up and forward out of that, the head lifted,
+tipped the other way and leant in, so a line landing is a change of posture and not just a
+mouth opening. `Hostile` is the one to look at: it is not a scowl. The head goes over to one
+side, the eyes open a pixel wider than they should, and the grin runs past the corners of the
+mouth with a row of teeth in it, held. `Open` is the same face smiling properly, and the sheet
+is about how little separates the two. The sheet had three rows once, for the wounds she took,
+and they are gone: what has been taken off her is on the **hearts** on the heading (`HeartsSprite`,
+both sides, spent ones drawn hollow), not on her face. She is meant to stay pretty at this
+table whatever the count is, and a split lip is not that.
 
 The poses are pixel edits in `opp_edit_eyes` and `opp_edit_mouth`, and they are small on
 purpose: the eyes are seven pixels wide and the mouth is ten, and at that size one pixel is a
@@ -170,14 +183,44 @@ The top of the frame has to clear the run's bookkeeping along the top edge, so t
 height (`OPP_OH`) is cut to exactly that distance at that scale: 100 rows at 6x, where the
 drawn one was 150 at 4x. Change one and recut the other.
 
+### The second opponent
+
+`Opponents` is the roster, and she is first on it, so she is the one across the table by default and the one an old save finds. The character-sheet opponent above sits down in chapter two. The roster is: one `Opponent` record per person --
+an id for the save, a sheet for the sprite with its frame size and scale, where the face is
+for the aim check, and a script for the talking -- in chapter order, and `SaveData.Advance`
+empties the seat so that the next time the run is entered the roster fills it. A player who is
+consumed sits back down with the same person; a player who gets up meets the next one. Every
+sheet has the same six columns in the same order, so `OpponentSprite` cuts whichever one `Who`
+names at whatever size `Who` says. Both of them talk through the stand-in script until they
+have scripts of their own.
+
+She comes off a picture, `tools/source/opponent-second-portrait.png`, of her at the table with
+the wall behind her and the plate and the box in front. The wall is keyed by temperature rather
+than by colour, because it is a lit wall and not a flat grey: it is cool everywhere and she is
+warm to the last strand, so the wall is whatever a flood from the border reaches that is cool,
+with the leaks into the darkest hair closed up and only the largest piece of what is left kept,
+which drops the stain on the wall above her shoulder. Where the plate and the box cover her arms,
+each column is filled from the last rows she is visible for. Then four things are done to her
+before she is sampled down: the scar and the dirt are cleaned off her face (a dark speck inside
+the face becomes the skin around it, with the eyes, nose and mouth left alone), the skin is
+pulled toward a pale grey, the eye sockets are put in shadow from the brow down, and she is
+sampled at four picture pixels to the art pixel and drawn at 4x. I tried her at the picture's
+own pixels first and it was too much detail for the table. Her talking still is not a mouth
+edit (I tried that too, and it looked pasted on); it is the head bent up and toward the player
+the same way the first opponent's is, so a line landing is a change of posture.
+
 ### The arm
 
 Your own arm is `hand-sheet.png`, and it is the thing nearest the camera. It comes in from the
-bottom-right corner on a diagonal, the way your right arm crosses your own view when you reach
-for something in front of you, and it slides out along its own length: `HandRest` and
-`HandMouth` in `BlackBoxGame` are both on the line the arm is drawn along, so the elbow end
-never leaves the bottom edge of the screen and the arm is always coming out of somebody. The
-sprite is placed by the tip of the middle finger, because that is the only part of it whose
+bottom-right corner on a diagonal and the wrist turns, so what you see is the back of your
+own hand with the fingers going out to the left, stacked one above the next, relaxed and a
+little curled, the thumb riding along the top edge: the way your right hand looks when you
+reach into something in front of you. It is modelled on a photograph of exactly that, and
+drawn from nothing -- the skeleton in the generator is the pose, and every pixel is lit off
+it. It slides out along its own length: `HandRest` and `HandMouth` in `BlackBoxGame` (and
+their close-up counterparts) are both on the line the arm is drawn along, so the elbow end
+never leaves the edge of the screen and the arm is always coming out of somebody. The sprite
+is placed by the tip of the middle finger, because that is the only part of it whose
 position matters -- the game says where the fingers land and the arm follows.
 
 It is a whole forearm with the cuff of a sleeve at the near end, drawn big in its own pixels
@@ -204,16 +247,40 @@ computed from the skeleton when the sheet is built, and the build stops if it dr
 
 One lamp is still all the light there is, and everything in the room is lit by it and only
 it, so what is in the far corner is a shape in the dark and what is under the lamp has a
-highlight down it. The room is dressed where she is not: the left wall has a steel door,
-riveted, with a small barred window and the cold light of a corridor behind it -- the only
-light in the room that is not the lamp's, and the only way out. Pipes run along the top of the
-wall either side of the flex, with a valve where the near one turns down and the stain its
-joint has been dripping onto the wall for years; a cable sags from the flex across to the
-right. The wall is painted two tones with the line at shoulder height, the way rooms like
-this are painted so the lower half can be scrubbed. Under the plate on the right there is a
-louvred vent, a camera in the corner with its one red light -- the box is not the only thing
-watching -- and tally marks scratched into the paint in fives by whoever sat here before.
-Nobody knows what they were counting. Rounds, probably.
+highlight down it. It is drawn at twice the resolution of the rest of the table, on purpose:
+the room is the one thing on screen that is not a sprite, and a photograph of a wall has more
+in it than a sprite's pixel can hold. The wall is poured concrete, three sizes of value noise
+on top of each other -- the mottling of the pour, the grain of the aggregate, the dust --
+with damp running down it in streaks from the top and from under every pipe joint, pale bloom
+where the water dried, seams between the panels with their edges chipped, and cracks that
+branch. The lamp has a haze under it where the dust in the air catches the light. The table
+has a grain, the sheen of the lamp lying on it past the lip, the scuffs of everyone who has
+reached across it, and the rings of things set down wet and left.
+
+The room is dressed where she is not: the left wall has a steel door, riveted, rust coming up
+from the bottom of it and out from every rivet, with a small barred window and the cold light
+of a corridor behind it -- the only light in the room that is not the lamp's, and the only way
+out. Pipes run along the top of the wall either side of the flex, sweating rust at their
+rings, with a valve where the near one turns down and the stain each joint has been dripping
+onto the wall for years; a cable sags from the flex across to the right. The wall is painted
+two tones with the line at shoulder height, the way rooms like this are painted so the lower
+half can be scrubbed, and the paint has worn through in places. Under the plate on the right
+there is a louvred vent, a camera in the corner with its one red light -- the box is not the
+only thing watching -- and tally marks scratched into the paint in fives by whoever sat here
+before. Nobody knows what they were counting. Rounds, probably.
+
+### The end of a run
+
+Two endings and one screen. When somebody is out of lives the round closes on the log as it
+always did, and then a veil comes down over the table and the verdict is set large across it:
+**YOU ADVANCE** if the player is still standing, **YOU HAVE BEEN CONSUMED BY THE BOX** if they
+are not, with one line under it and the one plate, LEAVE THE TABLE. Leaving is what turns the
+page: a run that has ended is written back to its slot ready to be played again
+(`SaveData.Advance` if the player got up, which turns the chapter; `SaveData.Restart` if they
+did not, which clears the same table), so the slot opens on a table and not on a verdict. What
+is kept either way is what the run is -- the name, the chapter, the opponent, what they think
+of the player, the flags the story has raised, and the clock. The chapter is on the heading.
+
 
 ### The plate
 
@@ -392,6 +459,14 @@ Three decisions worth knowing about:
 
 The save form itself is `SaveSlotMenu`, drawn over the title screen rather than replacing it, so
 the box is still watching while you pick a slot.
+
+## Where things are
+
+- `Components/` is every sprite and screen element, each with `LoadContent`, `Update` and `Draw` the way the tutorials do it. `Components/Checks/` is the three skill checks.
+- `Enums/` is every enum in the game, one file each.
+- `Dialogue/`, `Items/`, `Round/` and `Save/` are the rules: talking, what the box deals, how a round plays, and the save file.
+- `Collisions/` is the bounding shapes the checks test with.
+- `Layers.cs` is the draw order, `Palette.cs` is the colours more than one screen uses, and `Opponents.cs` is the roster.
 
 ## Assets
 
