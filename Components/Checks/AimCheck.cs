@@ -8,6 +8,8 @@ namespace TheBlackBox.Checks;
 
 /// <summary>
 /// The aim check: a sight over the opponent, steer it on and fire before the time runs out.
+/// 
+/// Hits our criteria for a successful shot.
 /// </summary>
 /// <remarks>
 /// The sight drifts more the longer you hold the shot, so waiting for it to settle does not

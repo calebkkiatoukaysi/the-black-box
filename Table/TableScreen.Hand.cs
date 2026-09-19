@@ -7,6 +7,8 @@ namespace TheBlackBox;
 
 /// <summary>
 /// The hand going into the box, the close-up it happens in, and the tag that comes back out to be caught.
+/// 
+/// (NEXT TO FIX, Hand is a little off, next update!)
 /// </summary>
 public partial class TableScreen
 {

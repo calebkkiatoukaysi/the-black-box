@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace TheBlackBox;
 
 /// <summary>
-/// The table of every item, and the weighted draw the box deals from.
+/// The table of every item, and the weighted draw the box deals from. (Watch for new Items!)
 /// </summary>
 /// <remarks>
 /// Adding an item is one row here and one member on ItemId. What an item actually does lives

@@ -6,6 +6,9 @@ namespace TheBlackBox;
 
 /// <summary>
 /// A picture of an item, off item-sheet.png.
+/// 
+/// 
+/// Will probably deprecate this class or maybe replace it with a more flexible system.
 /// </summary>
 /// <remarks>
 /// One frame per ItemId in enum order, so the frame is the enum value and there is nothing to

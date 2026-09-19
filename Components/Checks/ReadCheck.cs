@@ -8,6 +8,8 @@ namespace TheBlackBox.Checks;
 
 /// <summary>
 /// The read check: three tags slide past each other, one flashes red now and then, pick that one.
+/// 
+/// More criteria
 /// </summary>
 /// <remarks>
 /// No partial credit here, it was the marked one or it was not. A click hits a tag using

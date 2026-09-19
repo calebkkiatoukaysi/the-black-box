@@ -7,6 +7,8 @@ namespace TheBlackBox.Checks;
 /// <summary>
 /// Mouse, keyboard and gamepad read together, with the previous frame kept for edge detection.
 /// Same idea as the input tutorial, so a check does not care which device the player is on.
+/// 
+/// Hits our criteria
 /// </summary>
 /// <remarks>
 /// The mouse only counts as pointing on frames it actually moved, otherwise a mouse sitting
