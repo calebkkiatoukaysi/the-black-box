@@ -183,8 +183,8 @@ for the aim check, and a script for the talking -- in chapter order, and `SaveDa
 empties the seat so that the next time the run is entered the roster fills it. A player who is
 consumed sits back down with the same person; a player who gets up meets the next one. Every
 sheet has the same five columns in the same order, so `OpponentSprite` cuts whichever one `Who`
-names at whatever size `Who` says. Both of them talk through the stand-in script until they
-have scripts of their own.
+names at whatever size `Who` says. She is Serenity, and she has her own script; the
+character-sheet opponent talks through the stand-in script until she has one.
 
 She comes off a picture, `tools/source/opponent-second-portrait.png`, of her at the table with
 the wall behind her and the plate and the box in front. The wall is keyed by temperature rather
@@ -346,6 +346,7 @@ writing does not branch on the past, it only has to sound like it remembers it.
 | `DialogueNode` | One beat: what they say in up to three tempers, and the four ways to answer |
 | `DialogueScript` | One opponent's whole conversation, how long the box allows each round of it, and where each round opens |
 | `DiscussionPeriod` | One round's discussion being played. Draws nothing, so it can be tested with no window open |
+| `SerenityDiscussion` | Serenity, the first person across the table: polite, shy, worn down by the games, and on your side as far as anyone here can be. Her hostile lines are her going quiet, not cruel |
 | `DemoDiscussion` | A stand-in opponent, meant to be thrown away |
 
 The two axes are the point. One affection meter cannot express the opponent who is perfectly

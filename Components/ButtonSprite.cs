@@ -330,20 +330,34 @@ public class ButtonSprite
         Color lit = Color.Lerp(cold, Color.Lerp(Accent, Color.White, LabelLitBlend), _kindle);
 
         // Centre the whole block, so a detail line pushes the label up instead of hanging off it.
-        Vector2 block = MeasureText();
-        float top = MathF.Round(plate.Y + (plate.Height - block.Y) / 2f);
+        float fit = LabelFit;
+        Vector2 label = LabelFont.MeasureString(Label) * fit;
+        float height = string.IsNullOrEmpty(Sublabel) ? label.Y : label.Y + SublabelGap + _detailFont.MeasureString(Sublabel).Y;
+        float top = MathF.Round(plate.Y + (plate.Height - height) / 2f);
 
-        DrawLine(spriteBatch, LabelFont, Label, plate, top, lit);
+        DrawLine(spriteBatch, LabelFont, Label, plate, top, lit, fit);
 
         if (string.IsNullOrEmpty(Sublabel)) return;
 
         // Dimmer than the label so it doesn't compete with it.
         Color detail = Color.Lerp(cold * DetailDim, Color.Lerp(Accent, Color.White, DetailLitBlend), _kindle * DetailKindle);
-        DrawLine(spriteBatch, _detailFont, Sublabel, plate, top + LabelFont.MeasureString(Label).Y + SublabelGap, detail);
+        DrawLine(spriteBatch, _detailFont, Sublabel, plate, top + label.Y + SublabelGap, detail);
     }
 
     /// <summary>The font the label is set in. See <see cref="Small"/>.</summary>
     private SpriteFont LabelFont => Small ? _smallFont : _font;
+
+    /// <summary>How far a label may be shrunk to fit a fixed-size plate, so a long paraphrase never runs off the edges.</summary>
+    /// <remarks>The margin is the corner art, which a label should not sit over. Shrinking beats a smaller face: the wheel stays one face at a few sizes.</remarks>
+    private float LabelFit
+    {
+        get
+        {
+            float room = Size.X - CornerSize * 2 * DrawScale;
+            float width = LabelFont.MeasureString(Label ?? string.Empty).X;
+            return width > room ? room / width : 1f;
+        }
+    }
 
     /// <summary>Draws one line of text centred across the plate, with a shadow.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
@@ -352,15 +366,16 @@ public class ButtonSprite
     /// <param name="plate">The plate to centre across.</param>
     /// <param name="y">Top of the line, in screen pixels.</param>
     /// <param name="color">Colour of the text.</param>
-    private static void DrawLine(SpriteBatch spriteBatch, SpriteFont font, string text, Rectangle plate, float y, Color color)
+    /// <param name="scale">How far the line is shrunk to fit. 1 is full size.</param>
+    private static void DrawLine(SpriteBatch spriteBatch, SpriteFont font, string text, Rectangle plate, float y, Color color, float scale = 1f)
     {
-        Vector2 size = font.MeasureString(text);
+        Vector2 size = font.MeasureString(text) * scale;
         var position = new Vector2(MathF.Round(plate.X + (plate.Width - size.X) / 2f), MathF.Round(y));
 
         spriteBatch.DrawString(font, text, position + Palette.ShadowOffset, Palette.LabelShadow,
-            0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.ButtonLabelShadow);
+            0f, Vector2.Zero, scale, SpriteEffects.None, Layers.ButtonLabelShadow);
         spriteBatch.DrawString(font, text, position, color,
-            0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.ButtonLabel);
+            0f, Vector2.Zero, scale, SpriteEffects.None, Layers.ButtonLabel);
     }
 
     /// <summary>Moves <paramref name="value"/> toward <paramref name="target"/> without overshooting.</summary>

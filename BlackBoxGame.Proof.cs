@@ -3,15 +3,18 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace TheBlackBox;
 
+
+
 /// <summary>
-/// Proof shots: <c>dotnet run -- --proof shots</c> plays a scratch run through every state
-/// worth looking at and writes each one to a PNG, then quits. How I check the layout.
+/// Bug fixing class for capturing proof shots of the game.
+/// 
+/// This class handles the automated capture of proof shots during gameplay. Works well with debugging and layout verification.
+/// Also helps out with regression testing by providing visual confirmation of game states.
+/// How to use:
+/// 1. Set the <c>ProofDirectory</c> property to the desired output folder.
+/// 2. Run the game with the proof mode enabled.
+/// 3. The game will automatically capture and save proof shots to the specified directory.
 /// </summary>
-/// <remarks>
-/// Drawn into a render target rather than read off the window, so the shot is the whole
-/// 1600x900 table no matter what is in front of the window. The states themselves are set up
-/// by the table, in TableScreen.Proof.
-/// </remarks>
 public partial class BlackBoxGame
 {
     /// <summary>Where the shots go, or null when the game is being played.</summary>

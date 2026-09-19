@@ -8,14 +8,15 @@ namespace TheBlackBox;
 /// The roster, in chapter order. A chapter past the end gets the last one so a run never falls off the table.
 /// </summary>
 /// <remarks>
-/// Both opponents use the stand-in script until they have their own. Looked up by id too,
-/// because the save stores the id, and an unknown id falls back to the first rather than throwing.
+/// Serenity is first. The second still talks through the stand-in script until she has her
+/// own. Looked up by id too, because the save stores the id, and an unknown id (or the old
+/// stand-in id) falls back to the first rather than throwing.
 /// </remarks>
 public static class Opponents
 {
-    /// <summary>The default: her picture, sampled to art pixels at 4x. Her id is the stand-in script's, since the first saves were written with it.</summary>
+    /// <summary>Serenity: her picture, sampled to art pixels at 4x, and her own script.</summary>
     public static readonly Opponent First = new(
-        DemoDiscussion.Script.OpponentId, "opponent-second-sheet", 140, 120, 4f, new Vector2(4f, -265f), DemoDiscussion.Script);
+        SerenityDiscussion.Script.OpponentId, "opponent-second-sheet", 140, 120, 4f, new Vector2(4f, -265f), SerenityDiscussion.Script);
 
     /// <summary>The one from the character sheet, who sits down in chapter two.</summary>
     public static readonly Opponent Second = new(
