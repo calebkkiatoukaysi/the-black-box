@@ -6,25 +6,11 @@ using Microsoft.Xna.Framework.Graphics;
 namespace TheBlackBox;
 
 /// <summary>
-/// The stages of a single blink
-/// <see cref="Open"/> and only passes through the other three on the way back to it.
-/// </summary>
-public enum EyeState
-{
-    Open = 0,
-    Closing = 1,
-    Closed = 2,
-    Opening = 3,
-}
-
-/// <summary>
 /// One red eye hanging in the void inside the black box.
 /// </summary>
 /// <remarks>
-/// The eye runs two behaviours that deliberately do not know about each other: a blink
-/// state machine that drives openness, and a pupil that chases whatever gaze
-/// point the box hands it. Keeping them separate is what makes the box look alive -- an eye
-/// can be halfway through a blink while still turning to follow the mouse.
+/// Two separate behaviours: a blink state machine that drives openness, and a pupil that chases
+/// the gaze point the box hands it. Keeping them separate means an eye can blink while still turning to follow the mouse.
 /// </remarks>
 public class EyeSprite
 {
@@ -54,6 +40,20 @@ public class EyeSprite
     /// <summary>What the red has faded to for an eye hanging at the back of the void.</summary>
     private static readonly Color DeepTint = new(86, 58, 68);
 
+    /// <summary>How fast an eye turns to follow the gaze: this, plus up to the spread, so no two match.</summary>
+    private const float TrackingSpeedMin = 4.5f;
+    private const float TrackingSpeedSpread = 4.5f;
+
+    // The glow: its colour, the sine wave that makes it shimmer, and how it fades with depth.
+    private static readonly Color GlowColor = new(255, 58, 40);
+    private const float GlowBase = 0.84f;
+    private const float GlowShimmer = 0.16f;
+    private const float GlowRate = 2.1f;
+    private const float GlowVisibleThreshold = 0.05f;
+    private const float DepthDimming = 0.75f;
+    private const float GlowSizeBase = 0.95f;
+    private const float GlowSizePulse = 0.10f;
+
     /// <summary>Per-eye tracking rate, so seventeen eyes never swing in lockstep.</summary>
     private readonly float _trackingSpeed;
 
@@ -77,28 +77,20 @@ public class EyeSprite
     /// <summary>Final draw scale for the 16x16 frame, already folded in with the box's scale.</summary>
     public float Scale = 1f;
 
-    /// <summary>
-    /// How far back inside the void this eye hangs: 0 is just behind the mouth, 1 is barely
-    /// there at all. Deeper eyes are dimmer and cast almost no light, which is what gives
-    /// the opening the sense that it keeps going.
-    /// </summary>
+    /// <summary>How far back in the void this eye hangs, 0 to 1. Deeper eyes are dimmer and glow less.</summary>
     public float Depth;
 
-    /// <summary>
-    /// Creates an eye with a randomised blink schedule and tracking rate. This allows for a less robotic
-    /// </summary>
+    /// <summary>Creates an eye with a randomised blink schedule and tracking rate. This allows for a less robotic look.</summary>
     public EyeSprite()
     {
-        _trackingSpeed = 4.5f + (float)Random.Shared.NextDouble() * 4.5f;
+        _trackingSpeed = TrackingSpeedMin + (float)Random.Shared.NextDouble() * TrackingSpeedSpread;
         _shimmerPhase = (float)Random.Shared.NextDouble() * MathHelper.TwoPi;
 
         // Stagger the very first blink so the box does not open with all eyes in sync.
         _blinkAfter = Random.Shared.NextDouble() * MaxBlinkDelay; // AI helped me with this, staggering the initial blink for natural variation.
     }
 
-    /// <summary>
-    /// Loads the eye, pupil and glow textures using the provided ContentManager.
-    /// </summary>
+    /// <summary>Loads the eye, pupil and glow textures.</summary>
     /// <param name="content">The ContentManager to load with.</param>
     public void LoadContent(ContentManager content)
     {
@@ -108,9 +100,7 @@ public class EyeSprite
         _glow = content.Load<Texture2D>("glow");
     }
 
-    /// <summary>
-    /// Advances the blink animation and turns the pupil toward the supplied gaze point.
-    /// </summary>
+    /// <summary>Advances the blink and turns the pupil toward the gaze point.</summary>
     /// <param name="gameTime">The GameTime.</param>
     /// <param name="gazePoint">Screen position every eye on the box is currently watching.</param>
     public void Update(GameTime gameTime, Vector2 gazePoint)
@@ -122,54 +112,38 @@ public class EyeSprite
         UpdateGaze(elapsed, gazePoint);
     }
 
-    /// <summary>
-    /// Asks the eye to blink sooner than it had planned to.
-    /// </summary>
-    /// <remarks>
-    /// The box uses this to sweep a blink across every socket at once. The request can only
-    /// pull a blink earlier, never push one later, and an eye already mid-blink ignores it.
-    /// </remarks>
+    /// <summary>Asks the eye to blink sooner than planned. Used for the box-wide blink wave; can only pull a blink earlier.</summary>
     /// <param name="delay">Seconds to wait before blinking.</param>
     public void RequestBlink(double delay)
     {
         if (_state == EyeState.Open) _blinkAfter = Math.Min(_blinkAfter, _stateTimer + delay);
     }
 
-    /// <summary>
-    /// Draws the red light this eye spills out of the void.
-    /// </summary>
-    /// <remarks>Belongs in an additive batch; see <see cref="BlackBoxGame.Draw"/>.</remarks>
+    /// <summary>Draws the red light this eye spills out of the void. Needs an additive batch.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void DrawGlow(GameTime gameTime, SpriteBatch spriteBatch)
     {
-        //sin wave parameters for the glow shimmer effect
-        float basePulse = 0.84f;
-        float shimmerAmplitude = 0.16f;
-        float angularFrequency = 2.1f;
-
         // Skip drawing the glow if the eye is almost closed.
-        if (_openness <= 0.05f) return;
+        if (_openness <= GlowVisibleThreshold) return;
 
         // A slow shimmer keeps the glow from looking like a static decal.
-        float pulse = basePulse + shimmerAmplitude * MathF.Sin((float)_totalTime * angularFrequency + _shimmerPhase);
-        float intensity = _openness * pulse * (1f - Depth * 0.75f);
+        float pulse = GlowBase + GlowShimmer * MathF.Sin((float)_totalTime * GlowRate + _shimmerPhase);
+        float intensity = _openness * pulse * (1f - Depth * DepthDimming);
         var origin = new Vector2(_glow.Width / 2f, _glow.Height / 2f);
 
         spriteBatch.Draw(
             _glow,
             Position,
             null,
-            new Color(255, 58, 40) * intensity,
+            GlowColor * intensity,
             0f,
             origin,
-            Scale * GlowSizeRatio * (0.95f + 0.10f * pulse),
+            Scale * GlowSizeRatio * (GlowSizeBase + GlowSizePulse * pulse),
             SpriteEffects.None,
             Layers.EyeGlow);
     }
 
-    /// <summary>
-    /// Draws the eye and its pupil (unless the lid is closed.)
-    /// </summary>
+    /// <summary>Draws the eye and its pupil (unless the lid is closed.)</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void Draw(GameTime gameTime, SpriteBatch spriteBatch)
     {
@@ -209,6 +183,7 @@ public class EyeSprite
     }
 
     /// <summary>Picks the blink frame that best matches the current openness.</summary>
+    /// <remarks>The sheet has five frames, open to shut. These are the openness each one covers.</remarks>
     private int FrameIndex => _openness switch
     {
         >= 0.85f => 0,
@@ -259,14 +234,12 @@ public class EyeSprite
         Vector2 toGaze = gazePoint - Position;
         float distance = toGaze.Length();
 
-        // An eye staring at something right next to it barely deflects; one staring across
-        // the screen deflects all the way. Scaling by distance keeps the pupils from
-        // slamming to the edge of the socket every time the gaze passes nearby.
+        // Scale by distance, so a gaze point right next to the eye doesn't slam the pupil to the edge.
         Vector2 target = distance > float.Epsilon
             ? toGaze / distance * MathHelper.Clamp(distance / FullDeflectionDistance, 0f, 1f)
             : Vector2.Zero;
 
-        // Exponential smoothing, so the tracking rate does not change with frame rate.
+        // Exponential smoothing, so it tracks the same at any frame rate.
         _look = Vector2.Lerp(_look, target, 1f - MathF.Exp(-_trackingSpeed * (float)elapsed));
     }
 

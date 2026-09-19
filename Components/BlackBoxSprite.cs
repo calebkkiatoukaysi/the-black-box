@@ -10,35 +10,39 @@ namespace TheBlackBox;
 /// The black box: a shell of dead concrete around an opening, and the eyes hanging in it.
 /// </summary>
 /// <remarks>
-/// The box is the director for its eyes. It owns the single gaze point they all watch and
-/// the schedule for the box-wide blink, while each <see cref="EyeSprite"/> owns only its own
-/// animation. Pointing every eye at one shared target is what makes eighteen sprites read as
-/// one thing looking back at you instead of eighteen independent decorations.
+/// The box owns the one gaze point all the eyes watch and the box-wide blink; each EyeSprite only
+/// runs its own animation. Sharing one target is what makes eighteen eyes read as one thing looking at you.
 /// </remarks>
 public class BlackBoxSprite
 {
     /// <summary>Width and height of black-box.png.</summary>
     private const int TextureSize = 128;
 
-    /// <summary>
-    /// What the box is blown up by on the title screen, where it is the whole picture.
-    /// </summary>
+    /// <summary>The contact shadow: how much wider than the box, how tall, how far it sinks under the bottom edge, and its colour.</summary>
+    private const float ShadowWidth = 1.30f;
+    private const float ShadowHeight = 20f;
+    private const float ShadowSink = 0.34f;
+    private static readonly Color ShadowColor = new Color(4, 3, 6) * 0.95f;
+
+    /// <summary>The eyes' drift: how the phase and speed come off an eye's index, and how much slower it moves up and down.</summary>
+    private const float DriftPhaseStep = 1.37f;
+    private const float DriftSpeedBase = 0.35f;
+    private const float DriftSpeedStep = 0.07f;
+    private const int DriftSpeedSteps = 5;
+    private const float DriftVerticalRate = 0.7f;
+
+    /// <summary>Where the opening is inside black-box.png, and how big: the generator's aperture.</summary>
+    private const int ApertureX = 26;
+    private const int ApertureY = 29;
+    private const int ApertureSize = 76;
+
+    /// <summary>What the box is blown up by on the title screen.</summary>
     public const float DrawScale = 4f;
 
-    /// <summary>What it is blown up by once it is an object sitting on a table.</summary>
+    /// <summary>What it is blown up by on the table.</summary>
     /// <remarks>
-    /// <para>
-    /// Smaller because there is now something behind it to be in front of. At the title
-    /// scale the box covers the opponent from the collar up, which is a fine picture of a
-    /// box and a poor one of two people playing across it.
-    /// </para>
-    /// <para>
-    /// The only fraction in the game, and it is here because the number this controls is not
-    /// really the box's size -- it is how much of the opponent the box is allowed to cover.
-    /// Its top edge is the ceiling the man behind it has to keep his jaw above, so every step
-    /// down here is a step up in how large he can be drawn. A whole 2 would buy him more
-    /// again and leave the box too small to be the thing the room is built around.
-    /// </para>
+    /// Smaller, because the opponent sits behind it. At the title scale the box covered them
+    /// from the collar up. The only fractional scale in the game: 2 left the box too small to matter.
     /// </remarks>
     public const float TableScale = 2.5f;
 
@@ -64,22 +68,11 @@ public class BlackBoxSprite
     /// <summary>Seconds the box-wide blink takes to sweep from the left edge to the right.</summary>
     private const double BlinkWaveSweep = 0.40;
 
-    /// <summary>
-    /// Where one eye hangs, in the box texture's own 128x128 pixel space, how big it is
-    /// relative to <see cref="DrawScale"/>, and how far back in the void it sits.
-    /// </summary>
-    /// <remarks>
-    /// Authoring in texture space means the eyes follow the box automatically when it bobs,
-    /// moves or is rescaled.
-    /// </remarks>
+    /// <summary>Where one eye hangs in the 128x128 texture, how big it is, and how deep in the void it sits.</summary>
+    /// <remarks>Texture space, so the eyes follow the box when it bobs or gets rescaled.</remarks>
     private readonly record struct EyeSlot(float X, float Y, float Size, float Depth);
 
-    /// <summary>
-    /// Hand-placed, in three depth bands.
-    /// </summary>
-    /// <remarks>
-    /// Eyes are manually positioned to create a sense of depth and life within the box.
-    /// </remarks>
+    /// <summary>Hand-placed, in three depth bands, to give the void some depth.</summary>
     private static readonly EyeSlot[] EyeSlots =
     {
         // Near the mouth: big, bright, wide of centre.
@@ -123,27 +116,16 @@ public class BlackBoxSprite
     /// <summary>The radial falloff the contact shadow is drawn from.</summary>
     private Texture2D _glow;
 
-    /// <summary>
-    /// How far the art is blown up, per instance.
-    /// </summary>
-    /// <remarks>
-    /// A field rather than the constant it used to be, because the box is two different
-    /// sizes in two different scenes. Whole numbers only: everything in this project is
-    /// point-sampled pixel art and a fractional scale would put seams through the shell.
-    /// Changing it is free -- the eyes re-anchor from it every frame.
-    /// </remarks>
+    /// <summary>How far the art is blown up. A field, because the box is two sizes in two scenes.</summary>
     public float Scale = DrawScale;
 
-    /// <summary>
-    /// Builds the box and one eye per slot.
-    /// </summary>
+    /// <summary>Builds the box and one eye per slot.</summary>
     public BlackBoxSprite()
     {
         _eyes = new EyeSprite[EyeSlots.Length];
         for (int i = 0; i < _eyes.Length; i++)
         {
-            // Eye scale is set in Update rather than here, so that changing the box's own
-            // scale mid-game brings the eyes with it instead of leaving them at title size.
+            // Eye scale is set again in Update, so rescaling the box mid-game brings the eyes with it.
             _eyes[i] = new EyeSprite()
             {
                 Scale = DrawScale * EyeSlots[i].Size,
@@ -152,9 +134,7 @@ public class BlackBoxSprite
         }
     }
 
-    /// <summary>
-    /// Loads the box texture and every eye's textures using the provided ContentManager.
-    /// </summary>
+    /// <summary>Loads the box texture and every eye's textures.</summary>
     /// <param name="content">The ContentManager to load with.</param>
     public void LoadContent(ContentManager content)
     {
@@ -163,9 +143,7 @@ public class BlackBoxSprite
         foreach (var eye in _eyes) eye.LoadContent(content);
     }
 
-    /// <summary>
-    /// Bobs the box, decides where it is looking, and updates every eye.
-    /// </summary>
+    /// <summary>Bobs the box, decides where it is looking, and updates every eye.</summary>
     /// <param name="gameTime">The GameTime.</param>
     /// <param name="viewport">The viewport, used to keep the wandering gaze on screen.</param>
     public void Update(GameTime gameTime, Viewport viewport)
@@ -173,9 +151,7 @@ public class BlackBoxSprite
         double elapsed = gameTime.ElapsedGameTime.TotalSeconds;
         _totalTime += elapsed;
 
-        // Update the gaze and blink wave based on the elapsed time.
         UpdateGaze(elapsed, viewport);
-        // Update the blink wave based on the elapsed time.
         UpdateBlinkWave(elapsed);
 
         // Anchor eyes to the box's current position before updating them.
@@ -190,9 +166,7 @@ public class BlackBoxSprite
         }
     }
 
-    /// <summary>
-    /// Draws the shell and the void inside it, with no eyes in it yet. (The Box's Body)
-    /// </summary>
+    /// <summary>Draws the shell and the void inside it, with no eyes in it yet. (The Box's Body)</summary>
     /// <param name="gameTime">The game time.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void DrawBody(GameTime gameTime, SpriteBatch spriteBatch)
@@ -209,45 +183,31 @@ public class BlackBoxSprite
             Layers.Box);
     }
 
-    /// <summary>
-    /// Draws the pool of dark the box is sitting in.
-    /// </summary>
+    /// <summary>Draws the contact shadow under the box, so it sits on the table instead of floating.</summary>
     /// <remarks>
-    /// <para>
-    /// glow.png is a radial falloff, which is all a contact shadow is. Squashed flat and
-    /// drawn near-black it grounds the box on the table; without it the box reads as hanging
-    /// in front of the table rather than resting on it, because nothing else in the scene
-    /// casts anything.
-    /// </para>
-    /// <para>
-    /// Sat just below the bottom edge rather than centred on it. Centred, the half of the
-    /// ellipse above the edge is wider than the box and sticks out either side as two dark
-    /// nubs that read as feet.
-    /// </para>
+    /// It's glow.png squashed flat and drawn near-black. It sits just below the bottom edge:
+    /// centred on it, the top half of the ellipse stuck out either side like feet.
     /// </remarks>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void DrawContactShadow(SpriteBatch spriteBatch)
     {
         if (_glow is null) return;
 
-        float width = TextureSize * Scale * 1.30f;
-        float height = Scale * 20f;
+        float width = TextureSize * Scale * ShadowWidth;
+        float height = Scale * ShadowHeight;
         float bottom = DrawPosition.Y + TextureSize * Scale / 2f;
 
         var destination = new Rectangle(
             (int)MathF.Round(Position.X - width / 2f),
-            (int)MathF.Round(bottom - height * 0.34f),
+            (int)MathF.Round(bottom - height * ShadowSink),
             (int)MathF.Round(width),
             (int)MathF.Round(height));
 
-        spriteBatch.Draw(_glow, destination, null, new Color(4, 3, 6) * 0.95f,
+        spriteBatch.Draw(_glow, destination, null, ShadowColor,
             0f, Vector2.Zero, SpriteEffects.None, Layers.BoxShadow);
     }
 
-    /// <summary>
-    /// Draws the red light every open eye spills out of the opening.
-    /// </summary>
-    /// <remarks>Belongs in an additive batch; see <see cref="BlackBoxGame.Draw"/>.</remarks>
+    /// <summary>Draws the red light every open eye spills out of the opening. Needs an additive batch.</summary>
     /// <param name="gameTime">The game time.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void DrawEyeGlow(GameTime gameTime, SpriteBatch spriteBatch)
@@ -255,9 +215,7 @@ public class BlackBoxSprite
         foreach (var eye in _eyes) eye.DrawGlow(gameTime, spriteBatch);
     }
 
-    /// <summary>
-    /// Draws the eyes and their pupils, over the glow.
-    /// </summary>
+    /// <summary>Draws the eyes and their pupils, over the glow.</summary>
     /// <param name="gameTime">The game time.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void DrawEyes(GameTime gameTime, SpriteBatch spriteBatch)
@@ -266,35 +224,36 @@ public class BlackBoxSprite
     }
 
     /// <summary>The box's centre this frame, including the idle bob.</summary>
-    /// <remarks>
-    /// The bob is rounded to whole screen pixels. At a 3x draw scale a fractional offset
-    /// makes the upscaled art shimmer along its edges as it moves, which is exactly the
-    /// artefact point sampling is being used to avoid.
-    /// </remarks>
-    private Vector2 DrawPosition =>
+    /// <remarks>Rounded to whole pixels. A fractional bob made the edges shimmer as it moved.</remarks>
+    public Vector2 DrawPosition =>
         Position + new Vector2(0f, MathF.Round(MathF.Sin((float)_totalTime * BobSpeed) * BobAmplitude));
 
-    /// <summary>
-    /// A slow wander for one eye, so the things in the void are not pinned in place.
-    /// </summary>
-    /// <remarks>
-    /// Scaled by depth: an eye near the mouth is all but fixed, while the ones far down
-    /// swim. The rate and phase come from the eye's index rather than from extra slot
-    /// fields, which keeps the placement table readable.
-    /// </remarks>
+    /// <summary>Where the opening is on screen this frame. The lid in the close-up is placed from this.</summary>
+    public Rectangle Aperture
+    {
+        get
+        {
+            Vector2 topLeft = DrawPosition - new Vector2(TextureSize * Scale / 2f);
+            return new Rectangle(
+                (int)MathF.Round(topLeft.X + ApertureX * Scale),
+                (int)MathF.Round(topLeft.Y + ApertureY * Scale),
+                (int)MathF.Round(ApertureSize * Scale),
+                (int)MathF.Round(ApertureSize * Scale));
+        }
+    }
+
+    /// <summary>A slow wander for one eye. Deeper eyes drift more; near ones barely move.</summary>
     private Vector2 Drift(int index, EyeSlot slot)
     {
         // AI computed the phase, speed, and reach for the eye's drift based on its index and depth.
-
-        // What this does: it calculates a drifting offset for the eye based on its index and depth, creating a natural wandering motion.
-        float phase = index * 1.37f;
-        float speed = 0.35f + index % 5 * 0.07f;
+        float phase = index * DriftPhaseStep;
+        float speed = DriftSpeedBase + index % DriftSpeedSteps * DriftSpeedStep;
         float reach = DriftAmplitude * slot.Depth;
 
         // why Sin and Cos? I find that this creates a more natural wandering motion for the eyes.
         return new Vector2(
             MathF.Sin((float)_totalTime * speed + phase) * reach,
-            MathF.Cos((float)_totalTime * speed * 0.7f + phase) * reach);
+            MathF.Cos((float)_totalTime * speed * DriftVerticalRate + phase) * reach);
     }
 
     /// <summary>
@@ -305,29 +264,24 @@ public class BlackBoxSprite
     {
         Point mousePosition = Mouse.GetState().Position;
 
-        // Seed the sample instead of treating the very first frame as a mouse movement, 
-        // which would otherwise yank every eye toward wherever the cursor happened to be.
-
-        // If we haven't sampled the mouse yet, treat this as the first frame and center the gaze.
+        // First frame: seed the sample and centre the gaze, or every eye would yank toward the cursor.
         if (!_hasMouseSample)
         {
             _hasMouseSample = true;
             _lastMousePosition = mousePosition;
             _gazePoint = _gazeTarget = new Vector2(viewport.Width / 2f, viewport.Height / 2f);
         }
-        // If the mouse has moved, reset the attention timer.
         else if (mousePosition != _lastMousePosition)
         {
             _lastMousePosition = mousePosition;
             _mouseAttention = MouseAttentionDuration;
         }
-        // Update the gaze target based on whether the mouse is being attended to.
         if (_mouseAttention > 0)
         {
             _mouseAttention -= elapsed;
             _gazeTarget = mousePosition.ToVector2();
         }
-        // If the mouse is not being attended to, the box eventually picks a random point to look at.
+        // Once it loses interest in the mouse, the box picks random points to look at.
         else
         {
             _gazeHold -= elapsed;
@@ -340,14 +294,11 @@ public class BlackBoxSprite
             }
         }
 
-        // Ease the shared point rather than the individual pupils, so the box turns its
-        // attention as one and the per-eye tracking rates only add a little lag on top.
+        // Ease the shared point, not each pupil, so the box turns its attention as one.
         _gazePoint = Vector2.Lerp(_gazePoint, _gazeTarget, 1f - MathF.Exp(-GazeEase * (float)elapsed));
     }
 
-    /// <summary>
-    /// Every so often, blinks every eye in a wave that sweeps across the opening.
-    /// </summary>
+    /// <summary>Every so often, blinks every eye in a wave that sweeps across the opening.</summary>
     private void UpdateBlinkWave(double elapsed)
     {
         _blinkWaveTimer -= elapsed;

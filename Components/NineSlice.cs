@@ -8,23 +8,12 @@ namespace TheBlackBox;
 /// Draws a fixed-size frame of pixel art stretched to any rectangle, in nine pieces.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The four corners are drawn at their authored size, the four edges are stretched along the
-/// one axis they run down, and only the middle is stretched both ways. Everything drawn this
-/// way is authored to suit it -- nothing inside an edge varies along the direction it gets
-/// stretched -- so none of it smears no matter how far it is pulled.
-/// </para>
-/// <para>
-/// Both <see cref="ButtonSprite"/> and <see cref="SaveSlotMenu"/> are built out of plates that
-/// have to size themselves to their contents, so the slicing lives here rather than in either
-/// of them.
-/// </para>
+/// Corners stay their drawn size, edges stretch one way, the middle stretches both. Shared by
+/// <see cref="ButtonSprite"/> and the panels, which is why it's its own class.
 /// </remarks>
 public static class NineSlice
 {
-    /// <summary>
-    /// Draws one frame of <paramref name="texture"/> stretched to cover <paramref name="destination"/>.
-    /// </summary>
+    /// <summary>Draws one frame of the texture stretched to cover the destination.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     /// <param name="texture">The sheet the frame lives in.</param>
     /// <param name="destination">The area to cover, in screen pixels.</param>
@@ -39,8 +28,7 @@ public static class NineSlice
     {
         int corner = (int)MathF.Round(cornerSize * scale);
 
-        // Never let the two corners on an axis overrun the plate, or they would overlap and
-        // double-draw whatever they carry where they met.
+        // Don't let the two corners on an axis overlap on a small plate.
         int cornerX = Math.Min(corner, destination.Width / 2);
         int cornerY = Math.Min(corner, destination.Height / 2);
 

@@ -1,14 +1,11 @@
 namespace TheBlackBox;
 
 /// <summary>
-/// Sort keys handed to <see cref="Microsoft.Xna.Framework.Graphics.SpriteBatch"/> while it is
-/// running in <see cref="Microsoft.Xna.Framework.Graphics.SpriteSortMode.BackToFront"/>.
-/// 1 is the far distance and 0 is pressed against the camera, so a larger number draws first.
+/// Layer depths for SpriteBatch in BackToFront mode. 1 is the back, 0 is the front.
 /// </summary>
 /// <remarks>
-/// Depth only sorts sprites inside a single Begin/End batch. The title screen uses several
-/// batches because the eye glow needs additive blending, so the batch order in
-/// <see cref="BlackBoxGame.Draw"/> is the outer sort and these values are the inner one.
+/// Depth only sorts within one Begin/End. The eye glow needs its own additive batch, so the
+/// batch order in BlackBoxGame.Draw sorts first and these sort inside each batch.
 /// </remarks>
 public static class Layers
 {
@@ -36,6 +33,21 @@ public static class Layers
     /// <summary>The player's own hand, reaching past the box into the opening.</summary>
     public const float Hand = 0.30f;
 
+    /// <summary>The box's jaws in the close-up, over its eyes and behind the hand going in.</summary>
+    public const float Lid = 0.33f;
+
+    /// <summary>The tag the box pays with. In front of the catching hand so it lies in the palm when caught.</summary>
+    public const float Token = 0.29f;
+
+    /// <summary>The sight a check puts over its target.</summary>
+    public const float Sight = 0.27f;
+
+    /// <summary>The ember in the steady check, over the groove it sits in.</summary>
+    public const float Marker = 0.28f;
+
+    /// <summary>The groove the ember sits in.</summary>
+    public const float Bar = 0.31f;
+
     /// <summary>Red light bleeding out of each socket (drawn in the additive batch).</summary>
     public const float EyeGlow = 0.50f;
 
@@ -45,13 +57,10 @@ public static class Layers
     /// <summary>The pupil, over its own eye.</summary>
     public const float Pupil = 0.35f;
 
-    /// <summary>Ash spiralling into the mouth, in front of everything it is falling past.</summary>
+    /// <summary>Ash spiralling into the mouth.</summary>
     public const float Mote = 0.20f;
 
-    /// <summary>
-    /// The dimming pane a form is laid over. It is drawn in the form's own batch, behind
-    /// everything else in it and in front of the whole title screen under it.
-    /// </summary>
+    /// <summary>The dimming pane a form is laid over. Back of the form's batch.</summary>
     public const float Veil = 0.60f;
 
     /// <summary>The concrete slab a form is built on, over the veil.</summary>
@@ -66,15 +75,15 @@ public static class Layers
     /// <summary>Offset drop shadow behind a button's label.</summary>
     public const float ButtonLabelShadow = 0.16f;
 
-    /// <summary>A button's label, the closest part of the button.</summary>
+    /// <summary>A button's label.</summary>
     public const float ButtonLabel = 0.15f;
 
-    /// <summary>The dark plate the dialogue is written on, behind its own text.</summary>
+    /// <summary>The dark plate the dialogue is written on.</summary>
     public const float DialoguePlate = 0.14f;
 
     /// <summary>Offset drop shadow sitting just behind a line of text.</summary>
     public const float TextShadow = 0.12f;
 
-    /// <summary>Foreground text, the closest thing on screen.</summary>
+    /// <summary>Foreground text.</summary>
     public const float Text = 0.10f;
 }
