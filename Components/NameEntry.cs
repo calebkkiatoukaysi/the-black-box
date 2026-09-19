@@ -10,20 +10,25 @@ namespace TheBlackBox;
 /// Asks a new run what the player is called.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Opens once, over the title screen, when a slot is claimed that has no name on it yet. A
-/// run that already has one never sees this again -- the name is on the save, so two slots
-/// are two different people.
-/// </para>
-/// <para>
-/// Characters arrive from <see cref="GameWindow.TextInput"/> rather than from reading
-/// <c>Keyboard.GetState</c>. Reading the keyboard directly would mean owning the mapping from
-/// key to character, which means owning shift, caps lock, dead keys and every keyboard layout
-/// that is not the one this was written on. The window already knows all of that.
-/// </para>
+/// Opens once, when a slot with no name on it is claimed. Characters come from
+/// <see cref="GameWindow.TextInput"/> instead of Keyboard.GetState, so I don't have to handle
+/// shift, caps lock and keyboard layouts myself.
 /// </remarks>
 public class NameEntry
 {
+    /// <summary>The gap between the two buttons.</summary>
+    private const int ButtonGap = 36;
+
+    /// <summary>The caret: how far after the text it sits, how far down from the top, its width, and its height as a share of the line.</summary>
+    private const int CaretGap = 3;
+    private const int CaretInset = 4;
+    private const int CaretWidth = 2;
+    private const float CaretHeight = 0.78f;
+
+    private static readonly Color RuleColor = new(122, 108, 106);
+    private static readonly Color NoteColor = new(132, 122, 124);
+    private static readonly Color TypedColor = new(240, 232, 226);
+
     /// <summary>Width and height of the single frame in panel.png.</summary>
     private const int PanelFrameSize = 32;
 
@@ -44,11 +49,7 @@ public class NameEntry
     private const int FieldHeight = 64;
     private const int FieldGap = 26;
 
-    /// <summary>How long a name may be.</summary>
-    /// <remarks>
-    /// Short enough that it still fits on a plate and inside a written line when it is
-    /// substituted for <c>{name}</c>, which is the only real constraint on it.
-    /// </remarks>
+    /// <summary>How long a name may be. Short enough to fit on a plate and inside a line of dialogue.</summary>
     public const int MaxLength = 16;
 
     /// <summary>How far the veil darkens the title screen behind the form.</summary>
@@ -143,14 +144,7 @@ public class NameEntry
         Cancelled?.Invoke();
     }
 
-    /// <summary>
-    /// Takes one character from the window.
-    /// </summary>
-    /// <remarks>
-    /// Control characters are handled here rather than filtered out before they arrive, since
-    /// backspace and return are the two most important keys on this form. Everything else that
-    /// is not printable is dropped -- a name is not the place for a tab.
-    /// </remarks>
+    /// <summary>Takes one character from the window. Backspace and return are handled here; other control characters are dropped.</summary>
     /// <param name="character">The character the window reported.</param>
     public void TypeCharacter(char character)
     {
@@ -171,14 +165,14 @@ public class NameEntry
                 if (char.IsControl(character)) return;
                 if (_typed.Length >= MaxLength) return;
 
-                // A leading space is not a name, and nor is a double one.
+                // No leading or double spaces.
                 if (character == ' ' && (_typed.Length == 0 || _typed[^1] == ' ')) return;
 
                 _typed.Append(character);
                 break;
         }
 
-        // Any edit restarts the blink, so the caret is solid while somebody is typing.
+        // Restart the blink so the caret is solid while typing.
         _caretTimer = 0;
     }
 
@@ -190,7 +184,6 @@ public class NameEntry
 
         _caretTimer += gameTime.ElapsedGameTime.TotalSeconds;
 
-        // There is nobody to sit down as until something has been typed.
         _beginButton.Enabled = IsValid;
 
         _beginButton.Update(gameTime);
@@ -204,21 +197,21 @@ public class NameEntry
     {
         if (!IsOpen) return;
 
-        spriteBatch.Draw(_pixel, _screen, null, new Color(6, 5, 10) * VeilOpacity,
+        spriteBatch.Draw(_pixel, _screen, null, Palette.Veil * VeilOpacity,
             0f, Vector2.Zero, SpriteEffects.None, Layers.Veil);
 
         NineSlice.Draw(spriteBatch, _panel, _panelBounds, Point.Zero,
             PanelFrameSize, PanelCornerSize, PanelScale, Color.White, Layers.PanelPlate);
 
-        DrawCentered(spriteBatch, _font, Heading, _panelBounds.Top + PanelPadding, new Color(214, 206, 200));
+        DrawCentered(spriteBatch, _font, Heading, _panelBounds.Top + PanelPadding, Palette.Heading);
 
-        // The rule under the field, so the empty form still reads as somewhere to type.
+        // The rule under the field, so an empty form still looks like somewhere to type.
         var rule = new Rectangle(_fieldBounds.Left, _fieldBounds.Bottom, _fieldBounds.Width, 2);
-        spriteBatch.Draw(_pixel, rule, null, new Color(122, 108, 106),
+        spriteBatch.Draw(_pixel, rule, null, RuleColor,
             0f, Vector2.Zero, SpriteEffects.None, Layers.Text);
 
         DrawField(spriteBatch);
-        DrawCentered(spriteBatch, _detailFont, Note, _noteY, new Color(132, 122, 124));
+        DrawCentered(spriteBatch, _detailFont, Note, _noteY, NoteColor);
 
         _beginButton.Draw(gameTime, spriteBatch);
         _backButton.Draw(gameTime, spriteBatch);
@@ -236,15 +229,15 @@ public class NameEntry
 
         if (text.Length > 0)
         {
-            spriteBatch.DrawString(_font, text, new Vector2(left + 2f, top + 2f), Color.Black * 0.6f,
+            spriteBatch.DrawString(_font, text, new Vector2(left, top) + Palette.ShadowOffset, Palette.Shadow,
                 0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.TextShadow);
-            spriteBatch.DrawString(_font, text, new Vector2(left, top), new Color(240, 232, 226),
+            spriteBatch.DrawString(_font, text, new Vector2(left, top), TypedColor,
                 0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.Text);
         }
 
         if (_caretTimer % (CaretBlink * 2) >= CaretBlink) return;
 
-        var caret = new Rectangle((int)(left + size.X) + 3, (int)top + 4, 2, (int)MathF.Round(_font.LineSpacing * 0.78f));
+        var caret = new Rectangle((int)(left + size.X) + CaretGap, (int)top + CaretInset, CaretWidth, (int)MathF.Round(_font.LineSpacing * CaretHeight));
         spriteBatch.Draw(_pixel, caret, null, ButtonSprite.Amber,
             0f, Vector2.Zero, SpriteEffects.None, Layers.Text);
     }
@@ -258,14 +251,7 @@ public class NameEntry
         Confirmed?.Invoke(Name);
     }
 
-    /// <summary>
-    /// Sizes the panel around its contents and centres it.
-    /// </summary>
-    /// <remarks>
-    /// Run once, after the buttons have measured their own labels. Same reasoning as the title
-    /// screen's row: laying out from measurements rather than constants means the form stays
-    /// centred when a label changes.
-    /// </remarks>
+    /// <summary>Sizes the panel around its contents and centres it. Runs after the buttons have measured their labels.</summary>
     private void LayOut()
     {
         int headingHeight = (int)MathF.Round(_font.LineSpacing);
@@ -290,14 +276,14 @@ public class NameEntry
         _noteY = _fieldBounds.Bottom + FieldGap;
 
         float row = _noteY + noteHeight + HeadingGap + _beginButton.Size.Y / 2f;
-        float total = _beginButton.Size.X + 36 + _backButton.Size.X;
+        float total = _beginButton.Size.X + ButtonGap + _backButton.Size.X;
         float left = _panelBounds.Center.X - total / 2f;
 
         _beginButton.Center = new Vector2(left + _beginButton.Size.X / 2f, row);
-        _backButton.Center = new Vector2(left + _beginButton.Size.X + 36 + _backButton.Size.X / 2f, row);
+        _backButton.Center = new Vector2(left + _beginButton.Size.X + ButtonGap + _backButton.Size.X / 2f, row);
     }
 
-    /// <summary>Draws a line centred across the panel, over a hard offset shadow.</summary>
+    /// <summary>Draws a line centred across the panel, with a shadow.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     /// <param name="font">The SpriteFont to measure and render with.</param>
     /// <param name="text">The text to draw.</param>
@@ -308,7 +294,7 @@ public class NameEntry
         Vector2 size = font.MeasureString(text);
         var position = new Vector2(MathF.Round(_panelBounds.Center.X - size.X / 2f), MathF.Round(y));
 
-        spriteBatch.DrawString(font, text, position + new Vector2(2f, 2f), Color.Black * 0.6f,
+        spriteBatch.DrawString(font, text, position + Palette.ShadowOffset, Palette.Shadow,
             0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.TextShadow);
         spriteBatch.DrawString(font, text, position, color,
             0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.Text);

@@ -9,34 +9,18 @@ namespace TheBlackBox;
 /// Reads, writes and erases the three save slots.
 /// </summary>
 /// <remarks>
-/// <para>
-/// One slot is one JSON file in the player's local application data, written with
-/// <c>System.Text.Json</c> -- which ships with .NET, so the project still builds on a clean
-/// machine with nothing installed but the SDK and MonoGame.
-/// </para>
-/// <para>
-/// Saves deliberately do not live next to the executable. <c>bin/</c> is deleted by every
-/// clean build and is absent from every fresh clone of the repository, so a save written
-/// there is a save the player loses to <c>dotnet clean</c>. <see cref="Folder"/> survives all
-/// of that, and is where Windows expects a game to keep this.
-/// </para>
-/// <para>
-/// Nothing here throws. A save system that throws turns a bad sector into a crash on the
-/// title screen, so every operation catches, records what went wrong, and reports failure --
-/// the form shows the slot as unreadable and the player can still erase it and carry on.
-/// </para>
+/// One slot is one JSON file in local app data, written with System.Text.Json since that ships
+/// with .NET. Not next to the exe, because bin/ gets wiped by a clean build. Nothing in here
+/// throws: a bad file shows up as an unreadable slot the player can erase, not a crash on the
+/// title screen.
 /// </remarks>
 public static class SaveSystem
 {
     /// <summary>How many slots the game offers.</summary>
     public const int SlotCount = 3;
 
-    /// <summary>
-    /// The shape of save file this build writes. Bump it whenever an existing field changes
-    /// meaning or leaves, and teach <see cref="Upgrade"/> how to bring the old shape forward.
-    /// Adding a new field with a sensible default does not need a bump -- an older file simply
-    /// arrives without it and gets the default.
-    /// </summary>
+    /// <summary>The shape of save file this build writes.</summary>
+    /// <remarks>Bump it when an existing field changes meaning or goes away, and add a step to <see cref="Upgrade"/>. A new field with a default does not need a bump.</remarks>
     public const int CurrentVersion = 3;
 
     /// <summary>Written to disk indented, so a save can be read and edited while the game is built.</summary>
@@ -50,10 +34,8 @@ public static class SaveSystem
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "TheBlackBox", "Saves");
 
-    /// <summary>
-    /// Reads every slot, in order.
-    /// </summary>
-    /// <returns>One <see cref="SaveSlot"/> per slot, empty and unreadable ones included.</returns>
+    /// <summary>Reads every slot, in order.</summary>
+    /// <returns>One SaveSlot per slot, empty and unreadable ones included.</returns>
     public static SaveSlot[] ReadAll()
     {
         var slots = new SaveSlot[SlotCount];
@@ -61,11 +43,9 @@ public static class SaveSystem
         return slots;
     }
 
-    /// <summary>
-    /// Reads one slot.
-    /// </summary>
-    /// <param name="slot">Which slot, from 0 to <see cref="SlotCount"/> - 1.</param>
-    /// <returns>What the slot turned out to be. Never null, and never throws.</returns>
+    /// <summary>Reads one slot.</summary>
+    /// <param name="slot">Which slot, from 0 to SlotCount - 1.</param>
+    /// <returns>What the slot turned out to be. Never null, never throws.</returns>
     public static SaveSlot Read(int slot)
     {
         string path = PathFor(slot);
@@ -76,8 +56,7 @@ public static class SaveSystem
 
             SaveData data = JsonSerializer.Deserialize<SaveData>(File.ReadAllText(path), Options);
 
-            // Deserialize returns null for a file holding the literal "null", which is valid
-            // JSON and not a valid save, so it is caught here rather than downstream.
+            // A file holding just "null" is valid JSON and deserialises to null. Catch it here.
             if (data is null) return Unreadable(slot, "the file is empty");
 
             return new SaveSlot { Index = slot, State = SaveSlotState.Occupied, Data = Upgrade(data) };
@@ -92,19 +71,13 @@ public static class SaveSystem
         }
     }
 
-    /// <summary>
-    /// Writes one slot, stamping it with the current time and version on the way out.
-    /// </summary>
+    /// <summary>Writes one slot, stamping it with the current time and version on the way out.</summary>
     /// <remarks>
-    /// The write goes to a temporary file first and only then replaces the real one, because
-    /// a save is overwritten at exactly the moments a game is most likely to be killed --
-    /// quitting, or dying. Truncating the old save and then failing to finish the new one
-    /// would lose the run; this way the slot holds either the old save or the new one and
-    /// never half of either. <see cref="File.Replace(string, string, string)"/> also keeps the
-    /// save it displaced as a <c>.bak</c>, which is one more copy standing between the player
-    /// and a lost run.
+    /// Written to a .tmp first and then swapped in, so if the game dies mid-write the slot
+    /// still has the old save rather than half a new one. File.Replace keeps the old one as
+    /// a .bak too.
     /// </remarks>
-    /// <param name="slot">Which slot, from 0 to <see cref="SlotCount"/> - 1.</param>
+    /// <param name="slot">Which slot, from 0 to SlotCount - 1.</param>
     /// <param name="data">The run to write.</param>
     /// <returns>True if the slot now holds this run.</returns>
     public static bool Write(int slot, SaveData data)
@@ -130,17 +103,14 @@ public static class SaveSystem
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
         {
-            // A half-written temporary is not a save, and must not be left lying around
-            // looking like one.
+            // Don't leave a half-written temp file lying around looking like a save.
             TryDelete(temporary);
             return Fail(e.Message);
         }
     }
 
-    /// <summary>
-    /// Erases one slot, and the backup behind it.
-    /// </summary>
-    /// <param name="slot">Which slot, from 0 to <see cref="SlotCount"/> - 1.</param>
+    /// <summary>Erases one slot, and the backup behind it.</summary>
+    /// <param name="slot">Which slot, from 0 to SlotCount - 1.</param>
     /// <returns>True if the slot is now empty, which includes it having been empty already.</returns>
     public static bool Delete(int slot)
     {
@@ -161,29 +131,11 @@ public static class SaveSystem
         }
     }
 
-    /// <summary>
-    /// Brings a save written by an older build up to <see cref="CurrentVersion"/>.
-    /// </summary>
+    /// <summary>Brings a save written by an older build up to <see cref="CurrentVersion"/>.</summary>
     /// <remarks>
-    /// <para>
-    /// Each step moves a file forward exactly one version and falls through, so a version 1
-    /// file is carried all the way up by running every step in turn rather than by one
-    /// migration per pair of versions.
-    /// </para>
-    /// <para>
-    /// Version 1 to 2: version 1 kept a single <c>Hand</c> list, which was the player's whole
-    /// inventory. The rules since then separate the item that has just been dealt and is still
-    /// a decision from the items that were abstained with and kept, so <c>Hand</c> becomes
-    /// <see cref="SaveData.Banked"/> -- everything in an old save had already been dealt and
-    /// not used, which is precisely what banked now means. It is read out of
-    /// <see cref="SaveData.Extra"/> because the property it used to land in no longer exists.
-    /// </para>
-    /// <para>
-    /// Version 2 to 3: the bank became a pocket, and a pocket has <see cref="RoundRules.PocketSlots"/>
-    /// slots. A version 2 save could hold any number of items, so anything past the last
-    /// slot is dropped -- the oldest are kept, because they are the ones the player chose
-    /// first, and nothing else about the file changes.
-    /// </para>
+    /// Each step moves the file up one version and falls through to the next. 1 to 2: the old
+    /// Hand list becomes Banked, read out of Extra since the property is gone. 2 to 3: the bank
+    /// became a pocket with a size limit, so anything past the last slot is dropped, oldest kept.
     /// </remarks>
     /// <param name="data">The save as it was read off disk.</param>
     /// <returns>The same run, in the shape this build expects.</returns>
@@ -197,7 +149,7 @@ public static class SaveSystem
                     data.Banked.Add(ItemCatalog.ToSaveId(item));
             }
 
-            // Version 1 predates the opponent remembering anything, so it opens neutral.
+            // Version 1 had no disposition, so it opens neutral.
             data.OpponentDisposition = Disposition.Neutral;
         }
 
@@ -219,15 +171,8 @@ public static class SaveSystem
             pockets.RemoveRange(RoundRules.PocketSlots, pockets.Count - RoundRules.PocketSlots);
     }
 
-    /// <summary>
-    /// Reads a list of strings out of a field this build no longer has a property for, and
-    /// takes it out of the save so it is not written back.
-    /// </summary>
-    /// <remarks>
-    /// Anything that is not a list of strings comes back empty rather than throwing. A save
-    /// being migrated is a save that has already survived being read, and refusing it at this
-    /// point over one malformed field would turn a recoverable run into an unreadable slot.
-    /// </remarks>
+    /// <summary>Pulls a list of strings out of a field this build no longer has, and removes it so it is not written back.</summary>
+    /// <remarks>Anything malformed comes back empty instead of throwing. One bad field should not make the whole slot unreadable.</remarks>
     /// <param name="data">The save being brought forward.</param>
     /// <param name="name">The field to drain.</param>
     /// <returns>What the field held, or nothing.</returns>
@@ -247,7 +192,7 @@ public static class SaveSystem
     }
 
     /// <summary>The file one slot lives in.</summary>
-    /// <param name="slot">Which slot, from 0 to <see cref="SlotCount"/> - 1.</param>
+    /// <param name="slot">Which slot, from 0 to SlotCount - 1.</param>
     private static string PathFor(int slot)
     {
         if (slot < 0 || slot >= SlotCount)

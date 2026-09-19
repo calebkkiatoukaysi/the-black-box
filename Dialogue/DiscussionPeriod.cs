@@ -3,41 +3,13 @@ using System.Collections.Generic;
 
 namespace TheBlackBox;
 
-/// <summary>How a discussion period ended, or that it has not.</summary>
-public enum DiscussionState
-{
-    /// <summary>Still being played. The clock is running.</summary>
-    Running,
-
-    /// <summary>Talked to its end. The player chose the last word.</summary>
-    Concluded,
-
-    /// <summary>The box allowed so much time and no more. See <see cref="Tone.Silence"/>.</summary>
-    Silenced,
-}
-
 /// <summary>
 /// One discussion, being played: where it has got to, what the opponent now thinks, and how
 /// much of the box's patience is left.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The period is the half of a round that is not the box. Both sides talk, and then both feed
-/// it a hand -- so everything that happens here is meant to change what the other half is
-/// worth. Learning that an opponent is frightened is the same kind of advantage as holding a
-/// <see cref="ItemId.Lens"/>, bought with time instead of a hand.
-/// </para>
-/// <para>
-/// Nothing in here draws. It is told how much time has passed and it answers questions about
-/// what should be on screen, which keeps the whole system testable without a window open, and
-/// means the wheel can be rebuilt without touching a line of the dialogue logic.
-/// </para>
-/// <para>
-/// The disposition it finishes with is the value that outlives it. It belongs to the opponent
-/// and not to this period, so it is handed in at the start and read back out at the end --
-/// that is what lets an opponent remember, three discussions later, that the player was cruel
-/// on the first night.
-/// </para>
+/// Nothing in here draws; the wheel asks it what to show. The disposition is handed in at the
+/// start and read back out at the end, which is how an opponent remembers the last discussion.
 /// </remarks>
 public sealed class DiscussionPeriod
 {
@@ -46,16 +18,11 @@ public sealed class DiscussionPeriod
     private readonly List<string> _transcript = new();
     private readonly List<string> _flags = new();
 
-    /// <summary>
-    /// Opens a discussion.
-    /// </summary>
+    /// <summary>Opens a discussion.</summary>
     /// <param name="script">The opponent's lines. Validated here rather than on first use.</param>
-    /// <param name="playerName">What the player called themselves, substituted into every <c>{name}</c>.</param>
+    /// <param name="playerName">What the player called themselves, swapped into every {name}.</param>
     /// <param name="round">Which round of the run this is, from 0. Picks where the script opens.</param>
-    /// <param name="carriedOver">
-    /// What the opponent already thought of the player, from an earlier discussion, or null on
-    /// a first meeting to use the script's own opening.
-    /// </param>
+    /// <param name="carriedOver">What the opponent already thought of the player, or null on a first meeting.</param>
     public DiscussionPeriod(DialogueScript script, string playerName, int round = 0, Disposition? carriedOver = null)
     {
         ArgumentNullException.ThrowIfNull(script);
@@ -94,36 +61,18 @@ public sealed class DiscussionPeriod
     /// <summary>Everything said so far, in order, for a scrollback or a log.</summary>
     public IReadOnlyList<string> Transcript => _transcript;
 
-    /// <summary>
-    /// The <see cref="SaveData.Flags"/> ids the choices have raised.
-    /// </summary>
-    /// <remarks>
-    /// Collected rather than written. This class never touches a <see cref="SaveData"/> -- the
-    /// caller drains this when the period ends, which keeps a discussion playable in a test
-    /// with no save anywhere near it.
-    /// </remarks>
+    /// <summary>The <see cref="SaveData.Flags"/> ids the choices have raised.</summary>
+    /// <remarks>Collected here, not written. This class never touches a save; the caller drains this at the end.</remarks>
     public IReadOnlyList<string> FlagsRaised => _flags;
 
     /// <summary>What the opponent is saying, in the temper they are in and with the player's name in it.</summary>
     public string Line => Current is null ? string.Empty : Fill(Current.LineFor(Disposition));
 
-    /// <summary>
-    /// The last thing the player said, with their name in it, or empty before they have
-    /// answered anything.
-    /// </summary>
-    /// <remarks>
-    /// The other half of the conversation. <see cref="Line"/> is the opponent's side and is
-    /// the only side a wheel usually shows, which leaves a player choosing a three-word label
-    /// and never finding out what came out of their own mouth -- the exact complaint
-    /// <see cref="Tone"/> is written against, arrived at from the other direction. Held here
-    /// rather than handed back from <see cref="Choose"/> so that whatever is drawing can ask
-    /// for it on any frame rather than having to catch it on the one it was said.
-    /// </remarks>
+    /// <summary>The last thing the player said, with their name in it, or empty before they have answered anything.</summary>
+    /// <remarks>Kept as a property rather than returned from Choose so the plate can read it on any frame, not just the one it was said on.</remarks>
     public string Said { get; private set; } = string.Empty;
 
-    /// <summary>
-    /// Moves the clock.
-    /// </summary>
+    /// <summary>Moves the clock.</summary>
     /// <param name="seconds">How long since the last frame.</param>
     public void Update(float seconds)
     {
@@ -132,7 +81,7 @@ public sealed class DiscussionPeriod
         Remaining -= seconds;
         if (Remaining > 0f) return;
 
-        // Out of time. The opponent hears the pause, and the box moves things along.
+        // Out of time. The opponent hears the silence, and the box moves things along.
         Remaining = 0f;
         Disposition = Disposition.Hear(Tone.Silence);
         _transcript.Add($"{_playerName} says nothing.");
@@ -140,23 +89,16 @@ public sealed class DiscussionPeriod
         State = DiscussionState.Silenced;
     }
 
-    /// <summary>
-    /// Whether the option in <paramref name="corner"/> can be taken right now.
-    /// </summary>
-    /// <param name="corner">Which corner of the wheel, from 0 to <see cref="DialogueScript.WheelSize"/> - 1.</param>
+    /// <summary>Whether the option in this corner can be taken right now.</summary>
+    /// <param name="corner">Which corner of the wheel, from 0 to WheelSize - 1.</param>
     public bool IsOpen(int corner) =>
         State == DiscussionState.Running
         && Current is not null
         && corner >= 0 && corner < Current.Options.Count
         && Current.Options[corner].IsOpen(Disposition);
 
-    /// <summary>
-    /// Says the option in <paramref name="corner"/>.
-    /// </summary>
-    /// <remarks>
-    /// The opponent hears the tone first and the line second, so a written shift is applied on
-    /// top of what the tone costs rather than instead of it. See <see cref="Disposition.Hear"/>.
-    /// </remarks>
+    /// <summary>Says the option in this corner.</summary>
+    /// <remarks>The tone's cost is applied first and the option's own shift on top of it. See <see cref="Disposition.Hear"/>.</remarks>
     /// <param name="corner">Which corner of the wheel was picked.</param>
     /// <returns>True if the line was said. False means it was locked, out of range, or the discussion is over.</returns>
     public bool Choose(int corner)
@@ -183,14 +125,8 @@ public sealed class DiscussionPeriod
         return true;
     }
 
-    /// <summary>
-    /// Ends the discussion early, without the clock having run out.
-    /// </summary>
-    /// <remarks>
-    /// For the round loop, not the player -- something else in the round may need the table
-    /// back. It counts as concluded rather than silenced, because the opponent was not left
-    /// waiting on an answer.
-    /// </remarks>
+    /// <summary>Ends the discussion early, without the clock having run out.</summary>
+    /// <remarks>For the round loop, not the player. Counts as concluded, not silenced, since nobody was left waiting.</remarks>
     public void Close()
     {
         if (State != DiscussionState.Running) return;
@@ -200,7 +136,7 @@ public sealed class DiscussionPeriod
     }
 
     /// <summary>Puts the player's name into a written line.</summary>
-    /// <param name="text">The line as written, possibly holding <c>{name}</c>.</param>
+    /// <param name="text">The line as written, maybe with {name} in it.</param>
     private string Fill(string text) =>
         string.IsNullOrEmpty(text) ? string.Empty : text.Replace("{name}", _playerName);
 }

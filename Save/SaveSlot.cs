@@ -3,27 +3,10 @@ using System.Globalization;
 
 namespace TheBlackBox;
 
-/// <summary>What a slot on disk turned out to be.</summary>
-public enum SaveSlotState
-{
-    /// <summary>Nothing has ever been written here.</summary>
-    Empty,
-
-    /// <summary>A run was read out of it.</summary>
-    Occupied,
-
-    /// <summary>There is a file, but it could not be read. See <see cref="SaveSlot.Error"/>.</summary>
-    Unreadable,
-}
-
 /// <summary>
 /// One slot as the save form sees it: which slot, what is in it, and the line to print on it.
 /// </summary>
-/// <remarks>
-/// The form never touches the disk itself and never reasons about exceptions. It asks
-/// <see cref="SaveSystem.Read"/> for three of these and draws them, which keeps every file
-/// concern on one side of the line and every pixel on the other.
-/// </remarks>
+/// <remarks>The form never touches the disk. It asks SaveSystem for three of these and draws them.</remarks>
 public class SaveSlot
 {
     /// <summary>Which slot this is, from 0 to <see cref="SaveSystem.SlotCount"/> - 1.</summary>
@@ -44,17 +27,14 @@ public class SaveSlot
     /// <summary>The slot's name, in the numbering the game uses for everything else.</summary>
     public string Name => "SLOT " + Numeral(Index + 1);
 
-    /// <summary>
-    /// The line printed under the slot's name: what is in it, or why there is nothing to load.
-    /// </summary>
+    /// <summary>The line printed under the slot's name: what is in it, or why there is nothing to load.</summary>
     public string Summary => State switch
     {
         SaveSlotState.Occupied =>
             string.Format(CultureInfo.InvariantCulture, "CHAPTER {0}  ·  {1}  ·  {2}",
                 Data.Chapter, Clock(Data.Playtime), Data.SavedUtc.ToLocalTime().ToString("d MMM yyyy", CultureInfo.InvariantCulture)),
 
-        // Said plainly. A corrupt slot is the one place the game should stop being atmospheric
-        // and tell the player exactly what it found, because their run is what is at stake.
+        // Said plainly. A corrupt slot is the one place to drop the atmosphere and just tell the player.
         SaveSlotState.Unreadable => "UNREADABLE  ·  ERASE TO REUSE",
 
         _ => "EMPTY  ·  BEGIN",

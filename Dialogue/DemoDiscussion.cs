@@ -4,47 +4,17 @@ namespace TheBlackBox;
 /// The stand-in opponent, so the discussion period can be played before anybody is written.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Placeholder, and meant to be thrown away. It says as little about the world as it can get
-/// away with -- no names, no faction, nothing about what the box is or who put it there --
-/// because the lore is still being written and a demo script that guesses at it is a guess
-/// that ends up quoted back as canon.
-/// </para>
-/// <para>
-/// What it is not a placeholder for is the shape. It exercises every feature the system has:
-/// all three tempers on one node, an option locked behind a relaxed opponent, a flag raised by
-/// a choice, options that end the discussion and options that do not, and a conversation that
-/// moves on each round instead of starting over. A real script that plays correctly here will
-/// play correctly on the table.
-/// </para>
-/// <para>
-/// The rounds are written as beats of one night. The first is the introduction; the second is
-/// after both of you have felt the box take hold; the third is where people start counting;
-/// the fourth is the quiet before something lands; and everything after that is the two of you
-/// running out of things to say. Which temper each beat is said in is the discussion's own
-/// business -- the writing only has to sound like it remembers the last one.
-/// </para>
+/// Placeholder, meant to be thrown away, and it says nothing about the lore on purpose since
+/// that is still being written. What it does do is use every feature: all three tempers, a
+/// locked option, a flag, endings and non-endings, and a conversation that moves on each round.
 /// </remarks>
 public static class DemoDiscussion
 {
-    /// <summary>
-    /// How long the box allows each discussion. Generous, because it is the one people learn on.
-    /// </summary>
-    /// <remarks>
-    /// Was 45 while a reply was said and answered on the same frame it was clicked. The clock
-    /// does not stop for the beat each line is now held for, so roughly ten seconds of a
-    /// played-through discussion is spent on lines rather than on deciding -- this is 45 plus
-    /// that, so the player is left with the same thinking time they always had. The later
-    /// rounds are shorter conversations under the same clock, which is deliberate: the
-    /// pressure is meant to ease as the two of you run out of things to say.
-    /// </remarks>
+    /// <summary>How long the box allows each discussion. Generous, because it is the one people learn on.</summary>
+    /// <remarks>Was 45 before lines were held for a beat. That costs about ten seconds a discussion, so this is 45 plus that.</remarks>
     public const float Seconds = 56f;
 
-    /// <summary>
-    /// Less shut than <see cref="Disposition.Neutral"/>, because four beats is not enough
-    /// conversation to talk a stranger open from the default and the locked question below
-    /// would never once be offered. A longer script should start nearer the neutral 50.
-    /// </summary>
+    /// <summary>Less shut than neutral, or four beats would never be enough to unlock the locked question. A longer script should start nearer 50.</summary>
     public static readonly Disposition Opening = new(0, 34);
 
     /// <summary>The stand-in opponent's script.</summary>
@@ -89,8 +59,7 @@ public static class DemoDiscussion
                 Open = "{name}. I will try to remember it. That is not nothing, in here.",
                 Options = new DialogueOption[]
                 {
-                    // Carries most of the run's guard reduction on purpose: it is the one
-                    // disarming thing the player can say early, and it is what opens HOW MANY?
+                    // Carries most of the guard reduction on purpose. This is what opens HOW MANY? later.
                     new("AND YOURS?", "And what should I call you?",
                         Tone.Warm, Next: "howlong", Value: 3, Guard: -8),
 

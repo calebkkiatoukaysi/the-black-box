@@ -9,27 +9,15 @@ namespace TheBlackBox;
 /// The form the START button opens: three save slots, and what is in each of them.
 /// </summary>
 /// <remarks>
-/// <para>
-/// It is drawn over the title screen rather than replacing it, so the box keeps breathing
-/// behind the veil while the player decides. The box is the thing the player is agreeing to
-/// sit down with -- taking it off screen at the moment they choose a slot would be throwing
-/// away the only pressure the title screen has.
-/// </para>
-/// <para>
-/// The form owns no file handling of its own. It asks <see cref="SaveSystem"/> for three
-/// <see cref="SaveSlot"/> descriptions when it opens and draws them; every path, exception
-/// and byte stays on the other side of that call.
-/// </para>
+/// Drawn over the title screen rather than replacing it, so the box keeps watching while the
+/// player decides. All the file handling is in <see cref="SaveSystem"/>; this just draws what it gets back.
 /// </remarks>
 public class SaveSlotMenu
 {
     /// <summary>Width and height of the single frame in panel.png.</summary>
     private const int PanelFrameSize = 32;
 
-    /// <summary>
-    /// Fixed corner of the panel's nine-slice. Authored in tools/generate_assets.py as
-    /// <c>PANEL_CORNER</c>, and the two have to match or the recess shears when it stretches.
-    /// </summary>
+    /// <summary>Fixed corner of the panel's nine-slice. Has to match PANEL_CORNER in tools/generate_assets.py.</summary>
     private const int PanelCornerSize = 12;
 
     /// <summary>Blown up by the same whole number as the buttons that sit on it.</summary>
@@ -62,10 +50,7 @@ public class SaveSlotMenu
     /// <summary>Gap between the back button and the line that reports what went wrong.</summary>
     private const int StatusGap = 14;
 
-    /// <summary>
-    /// How far the veil darkens the title screen behind the form. Enough to push the box back
-    /// and let the panel read, not enough to take it off the screen -- it is still watching.
-    /// </summary>
+    /// <summary>How far the veil darkens the title screen. Enough to read the panel, not enough to hide the box.</summary>
     private const float VeilOpacity = 0.62f;
 
     private Texture2D _panel;
@@ -103,18 +88,14 @@ public class SaveSlotMenu
     /// <summary>Raised when the player backs out without choosing anything.</summary>
     public event Action Closed;
 
-    /// <summary>
-    /// Creates the form, sized and centred against the screen it will be drawn over.
-    /// </summary>
+    /// <summary>Creates the form, centred on the screen it will be drawn over.</summary>
     /// <param name="screen">The whole window, in screen pixels.</param>
     public SaveSlotMenu(Rectangle screen)
     {
         _screen = screen;
     }
 
-    /// <summary>
-    /// Loads the panel, the fonts, and every control on the form.
-    /// </summary>
+    /// <summary>Loads the panel, the fonts, and every control on the form.</summary>
     /// <param name="content">The ContentManager to load with.</param>
     /// <param name="graphicsDevice">The device, for the one pixel the veil is made of.</param>
     public void LoadContent(ContentManager content, GraphicsDevice graphicsDevice)
@@ -123,7 +104,7 @@ public class SaveSlotMenu
         _font = content.Load<SpriteFont>("spectral-ui");
         _detailFont = content.Load<SpriteFont>("spectral-detail");
 
-        // Not worth a PNG and a content-pipeline entry: it is one opaque pixel, stretched.
+        // One white pixel, stretched. Not worth a PNG.
         _veil = new Texture2D(graphicsDevice, 1, 1);
         _veil.SetData(new[] { Color.White });
 
@@ -153,15 +134,8 @@ public class SaveSlotMenu
         LayOut();
     }
 
-    /// <summary>
-    /// Opens the form, reading what is actually on disk as it does.
-    /// </summary>
-    /// <remarks>
-    /// The slots are read here rather than once at startup on purpose. The form is the only
-    /// place the player sees what is saved, so it should be showing the disk as it is now --
-    /// after a run was played, after a slot was erased, after the files were edited by hand
-    /// with the game left running.
-    /// </remarks>
+    /// <summary>Opens the form, reading what is on disk right now.</summary>
+    /// <remarks>Read here and not once at startup, so it shows the slots as they are after a run or an erase.</remarks>
     public void Open()
     {
         Refresh();
@@ -170,8 +144,7 @@ public class SaveSlotMenu
         _status = null;
         IsOpen = true;
 
-        // Every control comes back cold, and forgets whatever the mouse was doing while the
-        // form was away -- including the click on START that opened it.
+        // Reset every control so the click on START that opened this doesn't land on a slot.
         foreach (var button in _slotButtons) button.Reset();
         foreach (var button in _eraseButtons) button.Reset();
         _backButton.Reset();
@@ -186,9 +159,7 @@ public class SaveSlotMenu
         Closed?.Invoke();
     }
 
-    /// <summary>
-    /// Updates every control on the form.
-    /// </summary>
+    /// <summary>Updates every control on the form.</summary>
     /// <param name="gameTime">The GameTime.</param>
     public void Update(GameTime gameTime)
     {
@@ -203,27 +174,20 @@ public class SaveSlotMenu
         _backButton.Update(gameTime);
     }
 
-    /// <summary>
-    /// Draws the veil, the panel and everything on it.
-    /// </summary>
-    /// <remarks>
-    /// Expected to be called inside its own batch, over everything the title screen drew.
-    /// </remarks>
+    /// <summary>Draws the veil, the panel and everything on it. Call it in its own batch, over the title screen.</summary>
     /// <param name="gameTime">The GameTime.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void Draw(GameTime gameTime, SpriteBatch spriteBatch)
     {
         if (!IsOpen) return;
 
-        // The veil is tinted toward the box's own dark rather than to flat black, so the
-        // title screen behind it dims instead of turning grey.
-        spriteBatch.Draw(_veil, _screen, null, new Color(6, 5, 10) * VeilOpacity,
+        spriteBatch.Draw(_veil, _screen, null, Palette.Veil * VeilOpacity,
             0f, Vector2.Zero, SpriteEffects.None, Layers.Veil);
 
         NineSlice.Draw(spriteBatch, _panel, _panelBounds, Point.Zero,
             PanelFrameSize, PanelCornerSize, PanelScale, Color.White, Layers.PanelPlate);
 
-        DrawCentered(spriteBatch, _font, Heading, _panelBounds.Top + PanelPadding, new Color(214, 206, 200));
+        DrawCentered(spriteBatch, _font, Heading, _panelBounds.Top + PanelPadding, Palette.Heading);
 
         for (int i = 0; i < _slotButtons.Length; i++)
         {
@@ -233,15 +197,12 @@ public class SaveSlotMenu
 
         _backButton.Draw(gameTime, spriteBatch);
 
-        // The row is reserved in the layout whether or not anything goes wrong, so a failure
-        // does not shove the form around underneath the cursor that caused it.
+        // The status row is always reserved in the layout, so an error doesn't shove the form around.
         if (_status is not null)
             DrawCentered(spriteBatch, _detailFont, _status, _statusY, ButtonSprite.EmberRed);
     }
 
-    /// <summary>
-    /// Re-reads the slots and puts what they say back onto the plates.
-    /// </summary>
+    /// <summary>Re-reads the slots and puts what they say onto the plates.</summary>
     private void Refresh()
     {
         _slots = SaveSystem.ReadAll();
@@ -253,34 +214,23 @@ public class SaveSlotMenu
             _slotButtons[i].Label = slot.Name;
             _slotButtons[i].Sublabel = slot.Summary;
 
-            // Amber for a run waiting to be picked up, bone-white for an empty slot offering
-            // a new one, and a dead plate for a slot the game could not read -- there is
-            // nothing in there to load, so the button should not pretend there is.
+            // Amber for a run to pick up, bone for an empty slot, and a dead plate for one that wouldn't read.
             _slotButtons[i].Accent = slot.HasRun ? ButtonSprite.Amber : ButtonSprite.BoneWhite;
             _slotButtons[i].Enabled = slot.State != SaveSlotState.Unreadable;
 
-            // Nothing to erase in a slot that was never written. An unreadable one still gets
-            // the button: erasing it is the only way the player gets the slot back.
+            // An unreadable slot keeps its erase button. That's the only way to get the slot back.
             _eraseButtons[i].Enabled = slot.State != SaveSlotState.Empty;
             _eraseButtons[i].Label = EraseLabel;
             _eraseButtons[i].Reset();
         }
     }
 
-    /// <summary>
-    /// Commits to a slot: loads the run in it, or starts a new one and writes it immediately.
-    /// </summary>
-    /// <remarks>
-    /// A new run is saved the moment it is created rather than at the first checkpoint. The
-    /// slot the player just claimed should still be theirs if the game is closed on the next
-    /// screen, and it makes the first write happen while the player is looking at the form --
-    /// which is the one place the game can tell them if the disk will not take it.
-    /// </remarks>
+    /// <summary>Commits to a slot: loads the run in it, or starts a new one and writes it right away.</summary>
+    /// <remarks>Writing a new run immediately means the first write happens here, where the form can show an error.</remarks>
     /// <param name="slot">Which slot was clicked.</param>
     private void Choose(int slot)
     {
-        // Clicking a slot while an erase is half-confirmed is the player changing their mind
-        // about erasing, not confirming it somewhere else.
+        // Clicking a slot mid-erase means they changed their mind about erasing.
         CancelConfirm();
 
         SaveData data = _slots[slot].Data;
@@ -302,15 +252,8 @@ public class SaveSlotMenu
         SlotChosen?.Invoke(slot, data);
     }
 
-    /// <summary>
-    /// Erases a slot, on the second click.
-    /// </summary>
-    /// <remarks>
-    /// The first click turns the button into the question and the second one answers it. A
-    /// modal "are you sure" would need a second form, a second set of controls and a way back
-    /// out of it; the button asking in place costs one field and is just as hard to do by
-    /// accident, because the plate the player is about to click has changed under them.
-    /// </remarks>
+    /// <summary>Erases a slot, on the second click.</summary>
+    /// <remarks>The button turns into the "SURE?" question itself. Cheaper than a whole confirm form, and just as hard to do by accident.</remarks>
     /// <param name="slot">Which slot's erase button was clicked.</param>
     private void Erase(int slot)
     {
@@ -345,15 +288,8 @@ public class SaveSlotMenu
         _confirmingErase = -1;
     }
 
-    /// <summary>
-    /// Sizes the panel around its contents and places every control on it.
-    /// </summary>
-    /// <remarks>
-    /// Run once, after the controls have measured themselves in <c>LoadContent</c> -- the back
-    /// button sizes itself to its label, so until then the panel does not know how tall it is.
-    /// Deriving the panel from the rows rather than hardcoding a rectangle is what lets the
-    /// slot count change later without any of these numbers being wrong.
-    /// </remarks>
+    /// <summary>Sizes the panel around its contents and places every control on it.</summary>
+    /// <remarks>Has to run after LoadContent, because the back button sizes itself to its label.</remarks>
     private void LayOut()
     {
         int rows = _slotButtons.Length;
@@ -371,8 +307,7 @@ public class SaveSlotMenu
             PanelWidth,
             panelHeight);
 
-        // Each row is a slot and its erase button, centred as a pair so the slots stay lined
-        // up whether or not their erase button happens to be shown.
+        // Each row is a slot plus its erase button, centred as a pair so the slots line up either way.
         int rowWidth = SlotWidth + EraseGap + EraseWidth;
         int left = _panelBounds.Center.X - rowWidth / 2;
         int top = _panelBounds.Top + PanelPadding + headingHeight + HeadingGap;
@@ -391,9 +326,7 @@ public class SaveSlotMenu
         _statusY = backTop + _backButton.Size.Y + StatusGap;
     }
 
-    /// <summary>
-    /// Draws a line of text centred across the panel, over a hard offset shadow.
-    /// </summary>
+    /// <summary>Draws a line of text centred across the panel, with a shadow.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     /// <param name="font">The SpriteFont to measure and render with.</param>
     /// <param name="text">The line to draw.</param>
@@ -404,7 +337,7 @@ public class SaveSlotMenu
         Vector2 size = font.MeasureString(text);
         var position = new Vector2(MathF.Round(_panelBounds.Center.X - size.X / 2f), MathF.Round(y));
 
-        spriteBatch.DrawString(font, text, position + new Vector2(2f, 2f), Color.Black * 0.7f,
+        spriteBatch.DrawString(font, text, position + Palette.ShadowOffset, Palette.FormShadow,
             0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.TextShadow);
         spriteBatch.DrawString(font, text, position, color,
             0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.Text);

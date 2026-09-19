@@ -9,18 +9,9 @@ namespace TheBlackBox;
 /// The four ways to answer, and the clock they have to be answered inside.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Two columns flanking the box rather than a ring around it. The box owns the middle of the
-/// table and the opponent is directly behind it, so a true wheel would have to be drawn over
-/// one or the other. The columns keep the promise the ring was for -- the left pair costs the
-/// player nothing to say and the right pair costs them something, every time, on every
-/// node -- and they fall either side of the box instead of across it.
-/// </para>
-/// <para>
-/// Corner order is <see cref="Tone"/> order, which <see cref="DialogueScript.Validate"/>
-/// enforces. That is the whole reason the position is trustworthy: the label on a plate is a
-/// paraphrase and may surprise the player, but where it sits never will.
-/// </para>
+/// Two columns either side of the box instead of a ring, because a ring would sit over the box or
+/// the opponent. Corner order is <see cref="Tone"/> order, so the player always knows what a
+/// position costs before reading the label.
 /// </remarks>
 public class DialogueWheel
 {
@@ -39,29 +30,13 @@ public class DialogueWheel
     /// <summary>How wide a plate is, so a long paraphrase does not reach the box.</summary>
     private static readonly Point PlateSize = new(420, 84);
 
-    /// <summary>
-    /// Where the patience bar sits and how big it is.
-    /// </summary>
-    /// <remarks>
-    /// Under the opponent's name and over their line, on the plate the words are on, which
-    /// puts the clock in the same glance as what it is running out on. Below the box it would
-    /// be out of the player's eye-line exactly when it mattered most. It moves with the plate:
-    /// see <c>DialoguePlate</c> in <see cref="BlackBoxGame"/>.
-    /// </remarks>
+    /// <summary>Where the patience bar sits: on the dialogue plate, under the name. Moves with DialoguePlate in BlackBoxGame.</summary>
     private static readonly Rectangle PatienceBar = new(1040, 104, 500, 8);
 
     /// <summary>What the plate says instead of a tone when the opponent will not hear it.</summary>
     private const string LockedNote = "THEY ARE NOT OPEN ENOUGH FOR THAT";
 
-    /// <summary>
-    /// The colour each tone burns.
-    /// </summary>
-    /// <remarks>
-    /// Indexed by <see cref="Tone"/>, so a plate cannot be given the wrong one. Warm is the
-    /// box's own amber, level is bone, probing is a cold brass that reads as clinical next to
-    /// the others, and cutting is the red of the light inside the box -- the same colour the
-    /// title screen saves for the choice that ends things.
-    /// </remarks>
+    /// <summary>The colour each tone lights up in, indexed by <see cref="Tone"/>. Probing is a cold brass; the rest are the box's own colours.</summary>
     private static readonly Color[] ToneAccents =
     {
         ButtonSprite.Amber,
@@ -69,6 +44,10 @@ public class DialogueWheel
         new(198, 172, 128),
         ButtonSprite.EmberRed,
     };
+
+    /// <summary>The empty part of the patience bar, and how much patience is left when the bar turns red.</summary>
+    private static readonly Color PatienceTrack = new(28, 22, 26);
+    private const float PatienceWarning = 0.35f;
 
     private readonly ButtonSprite[] _plates = new ButtonSprite[DialogueScript.WheelSize];
 
@@ -107,9 +86,7 @@ public class DialogueWheel
         _pixel.SetData(new[] { Color.White });
     }
 
-    /// <summary>
-    /// Puts one beat's four replies onto the plates.
-    /// </summary>
+    /// <summary>Puts one beat's four replies onto the plates.</summary>
     /// <param name="node">The beat being answered.</param>
     /// <param name="disposition">What the opponent thinks of the player, which locks some replies.</param>
     public void Show(DialogueNode node, Disposition disposition)
@@ -123,9 +100,7 @@ public class DialogueWheel
 
             _plates[i].Label = option.Label;
 
-            // A locked plate says why rather than saying what it would have cost. The player
-            // is meant to know the door is there and that it is shut, which is what makes
-            // opening one worth playing for.
+            // A locked plate says why, so the player knows the door is there and shut.
             _plates[i].Sublabel = open ? ToneName(option.Tone) : LockedNote;
             _plates[i].Enabled = open;
             _plates[i].Reset();
@@ -150,9 +125,7 @@ public class DialogueWheel
         foreach (ButtonSprite plate in _plates) plate.Update(gameTime);
     }
 
-    /// <summary>
-    /// Draws the plates, and the bar showing how much of the box's patience is left.
-    /// </summary>
+    /// <summary>Draws the plates, and the bar showing how much of the box's patience is left.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     /// <param name="patience">How much time is left, from 1 to 0.</param>
@@ -165,22 +138,15 @@ public class DialogueWheel
         foreach (ButtonSprite plate in _plates) plate.Draw(gameTime, spriteBatch);
     }
 
-    /// <summary>
-    /// Draws the patience bar.
-    /// </summary>
-    /// <remarks>
-    /// It drains from both ends toward the middle rather than from right to left. A bar that
-    /// empties sideways is read as progress through something; this is not progress, it is the
-    /// room closing, and it should be legible as that out of the corner of an eye that is busy
-    /// reading four options.
-    /// </remarks>
+    /// <summary>Draws the patience bar.</summary>
+    /// <remarks>It drains from both ends toward the middle. Sideways read as a progress bar, and this isn't progress.</remarks>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     /// <param name="patience">How much time is left, from 1 to 0.</param>
     private void DrawPatience(SpriteBatch spriteBatch, float patience)
     {
         patience = Math.Clamp(patience, 0f, 1f);
 
-        spriteBatch.Draw(_pixel, PatienceBar, null, new Color(28, 22, 26),
+        spriteBatch.Draw(_pixel, PatienceBar, null, PatienceTrack,
             0f, Vector2.Zero, SpriteEffects.None, Layers.ButtonPlate);
 
         int width = (int)MathF.Round(PatienceBar.Width * patience);
@@ -189,10 +155,9 @@ public class DialogueWheel
         var remaining = new Rectangle(
             PatienceBar.Center.X - width / 2, PatienceBar.Y, width, PatienceBar.Height);
 
-        // Bone while there is time and ember once there is not, so the colour says it before
-        // the length does.
+        // Bone while there is time, red once there isn't.
         Color colour = Color.Lerp(ButtonSprite.EmberRed, ButtonSprite.BoneWhite,
-            MathF.Min(1f, patience / 0.35f));
+            MathF.Min(1f, patience / PatienceWarning));
 
         spriteBatch.Draw(_pixel, remaining, null, colour,
             0f, Vector2.Zero, SpriteEffects.None, Layers.ButtonAccent);

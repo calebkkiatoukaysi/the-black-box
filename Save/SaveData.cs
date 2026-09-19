@@ -9,19 +9,9 @@ namespace TheBlackBox;
 /// Everything one save slot remembers about a run.
 /// </summary>
 /// <remarks>
-/// <para>
-/// This is the whole save file. It is a plain data class with nothing but properties on it --
-/// no sprites, no <c>Game</c>, no textures -- because the moment a save holds a reference to
-/// something live it stops being serialisable, and because a save that is only data can be
-/// read, diffed and hand-edited while the game is being built.
-/// </para>
-/// <para>
-/// <see cref="Version"/> comes first for a reason. The fields below it are a guess at a game
-/// that is not written yet, and they will be wrong. Stamping the shape into every file means
-/// a save written this semester can be recognised and upgraded later instead of being thrown
-/// away or, worse, read as if it were the new shape. It has been needed twice already --
-/// see <see cref="SaveSystem.Upgrade"/>.
-/// </para>
+/// Plain data only, no sprites or textures, so it serialises and I can hand-edit a save while
+/// testing. Version comes first because the fields keep changing and SaveSystem.Upgrade has
+/// already had to fix old files twice.
 /// </remarks>
 public class SaveData
 {
@@ -34,24 +24,11 @@ public class SaveData
     /// <summary>When the slot was last written, in UTC. This is the date the form shows.</summary>
     public DateTime SavedUtc { get; set; }
 
-    /// <summary>
-    /// How long the player has spent in this run, in seconds.
-    /// </summary>
-    /// <remarks>
-    /// Stored as a number rather than a <see cref="TimeSpan"/>: a TimeSpan lands in the file as
-    /// <c>"01:02:03"</c>, which is a format to get wrong every time the file is touched by hand.
-    /// <see cref="Playtime"/> is the property the game actually uses.
-    /// </remarks>
+    /// <summary>How long the player has spent in this run, in seconds.</summary>
+    /// <remarks>A number, not a TimeSpan, so the file stays easy to edit by hand. The game uses <see cref="Playtime"/>.</remarks>
     public double PlaytimeSeconds { get; set; }
 
-    /// <summary>
-    /// What the player called themselves.
-    /// </summary>
-    /// <remarks>
-    /// Asked for once, when a slot is first started, and substituted into every written line
-    /// that contains <c>{name}</c>. It is on the save rather than on the game because two
-    /// slots are two different people.
-    /// </remarks>
+    /// <summary>What the player called themselves. Swapped into any line with {name} in it.</summary>
     public string PlayerName { get; set; } = string.Empty;
 
     /// <summary>How far through the story the run is.</summary>
@@ -72,48 +49,20 @@ public class SaveData
     /// <summary>How many times the box has been fed a hand in this run.</summary>
     public int HandsFed { get; set; }
 
-    /// <summary>
-    /// The item the box has just dealt the player and they have not decided on, by id, or
-    /// empty between deals.
-    /// </summary>
-    /// <remarks>
-    /// Separate from <see cref="Banked"/> because the rules make them separate things: an
-    /// item that has been dealt is a decision waiting to be taken, and using it or putting it
-    /// away is that decision. Version 1 had only the one list and could not express the
-    /// difference.
-    /// </remarks>
+    /// <summary>The item just dealt to the player and not decided on yet, by id, or empty.</summary>
+    /// <remarks>Kept apart from <see cref="Banked"/> because a dealt item is still a decision. Version 1 had one list and could not tell them apart.</remarks>
     public string Dealt { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Whether the player was dealt this round without being allowed to look.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="ItemId.Rotgut"/> buys a life with sight, and this is where that debt is
-    /// collected: the item in <see cref="Dealt"/> is real and will resolve normally, and the
-    /// player simply is not shown which one it is until it has been played. The debt itself
-    /// is <see cref="NextDealBlind"/>, and it becomes this on the next deal.
-    /// </remarks>
+    /// <summary>Whether the player was dealt this round without being allowed to look.</summary>
+    /// <remarks>This is the rotgut's price being paid. The item in Dealt is real, the player just cannot see it.</remarks>
     public bool DealtBlind { get; set; }
 
-    /// <summary>
-    /// Whether the player's next deal is to be made blind.
-    /// </summary>
-    /// <remarks>
-    /// Separate from <see cref="DealtBlind"/> because a rotgut can be drunk out of a pocket
-    /// in the middle of a turn, with an item already in the hand that the player has looked
-    /// at. Blinding that one would be blinding a hand they have seen; the debt is on the
-    /// next one, which is what the bottle says.
-    /// </remarks>
+    /// <summary>Whether the player's next deal is to be made blind.</summary>
+    /// <remarks>Separate from DealtBlind because a rotgut can be drunk mid-turn with an item already seen. The debt lands on the next deal.</remarks>
     public bool NextDealBlind { get; set; }
 
-    /// <summary>
-    /// The player's pockets: items put away for a later turn, by id, in pocket order.
-    /// </summary>
-    /// <remarks>
-    /// Never more than <see cref="RoundRules.PocketSlots"/> of them. Version 2 had no limit
-    /// and called this the bank; the pocket is the same list with a size, and
-    /// <see cref="SaveSystem.Upgrade"/> is where an older save's overflow goes.
-    /// </remarks>
+    /// <summary>The player's pockets: items put away for later, by id, in pocket order.</summary>
+    /// <remarks>Never more than <see cref="RoundRules.PocketSlots"/>. Version 2 had no limit and called this the bank.</remarks>
     public List<string> Banked { get; set; } = new();
 
     /// <summary>The item across the table, undecided. The player is not shown this.</summary>
@@ -132,22 +81,11 @@ public class SaveData
     public int OpponentWarmth { get; set; }
 
     /// <summary>How little the opponent is giving away. See <see cref="Disposition"/>.</summary>
-    /// <remarks>
-    /// Defaults to the neutral 50 rather than to zero, because zero is not neutral here -- it
-    /// is perfectly candid, and a save arriving without this field would otherwise open every
-    /// opponent's mouth for free.
-    /// </remarks>
+    /// <remarks>Defaults to the neutral 50, not zero. Zero here means fully candid, and an old save without this field would get that for free.</remarks>
     public int OpponentGuard { get; set; } = Disposition.Neutral.Guard;
 
-    /// <summary>
-    /// What is standing between the player and the next thing used on them, by id, or empty.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="ItemId.AshVeil"/> and <see cref="ItemId.Mirror"/> are both played before
-    /// they are needed, so what they do is sit here until something arrives. Only one can be
-    /// up at a time -- playing a second replaces the first, which is a real cost and is why
-    /// holding a guard is not simply free value.
-    /// </remarks>
+    /// <summary>The guard in front of the player, by id, or empty. Ash veil and mirror sit here until something hits it.</summary>
+    /// <remarks>Only one at a time. Playing a second replaces the first, so a guard is not free value.</remarks>
     public string PlayerWard { get; set; } = string.Empty;
 
     /// <summary>What is standing in front of the opponent. See <see cref="PlayerWard"/>.</summary>
@@ -164,35 +102,19 @@ public class SaveData
     /// <remarks>Cleared when the round ends, like <see cref="SeesOpponentItem"/>. What they carry can change.</remarks>
     public bool SeesOpponentPockets { get; set; }
 
-    /// <summary>What the box has already decided to deal next, by id, or empty if it has not.</summary>
-    /// <remarks>
-    /// <see cref="ItemId.MarkedDeck"/> shows the player the next deal, which means the next
-    /// deal has to exist before it happens. Rolled here and then spent by the next hand, so
-    /// what the marked deck promised is what actually arrives.
-    /// </remarks>
+    /// <summary>What the box has already decided to deal next, by id, or empty.</summary>
+    /// <remarks>The marked deck shows the next deal, so the next deal has to be rolled ahead of time and kept here.</remarks>
     public string NextDeal { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Everything that has happened and has to be remembered, by id: dialogue taken, lore
-    /// found, endings seen.
-    /// </summary>
-    /// <remarks>
-    /// A flat set of string ids rather than a field per event. The game is going to sprout
-    /// far more of these than anyone wants to add properties for, and adding one to this list
-    /// does not change the shape of the file, so it costs no version bump.
-    /// </remarks>
+    /// <summary>Everything that has happened and has to be remembered, by id: dialogue taken, lore found, endings seen.</summary>
+    /// <remarks>A flat list of strings instead of a property per event, so adding one never needs a version bump.</remarks>
     public List<string> Flags { get; set; } = new();
 
-    /// <summary>
-    /// Fields in the file that this build has no property for.
-    /// </summary>
+    /// <summary>Fields in the file that this build has no property for.</summary>
     /// <remarks>
-    /// This is how a removed field survives long enough to be migrated. Without it,
-    /// <c>System.Text.Json</c> silently drops anything it does not recognise, so version 1's
-    /// <c>Hand</c> would be gone before <see cref="SaveSystem.Upgrade"/> ever saw the object
-    /// and the player's items would quietly vanish. Upgrade reads what it needs from here and
-    /// removes it; anything left is written back out untouched, so a save passed through an
-    /// older build does not lose the fields that build did not know about.
+    /// Without this System.Text.Json drops unknown fields on read, so a removed field like
+    /// version 1's Hand would be gone before Upgrade could migrate it. Whatever Upgrade does
+    /// not take gets written back out as it was.
     /// </remarks>
     [JsonExtensionData]
     public Dictionary<string, JsonElement> Extra { get; set; }
@@ -208,14 +130,8 @@ public class SaveData
         set => PlaytimeSeconds = value.TotalSeconds;
     }
 
-    /// <summary>
-    /// What the opponent currently thinks of the player, as the discussion sees it.
-    /// </summary>
-    /// <remarks>
-    /// Two plain integers on disk and one value in code. A <see cref="Disposition"/> written
-    /// straight to the file would be a nested object for two numbers that want to be legible
-    /// and editable while the game is being balanced.
-    /// </remarks>
+    /// <summary>What the opponent currently thinks of the player, as the discussion sees it.</summary>
+    /// <remarks>Two plain ints on disk, one Disposition in code. Easier to read and tweak in the file that way.</remarks>
     [JsonIgnore]
     public Disposition OpponentDisposition
     {
@@ -227,14 +143,50 @@ public class SaveData
         }
     }
 
-    /// <summary>
-    /// Builds the save a brand new run starts from.
-    /// </summary>
-    /// <returns>A <see cref="SaveData"/> stamped with the current time.</returns>
+    /// <summary>Builds the save a brand new run starts from.</summary>
+    /// <returns>A fresh save stamped with the current time.</returns>
     public static SaveData NewRun()
     {
         DateTime now = DateTime.UtcNow;
         return new SaveData { CreatedUtc = now, SavedUtc = now };
+    }
+
+    /// <summary>Clears the table for another go: lives, pockets, hands, wards, the round count.</summary>
+    /// <remarks>The name, chapter, opponent, disposition, flags and clock all stay. Same table, same person, and they remember.</remarks>
+    public void Restart()
+    {
+        Round = 0;
+        PlayerLives = StartingLives;
+        OpponentLives = StartingLives;
+        HandsFed = 0;
+        Dealt = string.Empty;
+        DealtBlind = false;
+        NextDealBlind = false;
+        OpponentDealt = string.Empty;
+        OpponentDealtBlind = false;
+        OpponentNextDealBlind = false;
+        Banked.Clear();
+        OpponentBanked.Clear();
+        PlayerWard = string.Empty;
+        OpponentWard = string.Empty;
+        LastUsed = string.Empty;
+        SeesOpponentItem = false;
+        SeesOpponentPockets = false;
+        NextDeal = string.Empty;
+    }
+
+    /// <summary>The player got up from the table. Next chapter, cleared table, empty seat.</summary>
+    /// <remarks>
+    /// The seat is emptied here and not in Restart, because losing means sitting back down
+    /// with the same person. <see cref="Opponents.ForChapter"/> fills it next time the run is
+    /// entered. The old disposition is left over but harmless: a new opponent has not been met, so
+    /// their script writes over it.
+    /// </remarks>
+    public void Advance()
+    {
+        Chapter++;
+        Restart();
+        OpponentId = string.Empty;
     }
 
     /// <summary>Whether <paramref name="id"/> has been recorded in <see cref="Flags"/>.</summary>
@@ -257,11 +209,7 @@ public class SaveData
     public bool OpponentPocketsFull => OpponentBanked.Count >= RoundRules.PocketSlots;
 
     /// <summary>Whether the player has sat down with <see cref="OpponentId"/> before.</summary>
-    /// <remarks>
-    /// What decides whether a discussion opens on the script's own disposition or on the one
-    /// this save is carrying. It is a flag rather than a field because it is exactly the kind
-    /// of one-bit fact <see cref="Flags"/> exists to absorb without a version bump.
-    /// </remarks>
+    /// <remarks>Decides whether a discussion opens on the script's disposition or the saved one. A flag, so no version bump.</remarks>
     [JsonIgnore]
     public bool HasMetOpponent => HasFlag(MetFlag(OpponentId));
 
