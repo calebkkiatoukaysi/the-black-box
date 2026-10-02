@@ -13,6 +13,24 @@ namespace TheBlackBox;
 /// </remarks>
 public static class ItemResolver
 {
+    // How the lines the table listens for begin. The screen plays a sound when one is read out,
+    // so the wording lives here once instead of being copied into the screen.
+
+    /// <summary>Between who used an item and its name, in the first line of every use.</summary>
+    public const string UsedWord = " USED ";
+
+    /// <summary>A life coming off the player, and off the opponent.</summary>
+    public const string CostsYou = "IT COSTS YOU A LIFE.";
+    public const string CostsThem = "IT COSTS THEM A LIFE.";
+
+    /// <summary>A life given back to the player, and to the opponent.</summary>
+    public const string GivesYou = "IT GIVES YOU A LIFE BACK.";
+    public const string GivesThem = "IT GIVES THEM A LIFE BACK.";
+
+    /// <summary>A guard spending itself: the veil soaking a hit, or the mirror throwing it back.</summary>
+    public const string VeilTakes = "THE VEIL TAKES IT";
+    public const string MirrorSends = "THE MIRROR SENDS IT BACK.";
+
     /// <summary>Uses one item, applies everything it does, and says what happened.</summary>
     /// <param name="run">The run to change.</param>
     /// <param name="item">What is being used.</param>
@@ -28,7 +46,7 @@ public static class ItemResolver
         var log = new List<string>();
         string who = byPlayer ? run.PlayerName.ToUpperInvariant() : "THEY";
 
-        log.Add(who + " USED " + ItemCatalog.NameOf(item).ToUpperInvariant() + ".");
+        log.Add(who + UsedWord + ItemCatalog.NameOf(item).ToUpperInvariant() + ".");
         Resolve(run, item, byPlayer, random, log, Math.Clamp(efficiency, 0f, 1f));
 
         // A wild card copies the last thing used, so it must not record itself or two in a row loop forever.
@@ -258,14 +276,14 @@ public static class ItemResolver
 
             if (guard == ItemId.AshVeil)
             {
-                log.Add((onPlayer ? "THE VEIL TAKES IT FOR YOU." : "THE VEIL TAKES IT FOR THEM.")
+                log.Add(VeilTakes + (onPlayer ? " FOR YOU." : " FOR THEM.")
                     + " NOTHING LANDS.");
                 return;
             }
 
             if (guard == ItemId.Mirror)
             {
-                log.Add("THE MIRROR SENDS IT BACK.");
+                log.Add(MirrorSends);
                 Damage(run, !onPlayer, log);
                 return;
             }
@@ -274,12 +292,12 @@ public static class ItemResolver
         if (onPlayer)
         {
             run.PlayerLives--;
-            log.Add("IT COSTS YOU A LIFE. YOU HAVE " + Math.Max(0, run.PlayerLives) + " LEFT.");
+            log.Add(CostsYou + " YOU HAVE " + Math.Max(0, run.PlayerLives) + " LEFT.");
         }
         else
         {
             run.OpponentLives--;
-            log.Add("IT COSTS THEM A LIFE. THEY HAVE " + Math.Max(0, run.OpponentLives) + " LEFT.");
+            log.Add(CostsThem + " THEY HAVE " + Math.Max(0, run.OpponentLives) + " LEFT.");
         }
     }
 
@@ -300,12 +318,12 @@ public static class ItemResolver
         if (toPlayer)
         {
             run.PlayerLives = lives + 1;
-            log.Add("IT GIVES YOU A LIFE BACK. YOU HAVE " + run.PlayerLives + ".");
+            log.Add(GivesYou + " YOU HAVE " + run.PlayerLives + ".");
         }
         else
         {
             run.OpponentLives = lives + 1;
-            log.Add("IT GIVES THEM A LIFE BACK. THEY HAVE " + run.OpponentLives + ".");
+            log.Add(GivesThem + " THEY HAVE " + run.OpponentLives + ".");
         }
     }
 

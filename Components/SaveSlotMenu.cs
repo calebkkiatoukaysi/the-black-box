@@ -10,19 +10,11 @@ namespace TheBlackBox;
 /// </summary>
 /// <remarks>
 /// Drawn over the title screen rather than replacing it, so the box keeps watching while the
-/// player decides. All the file handling is in <see cref="SaveSystem"/>; this just draws what it gets back.
+/// player decides. All the file handling is in <see cref="SaveSystem"/>; this just draws what it
+/// gets back. SaveSlotScreen puts it on the screen stack and walks it with the keyboard.
 /// </remarks>
 public class SaveSlotMenu
 {
-    /// <summary>Width and height of the single frame in panel.png.</summary>
-    private const int PanelFrameSize = 32;
-
-    /// <summary>Fixed corner of the panel's nine-slice. Has to match PANEL_CORNER in tools/generate_assets.py.</summary>
-    private const int PanelCornerSize = 12;
-
-    /// <summary>Blown up by the same whole number as the buttons that sit on it.</summary>
-    private const float PanelScale = 3f;
-
     private const string Heading = "CHOOSE A SLOT";
     private const string BackLabel = "BACK";
     private const string EraseLabel = "ERASE";
@@ -41,22 +33,16 @@ public class SaveSlotMenu
     /// <summary>Gap between one slot row and the next.</summary>
     private const int RowGap = 18;
 
-    /// <summary>Breathing room inside the panel's recess.</summary>
-    private const int PanelPadding = 40;
-
     /// <summary>Gap under the heading, and over the back button.</summary>
     private const int HeadingGap = 30;
 
     /// <summary>Gap between the back button and the line that reports what went wrong.</summary>
     private const int StatusGap = 14;
 
-    /// <summary>How far the veil darkens the title screen. Enough to read the panel, not enough to hide the box.</summary>
-    private const float VeilOpacity = 0.62f;
+    /// <summary>The row the back button is on, under the slots, for the keyboard.</summary>
+    private const int BackRow = SaveSystem.SlotCount;
 
-    private Texture2D _panel;
-
-    /// <summary>A single white pixel, stretched over the screen to dim what is behind the form.</summary>
-    private Texture2D _veil;
+    private readonly FormPanel _panel = new();
 
     private SpriteFont _font;
     private SpriteFont _detailFont;
@@ -79,8 +65,15 @@ public class SaveSlotMenu
     /// <summary>What went wrong with the last thing the player asked for, or null.</summary>
     private string _status;
 
+    /// <summary>Where the keyboard is: which row (a slot, or the back button), and the slot or its erase button.</summary>
+    private int _focusRow;
+    private int _focusColumn;
+
     /// <summary>Whether the form is on screen and taking input.</summary>
     public bool IsOpen { get; private set; }
+
+    /// <summary>How far the form has faded in, 0 to 1.</summary>
+    public float Opacity { get; set; } = 1f;
 
     /// <summary>Raised when the player commits to a slot, with the run that slot now holds.</summary>
     public event Action<int, SaveData> SlotChosen;
@@ -100,13 +93,9 @@ public class SaveSlotMenu
     /// <param name="graphicsDevice">The device, for the one pixel the veil is made of.</param>
     public void LoadContent(ContentManager content, GraphicsDevice graphicsDevice)
     {
-        _panel = content.Load<Texture2D>("panel");
+        _panel.LoadContent(content, graphicsDevice);
         _font = content.Load<SpriteFont>("spectral-ui");
         _detailFont = content.Load<SpriteFont>("spectral-detail");
-
-        // One white pixel, stretched. Not worth a PNG.
-        _veil = new Texture2D(graphicsDevice, 1, 1);
-        _veil.SetData(new[] { Color.White });
 
         _slotButtons = new ButtonSprite[SaveSystem.SlotCount];
         _eraseButtons = new ButtonSprite[SaveSystem.SlotCount];
@@ -144,6 +133,10 @@ public class SaveSlotMenu
         _status = null;
         IsOpen = true;
 
+        _focusRow = 0;
+        _focusColumn = 0;
+        Navigate(0, 0);
+
         // Reset every control so the click on START that opened this doesn't land on a slot.
         foreach (var button in _slotButtons) button.Reset();
         foreach (var button in _eraseButtons) button.Reset();
@@ -167,34 +160,76 @@ public class SaveSlotMenu
 
         for (int i = 0; i < _slotButtons.Length; i++)
         {
+            _slotButtons[i].Focused = _focusRow == i && _focusColumn == 0;
+            _eraseButtons[i].Focused = _focusRow == i && _focusColumn == 1;
+
             _slotButtons[i].Update(gameTime);
             if (_eraseButtons[i].Enabled) _eraseButtons[i].Update(gameTime);
         }
 
+        _backButton.Focused = _focusRow == BackRow;
         _backButton.Update(gameTime);
     }
 
+    /// <summary>Moves the keyboard's place: up and down through the slots and BACK, left and right between a slot and its erase button.</summary>
+    /// <param name="rows">-1, 0 or 1.</param>
+    /// <param name="columns">-1, 0 or 1.</param>
+    /// <returns>True if the place moved.</returns>
+    public bool Navigate(int rows, int columns)
+    {
+        int row = Math.Clamp(_focusRow + rows, 0, BackRow);
+        int column = row == BackRow ? 0 : Math.Clamp(_focusColumn + columns, 0, 1);
+
+        // An empty slot cannot be erased and an unreadable one cannot be picked, so the keyboard steps over them.
+        if (row < BackRow && column == 1 && !_eraseButtons[row].Enabled) column = 0;
+        if (row < BackRow && column == 0 && !_slotButtons[row].Enabled) column = _eraseButtons[row].Enabled ? 1 : 0;
+
+        return FocusOn(row, column);
+    }
+
+    /// <summary>Puts the keyboard's place on whatever the mouse is over, so the two never light different plates.</summary>
+    /// <param name="mouse">Where the mouse is.</param>
+    /// <returns>True if the place moved.</returns>
+    public bool FollowMouse(Point mouse)
+    {
+        for (int i = 0; i < _slotButtons.Length; i++)
+        {
+            if (_slotButtons[i].Enabled && _slotButtons[i].Bounds.Contains(mouse)) return FocusOn(i, 0);
+            if (_eraseButtons[i].Enabled && _eraseButtons[i].Bounds.Contains(mouse)) return FocusOn(i, 1);
+        }
+
+        return _backButton.Bounds.Contains(mouse) && FocusOn(BackRow, 0);
+    }
+
+    /// <summary>Presses whatever the keyboard is on, the same as clicking it.</summary>
+    public void Press()
+    {
+        if (_focusRow == BackRow) _backButton.Activate();
+        else if (_focusColumn == 0) _slotButtons[_focusRow].Activate();
+        else _eraseButtons[_focusRow].Activate();
+    }
+
     /// <summary>Draws the veil, the panel and everything on it. Call it in its own batch, over the title screen.</summary>
+    /// <remarks>Drawn closed too, so it can fade out after a slot is picked. The screen decides when it is on.</remarks>
     /// <param name="gameTime">The GameTime.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void Draw(GameTime gameTime, SpriteBatch spriteBatch)
     {
-        if (!IsOpen) return;
+        _panel.DrawVeil(spriteBatch, Opacity);
+        _panel.Draw(spriteBatch, _panelBounds, Opacity);
 
-        spriteBatch.Draw(_veil, _screen, null, Palette.Veil * VeilOpacity,
-            0f, Vector2.Zero, SpriteEffects.None, Layers.Veil);
-
-        NineSlice.Draw(spriteBatch, _panel, _panelBounds, Point.Zero,
-            PanelFrameSize, PanelCornerSize, PanelScale, Color.White, Layers.PanelPlate);
-
-        DrawCentered(spriteBatch, _font, Heading, _panelBounds.Top + PanelPadding, Palette.Heading);
+        DrawCentered(spriteBatch, _font, Heading, _panelBounds.Top + FormPanel.Padding, Palette.Heading);
 
         for (int i = 0; i < _slotButtons.Length; i++)
         {
+            _slotButtons[i].Opacity = Opacity;
+            _eraseButtons[i].Opacity = Opacity;
+
             _slotButtons[i].Draw(gameTime, spriteBatch);
             if (_eraseButtons[i].Enabled) _eraseButtons[i].Draw(gameTime, spriteBatch);
         }
 
+        _backButton.Opacity = Opacity;
         _backButton.Draw(gameTime, spriteBatch);
 
         // The status row is always reserved in the layout, so an error doesn't shove the form around.
@@ -277,6 +312,9 @@ public class SaveSlotMenu
 
         _status = null;
         Refresh();
+
+        // The erase button just went away with the run, so the keyboard goes back to the slot.
+        Navigate(0, 0);
     }
 
     /// <summary>Takes back a half-confirmed erase and puts the button's own label back.</summary>
@@ -286,6 +324,19 @@ public class SaveSlotMenu
 
         _eraseButtons[_confirmingErase].Label = EraseLabel;
         _confirmingErase = -1;
+    }
+
+    /// <summary>Moves the keyboard's place to one plate.</summary>
+    /// <param name="row">A slot, or the back button's row.</param>
+    /// <param name="column">0 for the slot, 1 for its erase button.</param>
+    /// <returns>True if the place moved.</returns>
+    private bool FocusOn(int row, int column)
+    {
+        if (_focusRow == row && _focusColumn == column) return false;
+
+        _focusRow = row;
+        _focusColumn = column;
+        return true;
     }
 
     /// <summary>Sizes the panel around its contents and places every control on it.</summary>
@@ -298,8 +349,8 @@ public class SaveSlotMenu
         int headingHeight = (int)MathF.Round(_font.MeasureString(Heading).Y);
         int statusHeight = (int)MathF.Round(_detailFont.MeasureString(Heading).Y);
 
-        int panelHeight = PanelPadding + headingHeight + HeadingGap
-            + rowsHeight + HeadingGap + _backButton.Size.Y + StatusGap + statusHeight + PanelPadding;
+        int panelHeight = FormPanel.Padding + headingHeight + HeadingGap
+            + rowsHeight + HeadingGap + _backButton.Size.Y + StatusGap + statusHeight + FormPanel.Padding;
 
         _panelBounds = new Rectangle(
             _screen.Center.X - PanelWidth / 2,
@@ -310,7 +361,7 @@ public class SaveSlotMenu
         // Each row is a slot plus its erase button, centred as a pair so the slots line up either way.
         int rowWidth = SlotWidth + EraseGap + EraseWidth;
         int left = _panelBounds.Center.X - rowWidth / 2;
-        int top = _panelBounds.Top + PanelPadding + headingHeight + HeadingGap;
+        int top = _panelBounds.Top + FormPanel.Padding + headingHeight + HeadingGap;
 
         for (int i = 0; i < rows; i++)
         {
@@ -337,9 +388,9 @@ public class SaveSlotMenu
         Vector2 size = font.MeasureString(text);
         var position = new Vector2(MathF.Round(_panelBounds.Center.X - size.X / 2f), MathF.Round(y));
 
-        spriteBatch.DrawString(font, text, position + Palette.ShadowOffset, Palette.FormShadow,
+        spriteBatch.DrawString(font, text, position + Palette.ShadowOffset, Palette.FormShadow * Opacity,
             0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.TextShadow);
-        spriteBatch.DrawString(font, text, position, color,
+        spriteBatch.DrawString(font, text, position, color * Opacity,
             0f, Vector2.Zero, 1f, SpriteEffects.None, Layers.Text);
     }
 }

@@ -1,4 +1,6 @@
 using Microsoft.Xna.Framework;
+using TheBlackBox.Screens;
+using TheBlackBox.StateManagement;
 
 namespace TheBlackBox;
 
@@ -6,28 +8,34 @@ namespace TheBlackBox;
 /// The table's part of the proof run: one state after another, set up by hand, and which frames to keep.
 /// </summary>
 /// <remarks>
-/// Frames are counted by BlackBoxGame, which sits the scratch run down at frame 2 and takes
+/// Frames are counted from the first frame the table is drawn, by BlackBoxGame, which takes
 /// the shots. Anything animated is pinned on the frame of its shot, because saving a PNG stalls
 /// the fixed timestep and the catch-up updates would move it.
 /// </remarks>
 public partial class TableScreen
 {
-    /// <summary>The last frame of the schedule. The game quits after it.</summary>
-    internal const int ProofEnd = 582;
+    /// <summary>How many frames the table is given to come up out of the fade before anything is shot.</summary>
+    private const int Settled = 50;
+
+    /// <summary>How many frames the results veil is given to come down.</summary>
+    private const int VerdictSettled = 80;
+
+    /// <summary>The last frame of the table's schedule.</summary>
+    internal const int ProofEnd = Settled + 604 + 3 * VerdictSettled;
 
     /// <summary>Sets up whatever state this frame calls for, and names the file if the frame is to be kept.</summary>
-    /// <param name="frame">Which drawn frame this is, counted from the title screen.</param>
+    /// <param name="frame">Which drawn frame this is, counted from the table's first.</param>
     /// <returns>The file the frame should be written to, or null.</returns>
     internal string ProofStep(int frame)
     {
         switch (frame)
         {
             // The discussion, a few frames in so the wheel has settled.
-            case 20:
+            case Settled + 18:
                 return "table-discussion.png";
 
             // The player's turn, with things in both sets of pockets.
-            case 72:
+            case Settled + 70:
                 _wheel.Hide();
                 _discussion = null;
                 _discussionEnd = null;
@@ -48,40 +56,40 @@ public partial class TableScreen
                 BeginTurn();
                 return null;
 
-            case 130:
+            case Settled + 128:
                 return "table-turn.png";
 
             // The close-up, held on the Offer phase so the catch-up updates after a save do not open the mouth early.
-            case 131:
+            case Settled + 129:
                 _phase = RoundPhase.Offer;
                 OfferHand();
                 _phase = RoundPhase.Offer;
                 _lid.Open = 0.45f;
                 return null;
 
-            case 133:
+            case Settled + 131:
                 return "table-mouth.png";
 
             // Reaching. The reach is pinned on the frame of each shot because the round moves it every update.
-            case 136:
+            case Settled + 134:
                 _phase = RoundPhase.Reaching;
                 _lid.Open = 1f;
                 return null;
 
-            case 138:
+            case Settled + 136:
                 _reach = 0.5f;
                 _hand.Reach = _reach;
                 return "table-reaching.png";
 
             // All the way in. The hold is reset so the box has not paid yet.
-            case 141:
+            case Settled + 139:
                 _reach = 1f;
                 _hand.Reach = _reach;
                 _held = 0f;
                 return "table-taken.png";
 
             // The payout. Set up by hand rather than through Deal() so the box cannot deal nothing.
-            case 144:
+            case Settled + 142:
                 _run.Dealt = ItemCatalog.ToSaveId(ItemId.Lens);
                 _hand.IsVisible = false;
                 _opponent.SetDisposition(_run.OpponentDisposition);
@@ -90,22 +98,22 @@ public partial class TableScreen
 
             // The tag is pinned just under the mouth, above where the palm can reach. The palm sits under
             // the mouse, so anywhere lower and the catch could fire on the frame of the shot itself.
-            case 146:
+            case Settled + 144:
                 _token.Place(new Vector2(600f, 560f));
                 return "table-catching.png";
 
             // The aim check, with a revolver in hand.
-            case 148:
+            case Settled + 146:
                 CatchToken();
                 _run.Dealt = ItemCatalog.ToSaveId(ItemId.Revolver);
                 Decide(DealtChoice.Use);
                 return null;
 
-            case 154:
+            case Settled + 152:
                 return "table-aim.png";
 
             // The other two checks, same way: drop the current check, swap the item, ask again.
-            case 156:
+            case Settled + 154:
                 _check = null;
                 _afterCheck = null;
                 _phase = RoundPhase.PlayerTurn;
@@ -113,10 +121,10 @@ public partial class TableScreen
                 Decide(DealtChoice.Use);
                 return null;
 
-            case 162:
+            case Settled + 160:
                 return "table-steady.png";
 
-            case 164:
+            case Settled + 162:
                 _check = null;
                 _afterCheck = null;
                 _phase = RoundPhase.PlayerTurn;
@@ -124,42 +132,78 @@ public partial class TableScreen
                 Decide(DealtChoice.Use);
                 return null;
 
-            case 172:
+            case Settled + 170:
                 return "table-read.png";
 
             // Then nobody touches anything: the read check times out, the lens resolves, the opponent plays, the round closes.
-            case 560:
+            case Settled + 558:
                 return "table-resolved.png";
 
-            // The two endings, forced by setting lives and phase, which is all the ending screen reads.
-            case 563:
+            // The pause menu over the table, and then away again.
+            case Settled + 560:
+                ScreenManager.AddScreen(new PauseMenuScreen(SaveAndLeave));
+                return null;
+
+            case Settled + 580:
+                return "table-paused.png";
+
+            case Settled + 581:
+                ExitProofPopups();
+                return null;
+
+            // The two endings, forced by setting lives and phase. Update puts the results up off the phase.
+            case Settled + 590:
                 _run.PlayerLives = 0;
                 _phase = RoundPhase.Over;
-                _returnButton.Reset();
                 return null;
 
-            case 565:
+            case Settled + 590 + VerdictSettled:
                 return "table-consumed.png";
 
-            case 568:
+            case Settled + 591 + VerdictSettled:
+                ExitProofPopups();
                 _run.PlayerLives = 2;
                 _run.OpponentLives = 0;
+                _verdictShown = false;
                 return null;
 
-            case 570:
+            case Settled + 591 + 2 * VerdictSettled:
                 return "table-advance.png";
 
-            // Chapter two: advance the run the way Leave does and enter it again, which seats the second opponent.
-            case 572:
+            // Chapter two: advance the run the way FinishRun does and enter it again, which seats the second opponent.
+            case Settled + 592 + 2 * VerdictSettled:
+                ExitProofPopups();
                 _run.Advance();
-                Enter(_slot, _run);
+                Enter();
                 return null;
 
-            case 580:
+            case Settled + 600 + 2 * VerdictSettled:
                 return "table-second.png";
+
+            // And win that one too, and take the results' way back to the lobby.
+            case Settled + 602 + 2 * VerdictSettled:
+                _run.OpponentLives = 0;
+                _phase = RoundPhase.Over;
+                return null;
+
+            case Settled + 603 + 3 * VerdictSettled:
+                foreach (GameScreen screen in ScreenManager.GetScreens())
+                {
+                    if (screen is ResultsScreen results) results.ProofReturnToLobby();
+                }
+                return null;
 
             default:
                 return null;
+        }
+    }
+
+    /// <summary>Takes the pause menu or the results straight off the stack, with no fade.</summary>
+    private void ExitProofPopups()
+    {
+        foreach (GameScreen screen in ScreenManager.GetScreens())
+        {
+            if (screen is PauseMenuScreen or ResultsScreen) ScreenManager.RemoveScreen(screen);
         }
     }
 }

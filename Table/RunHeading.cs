@@ -29,7 +29,7 @@ public class RunHeading
     private const float HintGap = 32f;
 
     private const string ThemLabel = "THEM";
-    private const string LeaveHint = "ESC  ·  SAVE AND LEAVE";
+    private const string LeaveHint = "ESC  ·  PAUSE";
 
     private readonly HeartsSprite _hearts = new();
     private SpriteFont _detailFont;

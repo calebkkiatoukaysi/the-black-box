@@ -136,6 +136,12 @@ public class ButtonSprite
     /// <summary>Whether the button responds to the cursor at all.</summary>
     public bool Enabled = true;
 
+    /// <summary>Whether the keyboard has picked this button. It lights the same as a hover.</summary>
+    public bool Focused;
+
+    /// <summary>How much of the button shows, 0 to 1. Screens fade it with their transition.</summary>
+    public float Opacity = 1f;
+
     /// <summary>Raised the moment a press that started on this button is released on it.</summary>
     public event Action Clicked;
 
@@ -198,6 +204,15 @@ public class ButtonSprite
         _hasMouseSample = false;
     }
 
+    /// <summary>Presses the button from the keyboard: the plate sinks and comes back up, and it counts as a click.</summary>
+    public void Activate()
+    {
+        if (!Enabled) return;
+
+        _sink = 1f;
+        Clicked?.Invoke();
+    }
+
     /// <summary>Advances the animation and works out whether the button was clicked this frame.</summary>
     /// <param name="gameTime">The GameTime.</param>
     public void Update(GameTime gameTime)
@@ -238,7 +253,8 @@ public class ButtonSprite
                 _armed = false;
             }
 
-            _kindle = Approach(_kindle, _hovered ? 1f : 0f, (_hovered ? KindleRate : CoolRate) * elapsed);
+            bool lit = _hovered || Focused;
+            _kindle = Approach(_kindle, lit ? 1f : 0f, (lit ? KindleRate : CoolRate) * elapsed);
             _sink = Approach(_sink, Held ? 1f : 0f, (Held ? SinkRate : RiseRate) * elapsed);
         }
 
@@ -263,15 +279,15 @@ public class ButtonSprite
             plate.Offset(travel, travel);
         }
 
-        DrawPlate(spriteBatch, plate, frame, Color.White, Layers.ButtonPlate);
-        DrawPlate(spriteBatch, plate, new Point(frame.X, frame.Y + AccentBandOffset), Accent, Layers.ButtonAccent);
+        DrawPlate(spriteBatch, plate, frame, Color.White * Opacity, Layers.ButtonPlate);
+        DrawPlate(spriteBatch, plate, new Point(frame.X, frame.Y + AccentBandOffset), Accent * Opacity, Layers.ButtonAccent);
 
         // The icon sits on the left and the label takes the rest of the plate.
         int inset = 0;
         if (Icon is not null)
         {
             var at = new Vector2(plate.X + IconPad, MathF.Round(plate.Y + (plate.Height - IconSource.Height * IconScale) / 2f));
-            spriteBatch.Draw(Icon, at, IconSource, Color.White, 0f, Vector2.Zero, IconScale, SpriteEffects.None, Layers.ButtonLabel);
+            spriteBatch.Draw(Icon, at, IconSource, Color.White * Opacity, 0f, Vector2.Zero, IconScale, SpriteEffects.None, Layers.ButtonLabel);
             inset = IconPad + (int)MathF.Round(IconSource.Width * IconScale);
         }
 
@@ -335,13 +351,13 @@ public class ButtonSprite
         float height = string.IsNullOrEmpty(Sublabel) ? label.Y : label.Y + SublabelGap + _detailFont.MeasureString(Sublabel).Y;
         float top = MathF.Round(plate.Y + (plate.Height - height) / 2f);
 
-        DrawLine(spriteBatch, LabelFont, Label, plate, top, lit, fit);
+        DrawLine(spriteBatch, LabelFont, Label, plate, top, lit, fit, Opacity);
 
         if (string.IsNullOrEmpty(Sublabel)) return;
 
         // Dimmer than the label so it doesn't compete with it.
         Color detail = Color.Lerp(cold * DetailDim, Color.Lerp(Accent, Color.White, DetailLitBlend), _kindle * DetailKindle);
-        DrawLine(spriteBatch, _detailFont, Sublabel, plate, top + label.Y + SublabelGap, detail);
+        DrawLine(spriteBatch, _detailFont, Sublabel, plate, top + label.Y + SublabelGap, detail, 1f, Opacity);
     }
 
     /// <summary>The font the label is set in. See <see cref="Small"/>.</summary>
@@ -367,14 +383,16 @@ public class ButtonSprite
     /// <param name="y">Top of the line, in screen pixels.</param>
     /// <param name="color">Colour of the text.</param>
     /// <param name="scale">How far the line is shrunk to fit. 1 is full size.</param>
-    private static void DrawLine(SpriteBatch spriteBatch, SpriteFont font, string text, Rectangle plate, float y, Color color, float scale = 1f)
+    /// <param name="opacity">How much of it shows. See <see cref="Opacity"/>.</param>
+    private static void DrawLine(SpriteBatch spriteBatch, SpriteFont font, string text, Rectangle plate, float y, Color color,
+        float scale, float opacity)
     {
         Vector2 size = font.MeasureString(text) * scale;
         var position = new Vector2(MathF.Round(plate.X + (plate.Width - size.X) / 2f), MathF.Round(y));
 
-        spriteBatch.DrawString(font, text, position + Palette.ShadowOffset, Palette.LabelShadow,
+        spriteBatch.DrawString(font, text, position + Palette.ShadowOffset, Palette.LabelShadow * opacity,
             0f, Vector2.Zero, scale, SpriteEffects.None, Layers.ButtonLabelShadow);
-        spriteBatch.DrawString(font, text, position, color,
+        spriteBatch.DrawString(font, text, position, color * opacity,
             0f, Vector2.Zero, scale, SpriteEffects.None, Layers.ButtonLabel);
     }
 

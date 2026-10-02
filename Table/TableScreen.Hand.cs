@@ -69,6 +69,9 @@ public partial class TableScreen
         _hand.IsVisible = true;
         EnterCloseUp();
 
+        _audio.Play(Sfx.MenuConfirm);
+        _audio.Play(Sfx.BoxOpen);
+
         // Both hands go in together. Theirs is never drawn, so the lean is the whole of it.
         _opponent.Pose = OpponentPose.Reaching;
     }
@@ -90,6 +93,9 @@ public partial class TableScreen
         {
             _reach = MathF.Min(1f, _reach + elapsed / ReachSeconds);
             _hand.Reach = _reach;
+
+            // The moment the fingers are all the way in, the box has them.
+            if (_reach >= 1f) _audio.Play(Sfx.HandIn);
             return;
         }
 
@@ -124,6 +130,8 @@ public partial class TableScreen
         float drift = ((float)_random.NextDouble() * 2f - 1f) * TokenDrift;
         _token.Launch(TokenLaunch, new Vector2(drift, TokenLaunchSpeed));
         _catchHand.Show(CatchTipY, CatchMinX, CatchMaxX);
+
+        _audio.Play(Sfx.Payout);
     }
 
     /// <summary>Takes the table away and brings the box up, shut, to fill the view.</summary>
@@ -160,6 +168,7 @@ public partial class TableScreen
     /// <summary>The tag landed in the palm. The item is in the hand, and the turn is the player's.</summary>
     private void CatchToken()
     {
+        _audio.Play(Sfx.Catch);
         _token.IsVisible = false;
         _catchHand.IsVisible = false;
         LeaveCloseUp();
@@ -169,6 +178,7 @@ public partial class TableScreen
     /// <summary>The tag went over the edge. Same rule as LEAVE IT, said differently.</summary>
     private void DropToken()
     {
+        _audio.Play(Sfx.Drop);
         _token.IsVisible = false;
         _catchHand.IsVisible = false;
         LeaveCloseUp();

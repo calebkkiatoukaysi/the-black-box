@@ -7,7 +7,7 @@ namespace TheBlackBox;
 /// <summary>
 /// The end of a run: a veil over the table, and what became of the player, set large across it.
 /// </summary>
-/// <remarks>Two endings, one screen. The chapter only turns when the player leaves, in TableScreen.Leave.</remarks>
+/// <remarks>Two endings, one screen. ResultsScreen draws it, and the chapter only turns when the player leaves, in TableScreen.FinishRun.</remarks>
 public class EndingVeil
 {
     /// <summary>How dark the veil is, and its colour.</summary>
@@ -43,10 +43,11 @@ public class EndingVeil
     /// <summary>Draws the veil and the verdict. The text batch.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     /// <param name="won">Whether the player is still standing.</param>
-    public void Draw(SpriteBatch spriteBatch, bool won)
+    /// <param name="fade">How far the veil has come down, 0 to 1.</param>
+    public void Draw(SpriteBatch spriteBatch, bool won, float fade)
     {
         spriteBatch.Draw(_pixel, new Rectangle(0, 0, BlackBoxGame.ScreenWidth, BlackBoxGame.ScreenHeight), null,
-            VeilColor * Opacity, 0f, Vector2.Zero, SpriteEffects.None, Layers.Veil);
+            VeilColor * (Opacity * fade), 0f, Vector2.Zero, SpriteEffects.None, Layers.Veil);
 
         string title = won ? "YOU ADVANCE" : "YOU HAVE BEEN CONSUMED BY THE BOX";
         string line = won
@@ -55,7 +56,7 @@ public class EndingVeil
 
         // The long verdict shrinks to fit rather than running off the edges.
         Text.DrawFitted(spriteBatch, _titleFont, title, TitleY, BlackBoxGame.ScreenWidth - 2f * Margin,
-            won ? ButtonSprite.BoneWhite : ButtonSprite.EmberRed, Palette.HeavyShadow, ShadowOffset);
-        Text.DrawCentered(spriteBatch, _uiFont, line, LineY, LineColor, Palette.FormShadow, Palette.ShadowOffset);
+            (won ? ButtonSprite.BoneWhite : ButtonSprite.EmberRed) * fade, Palette.HeavyShadow * fade, ShadowOffset);
+        Text.DrawCentered(spriteBatch, _uiFont, line, LineY, LineColor * fade, Palette.FormShadow * fade, Palette.ShadowOffset);
     }
 }

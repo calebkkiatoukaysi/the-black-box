@@ -2,20 +2,25 @@ using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
+using TheBlackBox.Audio;
 using TheBlackBox.Checks;
+using TheBlackBox.Screens;
+using TheBlackBox.StateManagement;
 
 namespace TheBlackBox;
 
 /// <summary>
-/// The table: one run being played, from the first line of the discussion to the verdict.
+/// The table, which is the Black Box arena: one run being played, from the first line of the
+/// discussion to the verdict.
 /// </summary>
 /// <remarks>
 /// The rules are in RoundEngine; this is what to draw and when. It is split by phase: the
 /// discussion, the hand and the payout, and the player's turn each have their own file, and
-/// so does the proof schedule. BlackBoxGame owns the sprite batches and the box, so the
-/// drawing is four calls, one per batch, and the box is handed in.
+/// so does the proof schedule. The box is the one BoxScene owns, so the table borrows it, moves
+/// it onto the table and up into the close-up, and the title gets it back afterwards.
 /// </remarks>
-public partial class TableScreen
+public partial class TableScreen : GameScreen
 {
     /// <summary>Where the box sits on the table.</summary>
     /// <remarks>At TableScale this puts its bottom edge on the table with the opponent's face clear above it.</remarks>
@@ -44,8 +49,9 @@ public partial class TableScreen
     private const float ButtonY = 852f;
     private const float PocketsY = 722f;
 
-    /// <summary>How far above the pockets a save error is printed.</summary>
-    private const float StatusRise = 30f;
+    /// <summary>How long the room takes to come up out of the dark, and to go back into it.</summary>
+    private static readonly TimeSpan FadeInTime = TimeSpan.FromSeconds(0.8);
+    private static readonly TimeSpan FadeOutTime = TimeSpan.FromSeconds(0.6);
 
     /// <summary>What the box asks for once the talking is done, and the plates that follow.</summary>
     private const string FeedLabel = "PLACE YOUR HAND IN THE BOX";
@@ -53,7 +59,6 @@ public partial class TableScreen
     private const string KeepLabel = "KEEP IT";
     private const string LeaveLabel = "LEAVE IT";
     private const string ContinueLabel = "CONTINUE";
-    private const string ReturnLabel = "LEAVE THE TABLE";
 
     /// <summary>Where the three thirds of the decision sit, across the bottom of the table.</summary>
     private const float DecideLeftX = 520f;
@@ -64,10 +69,11 @@ public partial class TableScreen
     private static readonly Point DecideSize = new(240, 84);
     private static readonly Point ContinueSize = new(380, 84);
 
-    /// <summary>What a save error is prefixed with on the table.</summary>
-    internal const string SaveFailed = "COULD NOT SAVE -- ";
+    /// <summary>The keys that bring up the pause menu.</summary>
+    private readonly InputAction _pause = new(
+        new[] { Buttons.Start, Buttons.Back },
+        new[] { Keys.Escape }, true);
 
-    private readonly BlackBoxSprite _box;
     private readonly OpponentSprite _opponent = new();
     private readonly HandSprite _hand = new();
     private readonly BoxLidSprite _lid = new();
@@ -75,7 +81,6 @@ public partial class TableScreen
     private readonly CatchHandSprite _catchHand = new();
     private readonly RunHeading _heading = new();
     private readonly DialoguePlate _plate = new();
-    private readonly EndingVeil _ending = new();
     private readonly DialogueWheel _wheel = new();
 
     /// <summary>The three checks, made once and asked again each time an item calls for one.</summary>
@@ -92,36 +97,42 @@ public partial class TableScreen
     private readonly ButtonSprite _keepButton;
     private readonly ButtonSprite _leaveButton;
     private readonly ButtonSprite _continueButton;
-    private readonly ButtonSprite _returnButton;
 
     /// <summary>What the box deals from. Seeded by the clock like any other run.</summary>
     private readonly Random _random = new();
 
+    /// <summary>The run on the table, and the slot it goes back into.</summary>
+    private readonly RunSession _session;
+    private readonly SaveData _run;
+
+    /// <summary>The box and the ash around it, borrowed from the game.</summary>
+    private BoxScene _scene;
+    private BlackBoxSprite _box;
+
+    private ContentManager _content;
+    private AudioManager _audio;
+
     /// <summary>The wall, the lamp and the table. Drawn behind everything.</summary>
     private Texture2D _room;
-    private SpriteFont _detailFont;
-
-    /// <summary>The run on the table, and which slot it came out of and goes back into.</summary>
-    private SaveData _run;
-    private int _slot;
 
     /// <summary>Which part of the round the table is in.</summary>
     private RoundPhase _phase = RoundPhase.Discussion;
 
-    /// <summary>Why the last save failed, or null. Shown under the run rather than swallowed.</summary>
-    public string Status { get; set; }
+    /// <summary>Whether the results have been put up over the table. Once per run.</summary>
+    private bool _verdictShown;
 
-    /// <summary>Whether the table has given way to the close-up of the box.</summary>
-    public bool IsCloseUp => _closeUp;
+    /// <summary>Whether the table had focus last frame. See <see cref="Update"/>.</summary>
+    private bool _wasActive;
 
-    /// <summary>Raised once the run is written back and the player is off the table.</summary>
-    public event Action Left;
-
-    /// <summary>Builds the table around the box the game already has.</summary>
-    /// <param name="box">The box, which the table moves onto the table and up into the close-up.</param>
-    public TableScreen(BlackBoxSprite box)
+    /// <summary>Builds the table for a run.</summary>
+    /// <param name="session">The run, and the slot it goes back into.</param>
+    public TableScreen(RunSession session)
     {
-        _box = box;
+        _session = session;
+        _run = session.Run;
+
+        TransitionOnTime = FadeInTime;
+        TransitionOffTime = FadeOutTime;
 
         _aimCheck = new AimCheck(AimTarget, AimInner, AimOuter);
         _steadyCheck = new SteadyCheck(CheckBarOrigin);
@@ -135,14 +146,12 @@ public partial class TableScreen
         _keepButton = new ButtonSprite(KeepLabel, new Vector2(DecideMiddleX, ButtonY), ButtonSprite.Amber, DecideSize);
         _leaveButton = new ButtonSprite(LeaveLabel, new Vector2(DecideRightX, ButtonY), ButtonSprite.BoneWhite, DecideSize);
         _continueButton = new ButtonSprite(ContinueLabel, new Vector2(centreX, ButtonY), ButtonSprite.Amber, ContinueSize);
-        _returnButton = new ButtonSprite(ReturnLabel, new Vector2(centreX, ButtonY), ButtonSprite.BoneWhite);
 
         _feedButton.Clicked += OfferHand;
         _useButton.Clicked += () => Decide(DealtChoice.Use);
         _keepButton.Clicked += () => Decide(DealtChoice.Pocket);
         _leaveButton.Clicked += () => Decide(DealtChoice.Leave);
-        _continueButton.Clicked += StepLog;
-        _returnButton.Clicked += Leave;
+        _continueButton.Clicked += Continue;
 
         // Yours on the left, theirs on the right, in the same colours as the names on the plate.
         _playerPockets = new PocketStrip("YOUR POCKETS", new Vector2(RunHeading.Margin, PocketsY), ButtonSprite.BoneWhite);
@@ -153,13 +162,29 @@ public partial class TableScreen
         _wheel.Chosen += Answer;
     }
 
+    /// <summary>Loads everything on the table, borrows the box, and sits the player down.</summary>
+    public override void Activate()
+    {
+        _content ??= new ContentManager(ScreenManager.Game.Services, "Content");
+        _scene = ScreenManager.Game.Services.GetService<BoxScene>();
+        _box = _scene.Box;
+        _audio = ScreenManager.Game.Services.GetService<AudioManager>();
+
+        LoadContent(_content, ScreenManager.GraphicsDevice);
+        Enter();
+
+        _audio.PlaySong(Track.Arena);
+    }
+
+    /// <summary>Unloads the table.</summary>
+    public override void Unload() => _content?.Unload();
+
     /// <summary>Loads everything on the table.</summary>
     /// <param name="content">The ContentManager to load with.</param>
     /// <param name="graphicsDevice">The device, for the parts that draw from a pixel.</param>
-    public void LoadContent(ContentManager content, GraphicsDevice graphicsDevice)
+    private void LoadContent(ContentManager content, GraphicsDevice graphicsDevice)
     {
         _room = content.Load<Texture2D>("room");
-        _detailFont = content.Load<SpriteFont>("spectral-detail");
 
         _opponent.LoadContent(content);
         _hand.LoadContent(content);
@@ -168,7 +193,6 @@ public partial class TableScreen
         _catchHand.LoadContent(content);
         _heading.LoadContent(content);
         _plate.LoadContent(content, graphicsDevice);
-        _ending.LoadContent(content, graphicsDevice);
         _wheel.LoadContent(content, graphicsDevice);
 
         _aimCheck.LoadContent(content);
@@ -180,7 +204,6 @@ public partial class TableScreen
         _keepButton.LoadContent(content);
         _leaveButton.LoadContent(content);
         _continueButton.LoadContent(content);
-        _returnButton.LoadContent(content);
 
         _playerPockets.LoadContent(content);
         _opponentPockets.LoadContent(content);
@@ -188,17 +211,10 @@ public partial class TableScreen
 
     /// <summary>Puts the player at the table and moves the scene around them.</summary>
     /// <remarks>A run saved mid-decision comes back mid-decision, so closing the game never costs an item.</remarks>
-    /// <param name="slot">Which slot the run came out of, and goes back into.</param>
-    /// <param name="run">The run.</param>
-    /// <param name="status">Why a save just failed, or null.</param>
-    public void Enter(int slot, SaveData run, string status = null)
+    private void Enter()
     {
-        _slot = slot;
-        _run = run;
-        Status = status;
-
         ClearTable();
-        _returnButton.Reset();
+        _verdictShown = false;
 
         // Between chapters the seat is empty and the roster fills it. Within one, the save says who is there.
         if (string.IsNullOrWhiteSpace(_run.OpponentId))
@@ -208,6 +224,7 @@ public partial class TableScreen
 
         _opponentLivesShown = _run.OpponentLives;
 
+        // Already over (a run saved on the verdict): Update puts the results up on the first frame.
         if (RoundEngine.IsOver(_run))
         {
             _phase = RoundPhase.Over;
@@ -224,29 +241,23 @@ public partial class TableScreen
         StartDiscussion();
     }
 
-    /// <summary>Writes the run back to its slot and raises <see cref="Left"/>.</summary>
-    /// <remarks>If the write fails the player stays in the run, since the copy in memory is the only one left.</remarks>
-    public void Leave()
+    /// <summary>Closes out a finished run and writes it back: next chapter if they got up, the same table if not.</summary>
+    /// <remarks>The results screen calls this. A failed write leaves the run as it is in memory, so pressing again just tries the write again.</remarks>
+    /// <returns>Why the save failed, or null.</returns>
+    internal string FinishRun()
     {
-        // A finished run is written back ready to play again: next chapter if they got up, same one if not.
         if (RoundEngine.IsOver(_run))
         {
             if (_run.PlayerLives > 0) _run.Advance();
             else _run.Restart();
         }
 
-        if (!SaveSystem.Write(_slot, _run))
-        {
-            Status = SaveFailed + SaveSystem.LastError;
-            return;
-        }
-
-        _run = null;
-        ClearTable();
-        _phase = RoundPhase.Discussion;
-
-        Left?.Invoke();
+        return _session.Save() ? null : _session.LastError;
     }
+
+    /// <summary>Writes the run back as it stands, mid-round or not, for the pause menu's way out.</summary>
+    /// <returns>Why the save failed, or null.</returns>
+    private string SaveAndLeave() => _session.Save() ? null : _session.LastError;
 
     /// <summary>Takes everything off the table: the wheel, the hands, the tag, a check, the close-up and the log.</summary>
     private void ClearTable()
@@ -269,10 +280,40 @@ public partial class TableScreen
         LeaveCloseUp();
     }
 
-    /// <summary>Runs whichever part of the round the table is in.</summary>
+    /// <summary>Brings up the pause menu.</summary>
     /// <param name="gameTime">The frame's timing.</param>
-    public void Update(GameTime gameTime)
+    /// <param name="input">The input this frame.</param>
+    public override void HandleInput(GameTime gameTime, InputState input)
     {
+        if (_phase != RoundPhase.Over && _pause.Occurred(input))
+            ScreenManager.AddScreen(new PauseMenuScreen(SaveAndLeave));
+    }
+
+    /// <summary>Runs whichever part of the round the table is in, unless something is over it.</summary>
+    /// <remarks>Nothing moves while paused, the discussion clock included. Coming back resets the plates so the click that closed the menu cannot land on the table.</remarks>
+    /// <param name="gameTime">The frame's timing.</param>
+    /// <param name="otherScreenHasFocus">Whether a screen above has the input.</param>
+    /// <param name="coveredByOtherScreen">Whether a non-popup screen is on top.</param>
+    public override void Update(GameTime gameTime, bool otherScreenHasFocus, bool coveredByOtherScreen)
+    {
+        base.Update(gameTime, otherScreenHasFocus, coveredByOtherScreen);
+
+        if (!IsActive)
+        {
+            _wasActive = false;
+            return;
+        }
+
+        if (!_wasActive)
+        {
+            _wasActive = true;
+            _feedButton.Reset();
+            _useButton.Reset();
+            _keepButton.Reset();
+            _leaveButton.Reset();
+            _continueButton.Reset();
+        }
+
         // Playtime is counted here, not from the system clock, so time with the game closed does not count.
         _run.Playtime += gameTime.ElapsedGameTime;
 
@@ -314,15 +355,65 @@ public partial class TableScreen
                 break;
 
             case RoundPhase.Over:
-                _returnButton.Update(gameTime);
+                if (!_verdictShown) ShowVerdict();
                 break;
         }
+    }
+
+    /// <summary>The run is over: the song stops, the verdict is heard, and the results come down over the table.</summary>
+    private void ShowVerdict()
+    {
+        _verdictShown = true;
+
+        bool won = _run.PlayerLives > 0;
+        _audio.StopSong();
+        _audio.Play(won ? Sfx.Win : Sfx.Lose);
+
+        ScreenManager.AddScreen(new ResultsScreen(_session, won, FinishRun));
+    }
+
+    /// <summary>Draws the table in the five batches it needs, and fades it with the transition.</summary>
+    /// <param name="gameTime">The frame's timing.</param>
+    public override void Draw(GameTime gameTime)
+    {
+        SpriteBatch spriteBatch = ScreenManager.SpriteBatch;
+
+        // 1. Everything the eye light falls on: the room (or, in the close-up, the sky) and the box. Point sampling keeps the pixel art crisp.
+        spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
+        if (_closeUp) _scene.DrawSky(gameTime, spriteBatch);
+        else DrawScene(spriteBatch);
+        _box.DrawBody(gameTime, spriteBatch);
+        spriteBatch.End();
+
+        // 2. The eye glow, additive so the light spills onto the rim. Linear sampling so it stays soft.
+        spriteBatch.Begin(SpriteSortMode.BackToFront, BoxScene.PremultipliedAdditive, SamplerState.LinearClamp);
+        _box.DrawEyeGlow(gameTime, spriteBatch);
+        spriteBatch.End();
+
+        // 3. The eyes over the glow, the ash falling past in front of everything, and the hands over that.
+        spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
+        _box.DrawEyes(gameTime, spriteBatch);
+        _scene.DrawAsh(gameTime, spriteBatch);
+        DrawFront(gameTime, spriteBatch);
+        spriteBatch.End();
+
+        // 4. Text, sampled linearly so the font stays smooth.
+        spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        DrawText(spriteBatch);
+        spriteBatch.End();
+
+        // 5. The plates. Point sampling because they are pixel art; the labels are 1:1 so they are fine under it.
+        spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
+        DrawPlates(gameTime, spriteBatch);
+        spriteBatch.End();
+
+        ScreenManager.FadeBackBufferToBlack(TransitionPosition);
     }
 
     /// <summary>The room, the opponent and the box's shadow. The first batch, behind the box.</summary>
     /// <remarks>Same batch as the box so the layer sort puts the opponent behind it and the box over its own shadow.</remarks>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
-    public void DrawScene(SpriteBatch spriteBatch)
+    private void DrawScene(SpriteBatch spriteBatch)
     {
         spriteBatch.Draw(_room, new Rectangle(0, 0, BlackBoxGame.ScreenWidth, BlackBoxGame.ScreenHeight), null,
             Color.White, 0f, Vector2.Zero, SpriteEffects.None, Layers.Room);
@@ -334,7 +425,7 @@ public partial class TableScreen
     /// <summary>Everything between the player and the box: the jaws, both hands, the tag and a check's furniture.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
-    public void DrawFront(GameTime gameTime, SpriteBatch spriteBatch)
+    private void DrawFront(GameTime gameTime, SpriteBatch spriteBatch)
     {
         // The jaws go over the eyes and under the arm, which is between the player and the box.
         if (_closeUp)
@@ -348,27 +439,18 @@ public partial class TableScreen
         _check?.Draw(gameTime, spriteBatch);
     }
 
-    /// <summary>The bookkeeping, the plate and the verdict. The text batch, sampled smooth.</summary>
+    /// <summary>The bookkeeping and the plate. The text batch, sampled smooth.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
-    public void DrawText(SpriteBatch spriteBatch)
+    private void DrawText(SpriteBatch spriteBatch)
     {
         _heading.DrawText(spriteBatch, _run);
-
-        if (Status is not null)
-        {
-            Text.DrawCentered(spriteBatch, _detailFont, Status, PocketsY - StatusRise, ButtonSprite.EmberRed,
-                Palette.Shadow, Palette.ShadowOffset);
-        }
-
         DrawPlate(spriteBatch);
-
-        if (_phase == RoundPhase.Over) _ending.Draw(spriteBatch, _run.PlayerLives > 0);
     }
 
     /// <summary>The hearts, the item pictures, the pockets and whatever can be clicked. The pixel-art batch.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
-    public void DrawPlates(GameTime gameTime, SpriteBatch spriteBatch)
+    private void DrawPlates(GameTime gameTime, SpriteBatch spriteBatch)
     {
         _heading.DrawHearts(spriteBatch, _run);
         if (DealtOnShow is ItemId dealt) _plate.DrawIcon(spriteBatch, dealt);
@@ -401,10 +483,6 @@ public partial class TableScreen
 
             case RoundPhase.Resolving:
                 _continueButton.Draw(gameTime, spriteBatch);
-                break;
-
-            case RoundPhase.Over:
-                _returnButton.Draw(gameTime, spriteBatch);
                 break;
         }
     }

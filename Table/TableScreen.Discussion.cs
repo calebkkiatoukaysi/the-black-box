@@ -8,6 +8,9 @@ namespace TheBlackBox;
 /// </summary>
 public partial class TableScreen
 {
+    /// <summary>How far down the blip is pitched when a line lands across the table. The lobby uses the same idea per speaker.</summary>
+    private const float LineBlipPitch = -0.2f;
+
     // How long the player's own line is held: a base, a bit per character, and a floor and
     // ceiling. The clock keeps running through it, so a reply costs the time it takes to say.
     private const float SayingBase = 0.9f;
@@ -84,6 +87,7 @@ public partial class TableScreen
 
         // The wheel comes down while the player's line is up, and the new temper lands on the
         // face now so they see it arrive while they are still speaking.
+        _audio.Play(Sfx.MenuConfirm);
         _wheel.Hide();
         _opponent.SetDisposition(_discussion.Disposition);
 
@@ -110,8 +114,12 @@ public partial class TableScreen
         else EndDiscussion();
     }
 
-    /// <summary>Puts the current beat on the wheel.</summary>
-    private void ShowBeat() => _wheel.Show(_discussion.Current, _discussion.Disposition);
+    /// <summary>Puts the current beat on the wheel, with a blip for their line landing.</summary>
+    private void ShowBeat()
+    {
+        _wheel.Show(_discussion.Current, _discussion.Disposition);
+        _audio.Play(Sfx.TextBlip, pitch: LineBlipPitch);
+    }
 
     /// <summary>Closes the discussion down and lets the box ask for what it is owed.</summary>
     private void EndDiscussion()

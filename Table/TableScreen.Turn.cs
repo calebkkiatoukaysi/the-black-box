@@ -10,6 +10,9 @@ namespace TheBlackBox;
 /// </summary>
 public partial class TableScreen
 {
+    /// <summary>How well a check has to go to sound like it went well. Same line ItemResolver draws for the sight items.</summary>
+    private const float CheckWellDone = 0.5f;
+
     /// <summary>What KEEP IT says under itself when it cannot be pressed.</summary>
     private const string NoRoomNote = "NO ROOM";
     private const string UnseenNote = "NOT UNSEEN";
@@ -50,6 +53,8 @@ public partial class TableScreen
         if (_phase != RoundPhase.PlayerTurn) return;
         if (choice == DealtChoice.Pocket && !RoundEngine.CanPocketDealt(_run)) return;
 
+        _audio.Play(Sfx.MenuConfirm);
+
         // Items that need a check go through it first. A blind item skips it, since the check would give it away.
         if (choice == DealtChoice.Use && !_run.DealtBlind
             && ItemCatalog.TryParse(_run.Dealt, out ItemId dealt)
@@ -65,6 +70,8 @@ public partial class TableScreen
     private void PlayPocket(int slot)
     {
         if (_phase != RoundPhase.PlayerTurn) return;
+
+        _audio.Play(Sfx.MenuConfirm);
 
         if (slot >= 0 && slot < _run.Banked.Count
             && ItemCatalog.TryParse(_run.Banked[slot], out ItemId pocketed)
@@ -111,6 +118,8 @@ public partial class TableScreen
         if (!_check.IsDone) return;
 
         float efficiency = _check.Efficiency;
+        _audio.Play(efficiency >= CheckWellDone ? Sfx.CheckGood : Sfx.CheckBad);
+
         Action<float> then = _afterCheck;
         _check = null;
         _afterCheck = null;
@@ -159,22 +168,30 @@ public partial class TableScreen
         _opponentLivesShown = _run.OpponentLives;
     }
 
+    /// <summary>CONTINUE: the next line, with a tick if the line has no sound of its own.</summary>
+    private void Continue()
+    {
+        if (_log.Count == 0 || !TableCues.Play(_audio, _log.Peek())) _audio.Play(Sfx.MenuMove);
+        StepLog(cueAlreadyPlayed: true);
+    }
+
     /// <summary>Shows the next line of the log, or moves on if there are none left.</summary>
-    private void StepLog()
+    /// <param name="cueAlreadyPlayed">True if the caller already played the line's sound.</param>
+    private void StepLog(bool cueAlreadyPlayed = false)
     {
         if (_log.Count > 0)
         {
             _logLine = _log.Dequeue();
+            if (!cueAlreadyPlayed) TableCues.Play(_audio, _logLine);
             return;
         }
 
         _logLine = null;
 
-        // Out of lives on either side means no next round.
+        // Out of lives on either side means no next round. Update puts the results up.
         if (RoundEngine.IsOver(_run))
         {
             _phase = RoundPhase.Over;
-            _returnButton.Reset();
             return;
         }
 
