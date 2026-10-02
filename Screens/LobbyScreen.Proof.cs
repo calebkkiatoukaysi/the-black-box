@@ -77,19 +77,7 @@ public partial class LobbyScreen
                 PressWhileTalking();
                 return null;
 
-            // The one who watches, and the other conscript, a page each so the dialogue box is seen with both kinds of picture.
-            case Settled + 110:
-                _player.Position = _map.SecondSpot + new Vector2(-60f, 110f);
-                _proofPresses++;
-                return null;
-
-            case Settled + 160:
-                return "lobby-watched.png";
-
-            case >= Settled + 162 and <= Settled + 170:
-                PressWhileTalking();
-                return null;
-
+            // The other conscript, whose picture is a crop of their own walking sheet.
             case Settled + 172:
                 _player.Position = _map.ConscriptSpot + new Vector2(0f, 110f);
                 _proofPresses++;

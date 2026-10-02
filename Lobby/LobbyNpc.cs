@@ -10,16 +10,12 @@ namespace TheBlackBox.Lobby;
 /// pass the time.
 /// </summary>
 /// <remarks>
-/// They do not walk. They stand, look about now and then, and turn to face the player when spoken
-/// to. One of them watches the player across the room the whole time, which is the point of her.
+/// They do not walk. They stand, look about now and then, and turn to face the player when spoken to.
 /// </remarks>
 public class LobbyNpc
 {
     /// <summary>How close the player has to be to talk to them, in world pixels.</summary>
     public const float TalkReach = 150f;
-
-    /// <summary>How close the player has to be before somebody who watches turns to follow them.</summary>
-    private const float WatchReach = 520f;
 
     /// <summary>How long somebody looks one way before looking another, give or take.</summary>
     private const float GlanceSeconds = 3.2f;
@@ -41,9 +37,6 @@ public class LobbyNpc
 
     /// <summary>The figure.</summary>
     public WalkerSprite Walker { get; }
-
-    /// <summary>Whether they turn to follow the player around the room.</summary>
-    public bool Watches { get; init; }
 
     /// <summary>The floor they stand on, which the player cannot walk through.</summary>
     public BoundingRectangle Footprint => new(
@@ -69,23 +62,15 @@ public class LobbyNpc
         _glanceClock = (float)_random.NextDouble() * GlanceSeconds;
     }
 
-    /// <summary>Glances about, or watches the player if this one watches.</summary>
+    /// <summary>Glances about now and then.</summary>
     /// <param name="gameTime">The frame's timing.</param>
-    /// <param name="player">Where the player's feet are.</param>
-    public void Update(GameTime gameTime, Vector2 player)
+    public void Update(GameTime gameTime)
     {
-        if (Watches && Vector2.Distance(player, Walker.Position) < WatchReach)
+        _glanceClock -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+        if (_glanceClock <= 0f)
         {
-            Walker.Face(player);
-        }
-        else
-        {
-            _glanceClock -= (float)gameTime.ElapsedGameTime.TotalSeconds;
-            if (_glanceClock <= 0f)
-            {
-                _glanceClock = GlanceSeconds * (0.6f + (float)_random.NextDouble() * 0.8f);
-                Walker.Facing = Glances[_random.Next(Glances.Length)];
-            }
+            _glanceClock = GlanceSeconds * (0.6f + (float)_random.NextDouble() * 0.8f);
+            Walker.Facing = Glances[_random.Next(Glances.Length)];
         }
 
         Walker.Update(gameTime);

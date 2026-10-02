@@ -22,9 +22,13 @@ public partial class TableScreen
     private const float HandScale = 6f;
 
     /// <summary>Where the fingertips wait before the hand is offered, and where they end up: inside the mouth.</summary>
-    /// <remarks>Both are on the line the arm is drawn along, so it slides out along its own length instead of drifting sideways.</remarks>
+    /// <remarks>
+    /// Both are on the line the arm is drawn along, so it slides out along its own length instead
+    /// of drifting sideways. The mouth end is low enough that the cut end of the forearm is still
+    /// under the bottom of the screen when the hand is all the way in.
+    /// </remarks>
     private static readonly Vector2 HandRest = new(1560f, 1120f);
-    private static readonly Vector2 HandMouth = new(540f, 470f);
+    private static readonly Vector2 HandMouth = new(540f, 505f);
 
     /// <summary>How long the hand takes to go in, and how long the box holds it before it pays, in seconds.</summary>
     /// <remarks>The hold before paying is the point. Dealing the instant the fingers cross the rim made it a vending machine.</remarks>

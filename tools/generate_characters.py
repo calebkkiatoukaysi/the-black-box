@@ -1,6 +1,6 @@
 """
-Walking sprites for The Black Box: the two people the player can be, and the two opponents
-as they stand around the lobby.
+Walking sprites for The Black Box: the two people the player can be, and Serenity as she
+stands around the lobby.
 
     python tools/generate_characters.py
 
@@ -12,7 +12,8 @@ scarf, a cap), so a sheet is 5 x 12 frames.
 The player's two sheets are painted in key colours: the first row of each ramp in
 character-palettes.png. The game swaps those keys for whichever ramps were picked on the
 customization screen, so hair, outfit and accent can be any of the presets without a sheet
-per combination. The opponents are painted in their own colours and never swapped.
+per combination. Serenity is not drawn here: she is cut from the character sheet I made of her
+(tools/source/serenity-sheet.png), in her own colours, and never swapped.
 
 Like generate_assets.py it only needs CPython. It borrows that script's PNG writer and shape
 functions.
@@ -23,7 +24,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from generate_assets import OUT, new_image, write_png, _sd_box, _sd_line, _sd_poly  # noqa: E402
+from generate_assets import OUT, ROOT, new_image, read_png, write_png, _sd_box, _sd_line, _sd_poly  # noqa: E402
 
 FRAME_W = 32
 FRAME_H = 48
@@ -80,18 +81,10 @@ ACCENT_PRESETS = (
 # Everything else is fixed per figure.
 SKIN_OLIVE = ((92, 70, 58), (142, 112, 92), (188, 154, 128), (218, 188, 160))
 SKIN_BROWN = ((58, 36, 28), (98, 64, 46), (138, 96, 68), (172, 128, 94))
-SKIN_GREY = ((108, 100, 104), (156, 148, 152), (194, 188, 192), (222, 218, 222))   # the opponents: pale, a little grey
 PANTS = ((22, 20, 26), (36, 34, 42), (52, 50, 60))
 SHOES = ((14, 12, 14), (28, 25, 26), (44, 40, 40))
 EYE = (14, 10, 12)
 LIP = (124, 74, 70)
-LIP_PALE = (120, 98, 104)
-OATMEAL = ((76, 64, 54), (114, 98, 82), (152, 134, 112), (186, 168, 142))           # Serenity's knit
-DARK_KNIT = ((20, 18, 24), (34, 31, 38), (50, 46, 56), (72, 68, 80))                # hers, recoloured dark
-STRAP = ((48, 32, 22), (78, 54, 36), (106, 76, 52))
-GOLD = ((112, 84, 40), (164, 126, 64), (210, 168, 92))
-SERENITY_HAIR = ((14, 11, 12), (26, 20, 20), (42, 33, 31), (62, 50, 46))            # black-brown, off her picture
-OPPONENT_HAIR = ((8, 8, 10), (17, 16, 20), (29, 28, 34), (46, 45, 54))              # black
 
 
 # --------------------------------------------------------------------------- #
@@ -246,34 +239,25 @@ def figure(spec, direction, column, accessory):
 
     if side:
         # ---- facing left; flipped for right at the end ----
-        if hair == "long":
-            parts.append(poly(shifted([(15.2, 8.0), (20.6, 8.4), (21.8, 20.0), (21.4, 30.6), (18.2, 31.4), (17.2, 21.0)], dy=b),
-                              "hair", bevel=2.0, texture="strands", name="hair-back"))
         # The far arm, behind the body, swinging the other way.
         hand_far = (16.4 + swing * 2.4, 30.8 + b)
-        parts.append(capsule(16.8, 21.6 + b, hand_far[0], hand_far[1] - 1.0, 3.0, "outfit" if outfit != "knit" else "knit",
+        parts.append(capsule(16.8, 21.6 + b, hand_far[0], hand_far[1] - 1.0, 3.0, "outfit",
                              bevel=1.5, tone=-0.3, name="far-arm"))
         parts.append(ellipse(hand_far[0], hand_far[1], 1.4, 1.5, "skin", bevel=1.0, tone=-0.3, name="hand"))
         legs_side(parts, step, leg_top + b if not coat else 36.0 + b, foot, 16.0)
         parts.append(box(12.6, 30.6 + b, 19.8, 34.0 + b, "pants", corner=1.2, bevel=1.6, name="hips"))
-        body_mat = "knit" if outfit in ("knit", "dark-knit") else "outfit"
         if coat:
             parts.append(poly(shifted([(12.0, 20.6), (19.6, 20.6), (20.6, 23.0), (20.8, 37.4), (11.6, 37.4), (11.4, 23.0)], dy=b),
-                              body_mat, bevel=2.4, name="torso"))
+                              "outfit", bevel=2.4, name="torso"))
         else:
-            if outfit in ("knit", "dark-knit"):
-                parts.append(box(13.0, 19.6 + b, 19.2, 22.4 + b, "skin", corner=1.0, bevel=1.4, name="shoulders"))
-            top = 21.4 if outfit in ("knit", "dark-knit") else 20.6
-            parts.append(poly(shifted([(12.4, top), (19.4, top), (20.2, 23.0), (19.8, 31.8), (12.6, 31.8), (11.8, 23.0)], dy=b),
-                              body_mat, bevel=2.4, texture="knit" if body_mat == "knit" else None, name="torso"))
+            parts.append(poly(shifted([(12.4, 20.6), (19.4, 20.6), (20.2, 23.0), (19.8, 31.8), (12.6, 31.8), (11.8, 23.0)], dy=b),
+                              "outfit", bevel=2.4, name="torso"))
         if outfit == "jacket":
             parts.append(ellipse(18.4, 21.2 + b, 2.4, 1.9, "outfit", bevel=1.4, tone=-0.1, contour=True, name="hood"))
             parts.append(box(11.9, 29.8 + b, 19.9, 30.9 + b, "accent", bevel=0.8, name="hem"))
         if outfit == "coat":
             parts.append(box(11.8, 29.6 + b, 20.4, 30.9 + b, "accent", bevel=0.8, name="belt"))
             parts.append(poly(shifted([(12.6, 19.0), (16.4, 19.2), (16.0, 22.0), (12.2, 21.6)], dy=b), "accent", bevel=1.0, name="collar"))
-        if outfit == "knit":
-            parts.append(capsule(13.0, 21.8 + b, 18.6, 31.0 + b, 1.3, "strap", bevel=0.8, name="strap"))
         parts.append(box(15.0, 16.6 + b, 17.6, 20.4 + b, "skin", bevel=1.2, tone=-0.25, name="neck"))
         if accessory == "scarf":
             parts.append(poly(shifted([(13.6, 18.0), (18.2, 18.0), (18.8, 20.8), (13.0, 21.4)], dy=b), "accent", bevel=1.4, contour=True, name="scarf"))
@@ -287,7 +271,7 @@ def figure(spec, direction, column, accessory):
                               "hair", bevel=1.6, texture="strands", contour=True, name="hair"))
             parts.append(poly(shifted([(11.6, 9.0), (14.8, 7.8), (14.8, 10.2), (13.0, 9.8), (12.0, 10.6)], dy=b),
                               "hair", bevel=1.2, texture="strands", name="hair"))
-        elif hair == "tied":
+        else:
             parts.append(clip(ellipse(16.8, 10.6 + b, 4.9, 4.8, "hair", bevel=2.0, texture="strands", contour=True, name="hair"), bottom=11.0 + b))
             parts.append(poly(shifted([(11.8, 8.6), (15.6, 7.8), (14.6, 10.0), (12.2, 10.4)], dy=b),
                               "hair", bevel=1.2, texture="strands", name="hair"))
@@ -295,16 +279,9 @@ def figure(spec, direction, column, accessory):
                               "hair", bevel=1.6, texture="strands", contour=True, name="hair"))
             parts.append(ellipse(20.6, 15.0 + b, 1.9, 1.9, "hair", bevel=1.4, contour=True, name="hair"))
             parts.append(capsule(20.8, 16.0 + b, 21.4, 22.6 + b, 2.2, "hair", bevel=1.1, texture="strands", contour=True, name="hair"))
-        else:
-            parts.append(clip(ellipse(16.6, 10.8 + b, 5.0, 4.9, "hair", bevel=2.0, texture="strands", contour=True, name="hair"), bottom=11.0 + b))
-            parts.append(poly(shifted([(15.4, 8.6), (21.0, 9.6), (21.2, 17.0), (19.0, 18.4), (17.2, 16.0), (17.6, 12.0)], dy=b),
-                              "hair", bevel=1.8, texture="strands", contour=True, name="hair"))
-            parts.append(poly(shifted([(11.4, 9.0), (15.0, 7.8), (14.4, 10.4), (12.0, 10.8)], dy=b),
-                              "hair", bevel=1.2, texture="strands", name="hair"))
         # The near arm, in front of everything else.
         hand = (15.6 - swing * 2.4, 30.8 + b)
-        parts.append(capsule(15.6, 21.6 + b, hand[0], hand[1] - 1.0, 3.1, "outfit" if outfit not in ("knit", "dark-knit") else "knit",
-                             bevel=1.5, contour=True, texture="knit" if outfit in ("knit", "dark-knit") else None, name="arm"))
+        parts.append(capsule(15.6, 21.6 + b, hand[0], hand[1] - 1.0, 3.1, "outfit", bevel=1.5, contour=True, name="arm"))
         parts.append(ellipse(hand[0], hand[1], 1.4, 1.6, "skin", bevel=1.0, name="hand"))
         if accessory == "cap":
             parts.append(clip(ellipse(16.0, 10.0 + b, 5.6, 4.9, "accent", bevel=2.0, contour=True, name="cap"), bottom=10.4 + b))
@@ -312,55 +289,28 @@ def figure(spec, direction, column, accessory):
         # Face: one eye, a mouth.
         details.append((12, 12 + b, "eye"))
         details.append((12, 16 + b, "lip"))
-        if spec.get("tired"):
-            details.append((12, 13 + b, ("skin", 1)))
-        if spec.get("earring"):
-            details.append((17, 16 + b, ("gold", 2)))
-        if outfit == "knit":
-            details.append((12, 23 + b, ("gold", 2)))
         if direction == "right":
             parts = [flip_part(p) for p in parts]
             details = [(FRAME_W - 1 - x, y, what) for x, y, what in details]
         return parts, details
 
     # ---- facing the viewer, or facing away ----
-    long_back = None
-    if hair == "long":
-        long_back = poly(shifted([(10.0, 9.0), (22.0, 9.0), (23.2, 30.4), (16.0, 32.2), (8.8, 30.4)], dy=b),
-                         "hair", bevel=2.6, texture="strands", name="hair-back")
-        if back:
-            long_back = poly(shifted([(10.4, 9.0), (21.6, 9.0), (21.4, 20.0), (20.6, 29.4), (16.0, 30.6), (11.4, 29.4), (10.6, 20.0)], dy=b),
-                             "hair", bevel=2.4, texture="strands", name="hair-back")
-        if front:
-            long_back.tone = -0.25
-            parts.append(long_back)
-
     # Arms swing toward or away from the viewer, which is mostly up and down the screen.
     def arm(x_shoulder, x_hand, swing_dir, outer):
         drop = swing_dir * 1.0
         hx, hy = x_hand - outer * 0.0, 31.4 + b + drop
-        mat = "knit" if outfit in ("knit", "dark-knit") else "outfit"
-        parts.append(capsule(x_shoulder, 21.8 + b, hx, hy - 1.0, 3.2, mat, bevel=1.5, contour=True,
-                             texture="knit" if mat == "knit" else None, name="arm"))
+        parts.append(capsule(x_shoulder, 21.8 + b, hx, hy - 1.0, 3.2, "outfit", bevel=1.5, contour=True, name="arm"))
         parts.append(ellipse(hx, hy, 1.5, 1.6, "skin", bevel=1.0, name="hand"))
 
     legs_front(parts, step, front, (leg_top if not coat else 36.0) + b, foot)
     parts.append(box(10.6, 30.6 + b, 21.4, 34.2 + b, "pants", corner=1.4, bevel=1.8, name="hips"))
 
-    body_mat = "knit" if outfit in ("knit", "dark-knit") else "outfit"
-    if outfit in ("knit", "dark-knit"):
-        # The knit sits off the shoulders, so the tops of them are bare.
-        parts.append(box(9.8, 19.6 + b, 22.2, 22.6 + b, "skin", corner=1.2, bevel=1.6, name="shoulders"))
-        neck_y = 21.3 if front else 20.6
-        parts.append(poly(shifted([(9.4, 21.6), (13.0, neck_y + 0.4), (16.0, neck_y + 1.4), (19.0, neck_y + 0.4), (22.6, 21.6),
-                                   (22.4, 24.0), (21.6, 31.8), (10.4, 31.8), (9.6, 24.0)], dy=b),
-                          body_mat, bevel=2.6, texture="knit", name="torso"))
-    elif coat:
+    if coat:
         parts.append(poly(shifted([(9.6, 20.6), (22.4, 20.6), (23.0, 22.4), (23.0, 37.6), (9.0, 37.6), (9.0, 22.4)], dy=b),
-                          body_mat, bevel=2.8, name="torso"))
+                          "outfit", bevel=2.8, name="torso"))
     else:
         parts.append(poly(shifted([(9.6, 20.6), (22.4, 20.6), (22.8, 22.2), (21.8, 31.8), (10.2, 31.8), (9.2, 22.2)], dy=b),
-                          body_mat, bevel=2.8, name="torso"))
+                          "outfit", bevel=2.8, name="torso"))
 
     if outfit == "jacket":
         if front:
@@ -374,10 +324,6 @@ def figure(spec, direction, column, accessory):
                               "accent", bevel=1.2, contour=True, name="collar"))
         else:
             parts.append(box(12.4, 18.8 + b, 19.6, 21.4 + b, "accent", corner=1.0, bevel=1.2, contour=True, name="collar"))
-    if outfit == "knit" and front:
-        parts.append(capsule(11.6, 22.2 + b, 20.8, 31.0 + b, 1.3, "strap", bevel=0.8, name="strap"))
-    if outfit == "knit" and back:
-        parts.append(capsule(20.4, 22.2 + b, 11.2, 31.0 + b, 1.3, "strap", bevel=0.8, name="strap"))
 
     parts.append(box(14.6, 16.6 + b, 17.4, 20.6 + b, "skin", bevel=1.2, tone=-0.3, name="neck"))
 
@@ -402,13 +348,10 @@ def figure(spec, direction, column, accessory):
             parts.append(poly(shifted([(10.8, 9.0), (21.2, 9.0), (21.4, 14.0), (20.0, 16.6), (18.0, 16.0), (16.0, 17.0),
                                        (14.0, 16.0), (12.0, 16.6), (10.6, 14.0)], dy=b), "hair", bevel=2.4, texture="strands", name="hair"))
             parts.append(clip(ellipse(16.0, 11.4 + b, 5.4, 5.2, "hair", bevel=2.4, texture="strands", name="hair"), bottom=12.0 + b))
-        elif hair == "tied":
+        else:
             parts.append(ellipse(16.0, 11.8 + b, 5.3, 5.6, "hair", bevel=2.6, texture="strands", name="hair"))
             parts.append(ellipse(16.0, 17.2 + b, 2.3, 2.1, "hair", bevel=1.6, contour=True, name="hair"))
             parts.append(capsule(16.0, 18.4 + b, 16.0, 23.6 + b, 2.4, "hair", bevel=1.2, texture="strands", contour=True, name="hair"))
-        else:
-            parts.append(ellipse(16.0, 12.0 + b, 5.6, 5.8, "hair", bevel=2.6, texture="strands", name="hair"))
-            parts.append(long_back)
     else:
         if hair == "short":
             parts.append(clip(ellipse(16.0, 10.6 + b, 5.5, 4.7, "hair", bevel=2.2, texture="strands", contour=True, name="hair"), bottom=11.4 + b))
@@ -417,7 +360,7 @@ def figure(spec, direction, column, accessory):
                               "hair", bevel=1.4, texture="strands", contour=True, name="hair"))
             parts.append(box(10.6, 10.2 + b, 11.7, 13.6 + b, "hair", bevel=0.8, name="hair"))
             parts.append(box(20.3, 10.2 + b, 21.4, 13.6 + b, "hair", bevel=0.8, name="hair"))
-        elif hair == "tied":
+        else:
             parts.append(clip(ellipse(16.0, 10.4 + b, 5.6, 4.6, "hair", bevel=2.2, texture="strands", contour=True, name="hair"), bottom=11.0 + b))
             # Swept to one side, and down to the jaw either side of the face.
             parts.append(poly(shifted([(10.6, 8.6), (16.8, 8.6), (15.2, 10.4), (12.4, 11.8), (11.0, 12.6)], dy=b),
@@ -426,19 +369,6 @@ def figure(spec, direction, column, accessory):
                               "hair", bevel=1.2, texture="strands", contour=True, name="hair"))
             parts.append(poly(mirrored(shifted([(10.4, 9.6), (12.4, 10.6), (12.2, 15.6), (11.6, 17.6), (10.4, 16.8)], dy=b)),
                               "hair", bevel=1.2, texture="strands", contour=True, name="hair"))
-        else:
-            parts.append(clip(ellipse(16.0, 10.4 + b, 5.6, 4.6, "hair", bevel=2.2, texture="strands", contour=True, name="hair"), bottom=10.9 + b))
-            # Parted in the middle and falling straight, in front of the shoulders.
-            curtain = [(10.2, 8.8), (13.0, 9.4), (12.8, 19.4), (12.6, 27.6), (11.0, 30.0), (9.6, 27.4), (9.8, 17.0)]
-            ear_side = shifted(curtain, dy=b)
-            if spec.get("earring"):
-                # Tucked behind the ear on one side, so the hoop shows.
-                ear_side = shifted([(10.0, 15.4), (12.2, 16.6), (12.4, 27.4), (11.0, 29.8), (9.6, 27.2)], dy=b)
-                parts.append(ellipse(10.9, 13.6 + b, 0.9, 1.3, "skin", bevel=0.8, tone=-0.1, name="ear"))
-                parts.append(poly(shifted([(10.4, 8.8), (12.8, 9.4), (11.6, 12.2), (10.4, 12.6)], dy=b),
-                                  "hair", bevel=1.0, texture="strands", name="hair"))
-            parts.append(poly(ear_side, "hair", bevel=1.6, texture="strands", contour=True, name="hair"))
-            parts.append(poly(mirrored(shifted(curtain, dy=b)), "hair", bevel=1.6, texture="strands", contour=True, name="hair"))
 
     if accessory == "cap":
         parts.append(clip(ellipse(16.0, 9.6 + b, 5.9, 4.8, "accent", bevel=2.2, contour=True, name="cap"), bottom=10.2 + b))
@@ -451,16 +381,6 @@ def figure(spec, direction, column, accessory):
         details.append((15, 14 + b, ("skin", 1)))
         details.append((15, 16 + b, "lip"))
         details.append((16, 16 + b, "lip"))
-        if spec.get("tired"):
-            details.append((13, 14 + b, ("skin", 1)))
-            details.append((18, 14 + b, ("skin", 1)))
-        if spec.get("earring"):
-            details.append((10, 16 + b, ("gold", 2)))
-            details.append((10, 17 + b, ("gold", 1)))
-        if outfit in ("knit", "dark-knit"):
-            details.append((16, 23 + b, ("gold", 2)))
-            details.append((15, 22 + b, ("gold", 0)))
-            details.append((17, 22 + b, ("gold", 0)))
         if outfit == "coat":
             details.append((16, 25 + b, ("accent", 2)))
             details.append((16, 28 + b, ("accent", 2)))
@@ -537,8 +457,6 @@ def render_frame(parts, details, ramps):
                     k -= 1
                 elif (px * 3 + py // 6) % 7 == 0:
                     k += 1
-            elif p.texture == "knit" and k > 0 and py % 2 == 0 and (px + py // 2) % 2 == 0:
-                k -= 1
             elif p.texture == "rib" and k > 0 and px % 2 == 0:
                 k -= 1
             if p.contour and d < 0.8:
@@ -572,7 +490,7 @@ def render_frame(parts, details, ramps):
             # Only on the face itself, never painted over hair hanging in front of it.
             if owner_name != "head":
                 continue
-            c = EYE if what == "eye" else ramps.get("lip", LIP)
+            c = EYE if what == "eye" else LIP
         else:
             mat, k = what
             if mat == "skin" and owner_name != "head":
@@ -611,14 +529,141 @@ FIGURES = (
      dict(skin=SKIN_OLIVE, pants=PANTS, shoes=SHOES, **KEYS), ACCESSORIES),
     ("conscript-second", dict(hair="tied", outfit="coat"),
      dict(skin=SKIN_BROWN, pants=PANTS, shoes=SHOES, **KEYS), ACCESSORIES),
-    # The two opponents, as they stand around the lobby. Their own colours, off their pictures.
-    ("serenity-walker", dict(hair="long", outfit="knit", tired=True),
-     dict(skin=SKIN_GREY, hair=SERENITY_HAIR, knit=OATMEAL, strap=STRAP, gold=GOLD, pants=PANTS, shoes=SHOES,
-          outfit=OATMEAL, accent=ACCENT_PRESETS[2][1], lip=LIP_PALE), ("none",)),
-    ("opponent-walker", dict(hair="long", outfit="dark-knit", earring=True),
-     dict(skin=SKIN_GREY, hair=OPPONENT_HAIR, knit=DARK_KNIT, gold=GOLD, pants=PANTS, shoes=SHOES,
-          outfit=DARK_KNIT, accent=ACCENT_PRESETS[2][1], lip=LIP_PALE), ("none",)),
 )
+
+
+# --------------------------------------------------------------------------- #
+# serenity-walker.png -- Serenity in the lobby, cut from her character sheet
+#
+# tools/source/serenity-sheet.png is the sheet I made of her: idle, walk, run, interact and
+# hurt rows, every figure on the same flat dark backdrop. The lobby wants her standing and her
+# four walking frames each way, so those are cut out, keyed off the backdrop, and sampled down
+# into the same 32x48 frames as the conscripts, feet on the same row. The sheet only has her
+# walking to the right, so walking left is those frames mirrored.
+# --------------------------------------------------------------------------- #
+
+SERENITY_SOURCE = os.path.join(ROOT, "tools", "source", "serenity-sheet.png")
+
+#: Sheet pixels per art pixel. Her figures are about 130 sheet pixels tall, which comes out the
+#: same height as the conscripts.
+SERENITY_PITCH = 3.1
+
+#: The two rows of the sheet the frames come from (top and bottom, in sheet pixels), and where
+#: the figures start: the portrait and the row labels are left of it.
+SERENITY_IDLE_ROW = (40, 200)
+SERENITY_WALK_ROW = (220, 375)
+SERENITY_FIGURES_LEFT = 400
+
+#: Which figure along each row goes where. The idle row is front, right, back, right. The walk
+#: row is four front, three to the side (one short, so not used), four back, four right.
+SERENITY_IDLE = dict(down=0, right=1, up=2)
+SERENITY_WALK = dict(down=(0, 1, 2, 3), right=(11, 12, 13, 14), up=(7, 8, 9, 10))
+
+#: The backdrop is a flat, neutral dark grey. Anything warmer, brighter or darker is her.
+SERENITY_BG_LO, SERENITY_BG_HI, SERENITY_BG_TINT = 13, 21, 2
+
+#: Narrower than this many sheet pixels is a speck on the backdrop, not a figure.
+SERENITY_MIN_WIDTH = 8
+
+#: How much of a cell has to be her for the cell to be, and how far down a figure counts as
+#: its body when finding its middle (below that, the stride swings the legs about).
+SERENITY_KEEP = 0.5
+SERENITY_BODY = 0.55
+
+
+def _is_backdrop(px):
+    r, g, b = px[0], px[1], px[2]
+    return (SERENITY_BG_LO <= r <= SERENITY_BG_HI and SERENITY_BG_LO <= g <= SERENITY_BG_HI
+            and SERENITY_BG_LO <= b <= SERENITY_BG_HI and max(r, g, b) - min(r, g, b) <= SERENITY_BG_TINT)
+
+
+def _figures_in_row(pic, row):
+    """The left and right edge of every figure along one row of the sheet, left to right."""
+    y0, y1 = row
+    w = len(pic[0])
+    filled = [any(not _is_backdrop(pic[y][x]) for y in range(y0, y1)) for x in range(SERENITY_FIGURES_LEFT, w)]
+    spans, x = [], 0
+    while x < len(filled):
+        if filled[x]:
+            start = x
+            while x < len(filled) and filled[x]:
+                x += 1
+            if x - start >= SERENITY_MIN_WIDTH:
+                spans.append((SERENITY_FIGURES_LEFT + start, SERENITY_FIGURES_LEFT + x - 1))
+        x += 1
+    return spans
+
+
+def _her(pic, span, row):
+    """Which sheet pixels in a figure's box are her: everything the backdrop cannot reach from the edge of the box."""
+    (x0, x1), (y0, y1) = span, row
+    x0, x1 = x0 - 2, x1 + 2
+    w, h = x1 - x0 + 1, y1 - y0
+    outside = [[False] * w for _ in range(h)]
+    stack = [(x, y) for x in range(w) for y in (0, h - 1)] + [(x, y) for y in range(h) for x in (0, w - 1)]
+    while stack:
+        x, y = stack.pop()
+        if outside[y][x] or not _is_backdrop(pic[y0 + y][x0 + x]):
+            continue
+        outside[y][x] = True
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < w and 0 <= ny < h and not outside[ny][nx]:
+                stack.append((nx, ny))
+    return {(x0 + x, y0 + y) for y in range(h) for x in range(w) if not outside[y][x]}
+
+
+def _cut_figure(pic, span, row, ground):
+    """One figure as a FRAME_W x FRAME_H frame: its body centred, and the row's ground on the feet row."""
+    her = _her(pic, span, row)
+    top = min(y for _, y in her)
+    body = [x for x, y in her if y <= top + (ground - top) * SERENITY_BODY]
+    centre = sum(body) / len(body)
+
+    P = SERENITY_PITCH
+    left = centre - (FRAME_W / 2.0) * P
+    # The feet go on the row the conscripts' feet are on: the last row of the frame but one.
+    above = ground + 1 - (FRAME_H - 1) * P
+
+    frame = new_image(FRAME_W, FRAME_H)
+    for j in range(FRAME_H):
+        for i in range(FRAME_W):
+            cx0, cy0 = left + i * P, above + j * P
+            total, mine = 0, []
+            for y in range(int(math.floor(cy0)), int(math.ceil(cy0 + P))):
+                for x in range(int(math.floor(cx0)), int(math.ceil(cx0 + P))):
+                    total += 1
+                    if (x, y) in her:
+                        mine.append(pic[y][x])
+            if total and len(mine) / total >= SERENITY_KEEP:
+                mine.sort(key=lambda p: p[0] + p[1] + p[2])
+                mid = mine[len(mine) // 2]
+                frame[j][i] = [mid[0], mid[1], mid[2], 255]
+    return frame
+
+
+def build_serenity_walker():
+    pic = read_png(SERENITY_SOURCE)
+    idle = _figures_in_row(pic, SERENITY_IDLE_ROW)
+    walk = _figures_in_row(pic, SERENITY_WALK_ROW)
+    assert len(idle) >= 3 and len(walk) == 15, ("the sheet's rows have moved", len(idle), len(walk))
+
+    def ground(row, spans):
+        return max(y for s in spans for _, y in _her(pic, s, row))
+
+    idle_ground, walk_ground = ground(SERENITY_IDLE_ROW, idle), ground(SERENITY_WALK_ROW, walk)
+
+    frames = {}
+    for direction in ("down", "right", "up"):
+        frames[direction] = [_cut_figure(pic, idle[SERENITY_IDLE[direction]], SERENITY_IDLE_ROW, idle_ground)]
+        frames[direction] += [_cut_figure(pic, walk[k], SERENITY_WALK_ROW, walk_ground) for k in SERENITY_WALK[direction]]
+    frames["left"] = [[row[::-1] for row in frame] for frame in frames["right"]]
+
+    sheet = new_image(FRAME_W * COLUMNS, FRAME_H * len(DIRECTIONS))
+    for d, direction in enumerate(DIRECTIONS):
+        for c, frame in enumerate(frames[direction]):
+            for y in range(FRAME_H):
+                sheet[d * FRAME_H + y][c * FRAME_W:(c + 1) * FRAME_W] = [list(px) for px in frame[y]]
+    write_png(os.path.join(OUT, "serenity-walker.png"), sheet)
 
 
 def build_palettes():
@@ -641,9 +686,9 @@ def check_keys_are_unique():
         for c in ramp:
             assert c not in keys, ("key colour used twice", c)
             keys[c] = channel
-    for name, _, ramps, _ in FIGURES[:2]:
+    for name, _, ramps, _ in FIGURES:
         for mat, ramp in ramps.items():
-            if mat in KEYS or mat == "lip":
+            if mat in KEYS:
                 continue
             for c in ramp:
                 assert c not in keys, (name, mat, "paints a key colour", c)
@@ -664,4 +709,6 @@ if __name__ == "__main__":
         if only and name not in only:
             continue
         write_png(os.path.join(OUT, name + ".png"), build_sheet(spec, ramps, accessories))
+    if not only or "serenity-walker" in only:
+        build_serenity_walker()
     print("Done.")

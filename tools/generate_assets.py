@@ -6,8 +6,8 @@ Every PNG in Content/ comes out of this script. Run it from the repo root:
     python tools/generate_assets.py
 
 It only needs CPython: the PNG encoder and decoder are in here. Everything is drawn
-from scratch except the two opponents, which are cut from the two pictures in
-tools/source/ (opponent-portrait.png and opponent-second-portrait.png).
+from scratch except Serenity and the player's hand, which are cut from pictures in
+tools/source/ (opponent-second-portrait.png and hand.png).
 """
 
 import math
@@ -21,7 +21,7 @@ OUT = os.path.join(ROOT, "Content")
 
 
 # --------------------------------------------------------------------------- #
-# Minimal RGBA PNG encoder
+# Minimal RGBA PNG encoder and decoder
 # --------------------------------------------------------------------------- #
 
 def new_image(w, h, fill=(0, 0, 0, 0)):
@@ -79,6 +79,66 @@ def write_png(path, img):
     with open(path, "wb") as f:
         f.write(blob)
     print("  Content/" + os.path.basename(path) + "  (" + str(w) + "x" + str(h) + ")")
+
+
+def read_png(path):
+    """Decodes an 8-bit non-interlaced PNG into rows of [r, g, b, a]. The mirror of write_png."""
+    data = open(path, "rb").read()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n", path
+    pos, idat, plte, trns = 8, b"", None, None
+    while pos < len(data):
+        ln, = struct.unpack(">I", data[pos:pos + 4])
+        tag, body = data[pos + 4:pos + 8], data[pos + 8:pos + 8 + ln]
+        pos += 12 + ln
+        if tag == b"IHDR":
+            w, h, depth, ctype, _, _, interlace = struct.unpack(">IIBBBBB", body)
+        elif tag == b"IDAT":
+            idat += body
+        elif tag == b"PLTE":
+            plte = body
+        elif tag == b"tRNS":
+            trns = body
+        elif tag == b"IEND":
+            break
+    assert depth == 8 and interlace == 0, path
+    ch = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[ctype]
+    raw = zlib.decompress(idat)
+    stride = w * ch
+    out, prev, p = [], bytearray(stride), 0
+    for _ in range(h):
+        f, line = raw[p], bytearray(raw[p + 1:p + 1 + stride])
+        p += 1 + stride
+        for i in range(stride):
+            a = line[i - ch] if i >= ch else 0
+            b = prev[i]
+            c = prev[i - ch] if i >= ch else 0
+            if f == 1:
+                line[i] = (line[i] + a) & 255
+            elif f == 2:
+                line[i] = (line[i] + b) & 255
+            elif f == 3:
+                line[i] = (line[i] + ((a + b) >> 1)) & 255
+            elif f == 4:
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else (b if pb <= pc else c))) & 255
+        row = []
+        for x in range(w):
+            px = line[x * ch:(x + 1) * ch]
+            if ctype == 6:
+                row.append(list(px))
+            elif ctype == 2:
+                row.append([px[0], px[1], px[2], 255])
+            elif ctype == 0:
+                row.append([px[0], px[0], px[0], 255])
+            elif ctype == 4:
+                row.append([px[0], px[0], px[0], px[1]])
+            else:
+                i = px[0]
+                row.append([plte[i * 3], plte[i * 3 + 1], plte[i * 3 + 2],
+                            trns[i] if trns and i < len(trns) else 255])
+        out.append(row)
+        prev = line
+    return out
 
 
 def lerp_color(a, b, t):
@@ -1018,549 +1078,6 @@ def build_room(seed=5150):
 
 
 # --------------------------------------------------------------------------- #
-# opponent-sheet.png -- the chapter-two opponent: 5 poses across, one row, 107x100 a frame
-#
-# Columns: hostile, even, open, reach, hurt. Every opponent's sheet has these five columns
-# in this order; OpponentSprite cuts them at the size and scale Opponents.cs says. There is
-# no talking column: a line landing does not move her, the idle is the talking.
-# She is not drawn here. The portrait off her character sheet (tools/source/
-# opponent-portrait.png) is keyed and box-sampled at 4 image px per art px, and each
-# pose is a few pixels moved. I drew her twice before this and both were a likeness,
-# not her, so the sheet is the sprite. Five recolour edits make her the reference
-# (Nikki from Obsession): black hair, pale skin, East Asian eyes, dark top, ear + hoop.
-# --------------------------------------------------------------------------- #
-
-OPP_OW, OPP_OH = 107, 100
-
-OPP_POSES = ("hostile", "even", "open", "reach", "hurt")
-
-OPP_SOURCE = os.path.join(ROOT, "tools", "source", "opponent-portrait.png")
-
-#: Source image pixels per art pixel.
-OPP_PITCH = 4
-
-#: The sheet's background, keyed out, and how far off it a pixel can be and still be it.
-OPP_BG = (17, 17, 18)
-OPP_BG_TOL = 7
-
-#: Where the portrait sits in the frame. Its bottom row is the table lip.
-OPP_OX, OPP_OY = 11, 8
-
-# Landmarks in art pixels. The eyes are not quite level on the sheet, so each has its own rows.
-OPP_EYE_L = (27, 35, 29, 33)    # x0, x1, the lash-line row on the sheet, the lower-lid row
-OPP_EYE_R = (43, 51, 30, 33)
-#: Rows opp_edit_eye_shape moves the lash line. Zero now; see there.
-OPP_LID_DROP = 0
-OPP_MOUTH_Y = 46                # the line between the lips
-OPP_MOUTH_X0, OPP_MOUTH_X1 = 33, 42
-OPP_FACE_C = (38.0, 40.0)       # the middle of the face, for the paling and the bruise
-OPP_NECK = (32, 46, 55, 70)     # x0, x1, y0, y1
-
-#: The base of the neck the head bends about, and the rows the bend runs over.
-OPP_PIVOT = (39.0, 66.0)
-OPP_BEND_TOP, OPP_BEND_BOTTOM = 56, 72
-
-#: First row of the knit's band, and the dark ramp it is recoloured to.
-OPP_TEE_TOP = 79
-OPP_TEE_D = (14, 12, 18, 255)
-OPP_TEE_L = (78, 74, 92, 255)
-
-#: The near ear: centre and half-size.
-OPP_EAR = (23.5, 35.5, 2.0, 4.0)
-OPP_GOLD = (204, 160, 84, 255)
-OPP_GOLD_D = (112, 84, 40, 255)
-
-OPP_MOUTH_DARK = (28, 8, 10, 255)
-OPP_TEETH      = (218, 202, 190, 255)
-OPP_LASH       = (14, 7, 8, 255)
-
-# Per pose: head tilt in degrees (negative is toward the near side), lean toward the
-# box, drop, and what the eyes and mouth are doing.
-OPP_POSE = {
-    # Hostile is the wrong smile: head over, eyes too open, grin too wide. Not angry, that is the point.
-    "hostile": dict(tilt=-9.0, lean=0, drop=0, eyes="wide", mouth="grin"),
-    # Idle leans toward the box a little, like someone who has been sitting a while.
-    "even":    dict(tilt=4.0, lean=1, drop=1, eyes="rest", mouth="rest"),
-    "open":    dict(tilt=7.0, lean=1, drop=0, eyes="rest", mouth="smile"),
-    # Reaching: leant toward the box, eyes down on what the hand is doing.
-    "reach":   dict(tilt=5.0, lean=4, drop=3, eyes="down", mouth="rest"),
-    # Hurt: head down and away, eyes shut, mouth open.
-    "hurt":    dict(tilt=-7.0, lean=-2, drop=4, eyes="shut", mouth="cry"),
-}
-
-#: All the landmarks in one table so the pose edits can take any face. Portrait pixels, except origin.
-OPP_FACE = dict(
-    origin=(OPP_OX, OPP_OY),
-    eye_l=OPP_EYE_L, eye_r=OPP_EYE_R, lid_drop=OPP_LID_DROP,
-    mouth=(OPP_MOUTH_X0, OPP_MOUTH_X1, OPP_MOUTH_Y), teeth=OPP_TEETH,
-    centre=OPP_FACE_C, neck=OPP_NECK,
-    pivot=OPP_PIVOT, bend=(OPP_BEND_TOP, OPP_BEND_BOTTOM),
-)
-
-
-def read_png(path):
-    """Decodes an 8-bit non-interlaced PNG into rows of [r, g, b, a]. The mirror of write_png."""
-    data = open(path, "rb").read()
-    assert data[:8] == b"\x89PNG\r\n\x1a\n", path
-    pos, idat, plte, trns = 8, b"", None, None
-    while pos < len(data):
-        ln, = struct.unpack(">I", data[pos:pos + 4])
-        tag, body = data[pos + 4:pos + 8], data[pos + 8:pos + 8 + ln]
-        pos += 12 + ln
-        if tag == b"IHDR":
-            w, h, depth, ctype, _, _, interlace = struct.unpack(">IIBBBBB", body)
-        elif tag == b"IDAT":
-            idat += body
-        elif tag == b"PLTE":
-            plte = body
-        elif tag == b"tRNS":
-            trns = body
-        elif tag == b"IEND":
-            break
-    assert depth == 8 and interlace == 0, path
-    ch = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[ctype]
-    raw = zlib.decompress(idat)
-    stride = w * ch
-    out, prev, p = [], bytearray(stride), 0
-    for _ in range(h):
-        f, line = raw[p], bytearray(raw[p + 1:p + 1 + stride])
-        p += 1 + stride
-        for i in range(stride):
-            a = line[i - ch] if i >= ch else 0
-            b = prev[i]
-            c = prev[i - ch] if i >= ch else 0
-            if f == 1:
-                line[i] = (line[i] + a) & 255
-            elif f == 2:
-                line[i] = (line[i] + b) & 255
-            elif f == 3:
-                line[i] = (line[i] + ((a + b) >> 1)) & 255
-            elif f == 4:
-                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
-                line[i] = (line[i] + (a if pa <= pb and pa <= pc else (b if pb <= pc else c))) & 255
-        row = []
-        for x in range(w):
-            px = line[x * ch:(x + 1) * ch]
-            if ctype == 6:
-                row.append(list(px))
-            elif ctype == 2:
-                row.append([px[0], px[1], px[2], 255])
-            elif ctype == 0:
-                row.append([px[0], px[0], px[0], 255])
-            elif ctype == 4:
-                row.append([px[0], px[0], px[0], px[1]])
-            else:
-                i = px[0]
-                row.append([plte[i * 3], plte[i * 3 + 1], plte[i * 3 + 2],
-                            trns[i] if trns and i < len(trns) else 255])
-        out.append(row)
-        prev = line
-    return out
-
-
-def opp_load_portrait():
-    """
-    The portrait off the sheet, keyed and sampled down to art pixels. The background is
-    flood-filled in from the border rather than keyed by colour alone, because the darkest
-    hair is nearly the same grey. Coverage becomes alpha, so her edge keeps the sheet's rim.
-    """
-    src = read_png(OPP_SOURCE)
-    H, W = len(src), len(src[0])
-    bg = [[False] * W for _ in range(H)]
-    stack = [(x, y) for x in range(W) for y in (0, H - 1)] + [(x, y) for y in range(H) for x in (0, W - 1)]
-    while stack:
-        x, y = stack.pop()
-        if x < 0 or y < 0 or x >= W or y >= H or bg[y][x]:
-            continue
-        px = src[y][x]
-        if max(abs(px[0] - OPP_BG[0]), abs(px[1] - OPP_BG[1]), abs(px[2] - OPP_BG[2])) > OPP_BG_TOL:
-            continue
-        bg[y][x] = True
-        stack.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
-
-    P = OPP_PITCH
-    small = []
-    for by in range(H // P):
-        row = []
-        for bx in range(W // P):
-            acc, n = [0, 0, 0], 0
-            for y in range(by * P, by * P + P):
-                for x in range(bx * P, bx * P + P):
-                    if bg[y][x]:
-                        continue
-                    px = src[y][x]
-                    acc[0] += px[0]
-                    acc[1] += px[1]
-                    acc[2] += px[2]
-                    n += 1
-            if n == 0:
-                row.append([0, 0, 0, 0])
-            else:
-                row.append([acc[0] // n, acc[1] // n, acc[2] // n, 255 * n // (P * P)])
-        small.append(row)
-    return small
-
-
-# --------------------------------------------------------------------------- #
-# Pixel edits
-# --------------------------------------------------------------------------- #
-
-def _is_knit(px):
-    # Knit is skin with the colour taken out: more blue for the same red. Red-minus-green
-    # alone let the sunlit ribs through.
-    return px[3] > 0 and px[0] >= 110 and (px[2] / float(px[0]) >= 0.455 or px[0] - px[1] <= 60)
-
-
-def opp_edit_dress(img):
-    """
-    The knit made a dark top: knit pixels from the band down go onto a dark ramp by
-    brightness, so the ribs and folds survive. The shoulders stay bare.
-    """
-    for y in range(OPP_TEE_TOP, len(img)):
-        for x in range(len(img[0])):
-            px = img[y][x]
-            # From the band's second row down everything that is not hair is top; the
-            # sliver of chest read as a hole in the cloth. The first row is sorted by colour.
-            if px[3] == 0 or px[0] < 60:
-                continue
-            if y <= OPP_TEE_TOP + 1 and not _is_knit(px):
-                continue
-            lum = 0.3 * px[0] + 0.59 * px[1] + 0.11 * px[2]
-            c = lerp_color(OPP_TEE_D, OPP_TEE_L, (lum - 80.0) / 150.0)
-            img[y][x] = [c[0], c[1], c[2], px[3]]
-
-
-def opp_edit_eye_shape(img):
-    """
-    The eyes made East Asian: the crease above the lid painted over with the lid's own
-    skin (a monolid), and the outer corner lifted a pixel. I tried dropping the lid a row
-    too and at eight pixels of eye that looked asleep.
-    """
-    for side, (x0, x1, lash, lower) in (("L", OPP_EYE_L), ("R", OPP_EYE_R)):
-        outer = (x1 - 1, x1) if side == "R" else (x0, x0 + 1)
-        # The crease becomes lid, in the cheek's skin, a touch darker for the brow's shadow.
-        for x in range(x0, x1 + 1):
-            c = img[lower + 2][x]
-            img[lash - 1][x] = list(shade((c[0], c[1], c[2], 255), 0.86))
-        # The outer corner lifts a pixel.
-        for x in outer:
-            img[lash - 1][x] = list(img[lash][x])
-            c = img[lower + 2][x]
-            img[lash][x] = list(shade((c[0], c[1], c[2], 255), 0.90))
-
-
-def opp_edit_ear(img):
-    """
-    The near ear tucked out of the hair, with a hoop. An oval painted in the skin from
-    the cheek's edge on each row, with a hollow and a darker rim so it reads as an ear.
-    """
-    ex, ey, rx, ry = OPP_EAR
-    for y in range(int(ey - ry) - 1, int(ey + ry) + 2):
-        for x in range(int(ex - rx) - 1, int(ex + rx) + 2):
-            d = math.hypot((x - ex) / rx, (y - ey) / ry)
-            if d > 1.0:
-                continue
-            # The nearest skin on this row, a few pixels in from the edge of the cheek.
-            sx = int(ex + rx) + 2
-            while sx < len(img[0]) - 1 and not (img[y][sx][3] and img[y][sx][0] - img[y][sx][1] > 40):
-                sx += 1
-            skin = img[y][sx]
-            v = 0.95 - 0.30 * max(0.0, (y - ey) / ry)
-            hollow = math.hypot((x - ex - 0.5) / 1.2, (y - ey + 0.6) / 2.2)
-            if hollow < 1.0:
-                v *= 0.55 + 0.30 * hollow
-            if d > 0.78:
-                v *= 0.72
-            c = shade((skin[0], skin[1], skin[2], 255), v)
-            img[y][x] = [c[0], c[1], c[2], 255]
-    # Three wide and four tall with a two-pixel hole, so it is a ring and not a stud.
-    hx, hy = int(ex - 0.5), int(ey + ry) + 2
-    for dx, dy, c in ((0, -1, OPP_GOLD), (-1, 0, OPP_GOLD), (1, 0, OPP_GOLD),
-                      (-1, 1, OPP_GOLD_D), (1, 1, OPP_GOLD_D), (0, 2, OPP_GOLD_D)):
-        img[hy + dy][hx + dx] = list(c)
-
-
-def _copy_block(img, x0, y0, x1, y1):
-    return [[list(img[y][x]) for x in range(x0, x1 + 1)] for y in range(y0, y1 + 1)]
-
-
-def _paste_block(img, block, x0, y0):
-    for j, row in enumerate(block):
-        for i, px in enumerate(row):
-            if 0 <= y0 + j < len(img) and 0 <= x0 + i < len(img[0]):
-                img[y0 + j][x0 + i] = list(px)
-
-
-def _shift_block(img, x0, y0, x1, y1, dx, dy):
-    """Moves a block of pixels; what it leaves behind is the caller's to fill."""
-    _paste_block(img, _copy_block(img, x0, y0, x1, y1), x0 + dx, y0 + dy)
-
-
-def _blend(img, x, y, rgba, k):
-    if 0 <= y < len(img) and 0 <= x < len(img[0]) and k > 0:
-        img[y][x] = list(lerp_color(tuple(img[y][x]), rgba, min(1.0, k)))
-
-
-def opp_edit_eyes(img, mode, face):
-    """
-    What the eyes are doing, by moving rows. wide lifts brow and lash a row; down moves
-    the eye down under the lid; shut paints the lids over with cheek skin plus a lash line.
-    """
-    for side, (x0, x1, lash, lower) in (("L", face["eye_l"]), ("R", face["eye_r"])):
-        lash += face["lid_drop"]
-        if mode == "shut":
-            for y in range(lash, lower + 1):
-                for x in range(x0, x1 + 1):
-                    c = img[lower + 2][x]
-                    img[y][x] = list(shade(tuple(c), 0.92))
-            for x in range(x0 + 1, x1):
-                t = (x - (x0 + x1) / 2.0) / ((x1 - x0) / 2.0)
-                y = lash + 2 - int(round(1.2 * t * t))
-                _blend(img, x, y, OPP_LASH, 0.9)
-                _blend(img, x, y + 1, OPP_LASH, 0.3)
-            continue
-        if mode == "wide":
-            _shift_block(img, x0, lash - 4, x1, lash, 0, -1)
-            for x in range(x0, x1 + 1):
-                img[lash][x] = list(img[lash + 1][x])
-        elif mode == "down":
-            _shift_block(img, x0, lash, x1, lower, 0, 1)
-            for x in range(x0, x1 + 1):
-                img[lash][x] = list(img[lash - 1][x])
-
-
-def opp_edit_mouth(img, mode, face):
-    """
-    What the mouth is doing, on the ten columns of the lips. The corners are the outer
-    three columns each side; one row up or down is the whole difference.
-    """
-    if mode == "rest":
-        return
-    x0, x1, my = face["mouth"]
-    teeth = face["teeth"]
-    cx = (x0 + x1) / 2.0
-
-    def lift(x, rows):
-        # Slides one column of the mouth up (negative) or down by so many rows.
-        if rows < 0:
-            _shift_block(img, x, my - 2, x, my + 3, 0, rows)
-            for k in range(-rows):
-                img[my + 3 - k][x] = list(img[my + 4][x])
-        elif rows > 0:
-            _shift_block(img, x, my - 2, x, my + 3, 0, rows)
-            for k in range(rows):
-                img[my - 2 + k][x] = list(img[my - 3][x])
-
-    if mode == "smile":
-        for x in range(x0, x1 + 1):
-            if abs(x - cx) >= 2.5:
-                lift(x, -1)
-        _blend(img, x0 - 1, my - 1, tuple(img[my - 1][x0]), 0.6)
-        _blend(img, x1 + 1, my - 1, tuple(img[my - 1][x1]), 0.6)
-
-    elif mode == "grin":
-        # Corners up like the smile, the line run two columns past each corner, and a
-        # row of teeth pushed in between the lips.
-        for x in range(x0, x1 + 1):
-            if abs(x - cx) >= 2.5:
-                lift(x, -1)
-        for k in (1, 2):
-            _blend(img, x0 - k, my - 1, OPP_LASH, 0.6 - 0.2 * k)
-            _blend(img, x1 + k, my - 1, OPP_LASH, 0.6 - 0.2 * k)
-        _shift_block(img, x0, my + 1, x1, my + 3, 0, 1)
-        for x in range(x0 + 1, x1):
-            y = my + (0 if abs(x - cx) >= 2.5 else 1)
-            img[y][x] = list(teeth if x % 2 else shade(teeth, 0.84))
-            _blend(img, x, y + 1, OPP_MOUTH_DARK, 0.45)
-
-    elif mode == "cry":
-        for x in range(x0, x1 + 1):
-            if abs(x - cx) >= 2.5:
-                lift(x, 1)
-        _shift_block(img, x0 - 1, my + 2, x1 + 1, my + 4, 0, 2)
-        for x in range(x0 + 1, x1):
-            img[my + 2][x] = list(OPP_MOUTH_DARK)
-            img[my + 3][x] = list(OPP_MOUTH_DARK)
-            _blend(img, x, my + 1, OPP_MOUTH_DARK, 0.5)
-
-
-def opp_bend(img, tilt, lean, drop, face):
-    """
-    Bends the head about the base of the neck, and leans and drops it. Full amount above
-    the chin, none at the shoulders, blended down the neck. Sampled backwards so there are
-    no holes. Runs on the whole frame so the hair is not cut off at the portrait's edge.
-    """
-    if abs(tilt) < 0.01 and lean == 0 and drop == 0:
-        return img
-    h, w = len(img), len(img[0])
-    ox, oy = face["origin"]
-    px, py = face["pivot"][0] + ox, face["pivot"][1] + oy
-    top, bottom = face["bend"][0] + oy, face["bend"][1] + oy
-    out = new_image(w, h)
-    for Y in range(h):
-        wgt = 1.0 if Y <= top else max(0.0, (bottom - Y) / float(bottom - top))
-        if wgt <= 0.0:
-            out[Y] = [list(p) for p in img[Y]]
-            continue
-        a = math.radians(-tilt * wgt)
-        ca, sa = math.cos(a), math.sin(a)
-        for X in range(w):
-            dx, dy = X - lean * wgt - px, Y - drop * wgt - py
-            sx, sy = px + dx * ca - dy * sa, py + dx * sa + dy * ca
-            ix, iy = r(sx), r(sy)
-            if 0 <= ix < w and 0 <= iy < h:
-                out[Y][X] = list(img[iy][ix])
-    return out
-
-
-# --------------------------------------------------------------------------- #
-# Her colouring
-#
-# The sheet has brown hair and warm skin. Black hair and greyed skin are what carry the
-# resemblance, and both are recolours of what is there so every streak and bit of blush
-# survives. I tried a wolf cut and it gave her more hair than face, so the hair is the
-# sheet's own.
-# --------------------------------------------------------------------------- #
-
-# Black, with a cool grey where the lamp catches it: black hair does not shine brown.
-OPP_HAIR_RAMP = ((5, 4, 7), (14, 12, 16), (27, 24, 30), (48, 44, 52), (82, 76, 88), (140, 132, 146))
-
-#: How far the skin goes toward grey, and the grey. Half way keeps the blush and the jaw shadow.
-OPP_SKIN_GREY = 0.50
-OPP_SKIN_GREY_TONE = (214, 210, 216, 255)
-
-
-def _ramp(ramp, v):
-    """The colour v of the way along a ramp, 0 at the darkest stop and 1 at the lightest."""
-    v = max(0.0, min(1.0, v)) * (len(ramp) - 1)
-    i = min(len(ramp) - 2, int(v))
-    t = v - i
-    a, b = ramp[i], ramp[i + 1]
-    return (int(round(a[0] + (b[0] - a[0]) * t)),
-            int(round(a[1] + (b[1] - a[1]) * t)),
-            int(round(a[2] + (b[2] - a[2]) * t)), 255)
-
-
-def _body_top(x):
-    """The row the body starts at in this column: the neck, then the slope of the shoulder."""
-    dx = abs(x - OPP_FACE_C[0])
-    if dx <= 8:
-        return 55.0
-    if dx <= 19:
-        return 64.0 + (dx - 8) * 0.6
-    return 70.6 + (dx - 19) * 0.25
-
-
-def _in_face(x, y):
-    fx, fy = OPP_FACE_C
-    return ((x - fx) / 15.5) ** 2 + ((y - fy) / 20.0) ** 2 <= 1.0
-
-
-def _is_sheet_hair(px):
-    """Dark and warm: the sheet's hair, as against the cold dark of the top."""
-    return px[3] > 0 and max(px[0], px[1], px[2]) < 120 and px[0] > px[2] + 4
-
-
-def _is_hair_here(img, x, y):
-    """
-    Whether (x, y) is hair, by position as much as colour: above the body line anything
-    that is not face or neck; over the shoulders anything not bright enough to be lit skin.
-    """
-    px = img[y][x]
-    if px[3] == 0:
-        return False
-    fx = OPP_FACE_C[0]
-    dx = abs(x - fx)
-    if _in_face(x, y):
-        return _is_sheet_hair(px) and (y < 25 or dx > 12)
-    # Lit skin on the forehead and temples is skin whatever the geometry says; the first
-    # draft blackened a band across her brow.
-    if y >= 13 and dx <= 17 and px[0] >= 150 and px[0] - px[1] >= 55:
-        return False
-    if dx <= 8 and y >= 55:
-        return False
-    if y < _body_top(x):
-        return not (y > 24 and dx <= 16 and px[0] >= 100 and px[0] - px[1] > 45)
-    if y < OPP_TEE_TOP:
-        # The falls over the shoulders: dark, or lit but not as warm as skin.
-        return dx >= 9 and (px[0] < 110 or px[0] - px[1] < 58)
-    return _is_sheet_hair(px)
-
-
-def opp_edit_hair_black(img):
-    """The sheet's brown hair, black. Each pixel keeps its brightness and loses its colour."""
-    h, w = len(img), len(img[0])
-    for y in range(h):
-        for x in range(w):
-            if not _is_hair_here(img, x, y):
-                continue
-            px = img[y][x]
-            lum = (0.3 * px[0] + 0.59 * px[1] + 0.11 * px[2]) / 255.0
-            c = _ramp(OPP_HAIR_RAMP, 0.03 + 0.85 * lum)
-            # At the hairline only what is plainly hair goes all the way black, or she
-            # gets a hard band across her brow.
-            k = 1.0
-            if _in_face(x, y):
-                k = max(0.0, min(1.0, (85 - max(px[0], px[1], px[2])) / 35.0))
-            c = lerp_color((px[0], px[1], px[2], 255), c, k)
-            img[y][x] = [c[0], c[1], c[2], px[3]]
-
-
-def opp_edit_skin(img):
-    """
-    The skin, pale: everything warm enough to be skin is pulled halfway toward one cool
-    tone. The pull is the same everywhere, so the shading and the blush survive.
-    """
-    h, w = len(img), len(img[0])
-    for y in range(h):
-        for x in range(w):
-            px = img[y][x]
-            # Skin: warm, warmer than the hair (neutral by now) and the top (cold).
-            if px[3] == 0 or px[0] < 60 or px[0] - px[1] < 18 or px[0] < px[2] + 10:
-                continue
-            c = lerp_color((px[0], px[1], px[2], 255), OPP_SKIN_GREY_TONE, OPP_SKIN_GREY)
-            img[y][x] = [c[0], c[1], c[2], px[3]]
-
-
-def build_opponent_frame(img, ox, oy, portrait, pose_name, face):
-    p = OPP_POSE[pose_name]
-    fx, fy = face["origin"]
-    cell = [[list(px) for px in row] for row in portrait]
-    opp_edit_eyes(cell, p["eyes"], face)
-    opp_edit_mouth(cell, p["mouth"], face)
-    frame = new_image(OPP_OW, OPP_OH)
-    for y, row in enumerate(cell):
-        for x, px in enumerate(row):
-            frame[fy + y][fx + x] = list(px)
-    frame = opp_bend(frame, p["tilt"], p["lean"], p["drop"], face)
-    for y, row in enumerate(frame):
-        for x, px in enumerate(row):
-            if px[3]:
-                img[oy + y][ox + x] = list(px)
-
-
-def write_opponent_sheet(name, portrait, face):
-    """One opponent's sheet: the five poses of one finished portrait, side by side."""
-    fx, fy = face["origin"]
-    assert fx + len(portrait[0]) <= OPP_OW and fy + len(portrait) == OPP_OH, \
-        (name + ": the portrait no longer fits the frame", len(portrait[0]), len(portrait))
-    img = new_image(OPP_OW * len(OPP_POSES), OPP_OH)
-    for col, pose in enumerate(OPP_POSES):
-        build_opponent_frame(img, col * OPP_OW, 0, portrait, pose, face)
-    write_png(os.path.join(OUT, name), img)
-
-
-def build_opponent_sheet():
-    portrait = opp_load_portrait()
-    opp_edit_dress(portrait)
-    opp_edit_hair_black(portrait)
-    opp_edit_skin(portrait)
-    opp_edit_eye_shape(portrait)
-    opp_edit_ear(portrait)
-    write_opponent_sheet("opponent-sheet.png", portrait, OPP_FACE)
-
-
-# --------------------------------------------------------------------------- #
 # opponent-second-sheet.png -- the default opponent, off her picture, 140x120 a frame at 4x
 #
 # She is tools/source/opponent-second-portrait.png with the wall keyed out (it is cool,
@@ -1577,6 +1094,9 @@ def build_opponent_sheet():
 # --------------------------------------------------------------------------- #
 
 OPP2_SOURCE = os.path.join(ROOT, "tools", "source", "opponent-second-portrait.png")
+
+#: The five columns OpponentSprite expects. Serenity's are all the one still.
+OPP2_POSES = ("hostile", "even", "open", "reach", "hurt")
 
 #: The row of the picture that is the table's far edge. Her frame ends there.
 OPP2_LIP = 480
@@ -1832,8 +1352,8 @@ def opp2_sample(frame):
 
 def build_second_opponent_sheet():
     base = opp2_sample(opp2_make_pale(opp2_clean_face(opp2_load_portrait())))
-    img = new_image(OPP2_ART_W * len(OPP_POSES), OPP2_ART_H)
-    for col in range(len(OPP_POSES)):
+    img = new_image(OPP2_ART_W * len(OPP2_POSES), OPP2_ART_H)
+    for col in range(len(OPP2_POSES)):
         for y, row in enumerate(base):
             for x, px in enumerate(row):
                 if px[3]:
@@ -2433,414 +1953,127 @@ def build_hearts():
 
 
 # --------------------------------------------------------------------------- #
-# hand-sheet.png -- the player's own arm, 5 frames of 96x96, curled hand to open hand
+# hand-sheet.png -- the player's own arm, 5 frames, curled hand to open hand
 #
-# Seen from the side and a little above, modelled on a photo of a hand doing this:
-# forearm up from the bottom-right, wrist turned, fingers out to the left stacked one
-# above the next, thumb along the top. Frame 0 is curled like a hand resting on a
-# table, frame 4 is open. It is not drawn, it is modelled and lit: a height field (tubes
-# for the arm and fingers, bumps for knuckles, ridges for tendons, nails set in) shaded
-# by its angle to the lamp, then rendered at 3x and averaged down so it looks like a
-# photo shrunk to pixels. The lamp is over the box, so the fingertips are the bright end.
+# Cut from tools/source/hand.png, the picture of the arm I made for it: five hands in a row,
+# open to curled, forearm up from the bottom-right. The picture is pixel art that was blown up
+# about 5.4 times and smoothed on the way, so it is sampled back down to its own pixels: each
+# art pixel is the median of the middle of its cell, which keeps the smoothing between cells
+# out. The background is keyed off its alpha, stray marks are dropped, and the frames are laid
+# curled first, which is the order the reach plays them in. Every frame is lined up by where
+# its forearm leaves the bottom of the picture, so the elbow stays put while the hand opens.
 # --------------------------------------------------------------------------- #
 
-HAND_HW, HAND_HH = 96, 96
-HAND_REACH = 5
+HAND_SOURCE = os.path.join(ROOT, "tools", "source", "hand.png")
 
-#: Rendered at this many times the frame size and averaged down.
-HAND_SS = 3
+#: Picture pixels per art pixel, and where the grid starts, measured off the edges in the picture.
+HAND_PITCH_X, HAND_PITCH_Y = 5.46, 5.32
+HAND_PHASE_X, HAND_PHASE_Y = 0.0, 3.99
 
-HAND_SKIN      = (232, 196, 172)        # albedo: light, a little pink
-HAND_SKIN_RED  = (206, 110, 92)         # what it goes toward where the light comes through
-HAND_KNUCKLE   = (212, 148, 126)
-HAND_VEIN      = (160, 150, 176)
-HAND_NAIL      = (236, 200, 188)
-HAND_NAIL_TIP  = (248, 238, 230)
-HAND_CUTICLE   = (198, 148, 132)
-HAND_CLOTH     = (44, 44, 60)
-HAND_CLOTH_L   = (92, 90, 112)
-HAND_COLD      = (58, 56, 76)
-HAND_RED       = (172, 54, 40)
-HAND_RIM       = (10, 6, 10)
+#: How much of a cell has to be arm for the cell to be, and the share of the cell's middle the colour is taken from.
+HAND_KEEP = 0.5
+HAND_CORE = 0.6
 
-HAND_LAMP      = (-0.30, -0.62, 0.72)   # over the box, which is up and left of the arm
-HAND_AMBIENT   = (0.30, 0.28, 0.32)
-HAND_KEY       = (1.00, 0.92, 0.80)
+#: Anything opaque smaller than this many art pixels is a stray mark, not an arm.
+HAND_SPECK = 40
 
-# The forearm line, elbow (off the bottom-right corner) to wrist, and the back-of-hand
-# line, wrist to top. They are not the same line: the wrist turns.
-HAND_ELBOW = (100.0, 112.0)
-HAND_WRIST = (62.0, 58.0)
-HAND_TOP = (52.0, 22.0)
-
-#: The middle fingertip in the open frame, checked when built. HandSprite.Fingertip anchors by it.
-HAND_FINGERTIP = (17, 25)
-
-# Per finger: knuckle position on the left edge of the hand, direction (x right, y down),
-# and open length. Index first.
-HAND_FINGERS = (
-    ((44.5, 27.0), (-0.96, -0.28), 26.0),
-    ((43.5, 32.0), (-1.00, -0.08), 28.0),
-    ((44.0, 37.0), (-0.99, 0.12), 26.0),
-    ((46.5, 42.0), (-0.95, 0.30), 21.0),
-)
-
-#: The three segments of a finger as fractions of its length, and the radius at each joint.
-HAND_SEGMENTS = (0.44, 0.31, 0.25)
-HAND_RADII = (3.0, 2.7, 2.45, 2.0)
-
-#: How far the middle and last segments bend toward the palm, in degrees, open and curled.
-HAND_BEND_OPEN = (10.0, 22.0)
-HAND_BEND_CURLED = (34.0, 58.0)
-
-# Tags for what a pixel belongs to, which picks its albedo.
-HAND_T_SKIN, HAND_T_NAIL, HAND_T_CLOTH = 1, 2, 3
+#: Frames in the sheet, and the room left round the arms in a frame.
+HAND_FRAMES = 5
+HAND_PAD = 2
 
 
-def _norm3h(v):
-    m = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) or 1.0
-    return (v[0] / m, v[1] / m, v[2] / m)
+def _median(values):
+    values = sorted(values)
+    return values[len(values) // 2]
 
 
-HAND_LAMP = _norm3h(HAND_LAMP)
-HAND_HALF = _norm3h((HAND_LAMP[0], HAND_LAMP[1], HAND_LAMP[2] + 1.0))
+def hand_sample():
+    """The picture sampled down to art pixels: rows of [r, g, b, a], with a hard alpha."""
+    pic = read_png(HAND_SOURCE)
+    ph, pw = len(pic), len(pic[0])
+    cols = int((pw - HAND_PHASE_X) // HAND_PITCH_X)
+    rows = int((ph - HAND_PHASE_Y) // HAND_PITCH_Y)
+    art = new_image(cols, rows)
+    lo, hi = (1.0 - HAND_CORE) / 2.0, (1.0 + HAND_CORE) / 2.0
+    for j in range(rows):
+        y0 = HAND_PHASE_Y + j * HAND_PITCH_Y
+        for i in range(cols):
+            x0 = HAND_PHASE_X + i * HAND_PITCH_X
+            inside = total = 0
+            core = []
+            for y in range(int(y0), min(ph, int(y0 + HAND_PITCH_Y))):
+                fy = (y + 0.5 - y0) / HAND_PITCH_Y
+                for x in range(int(x0), min(pw, int(x0 + HAND_PITCH_X))):
+                    px = pic[y][x]
+                    total += 1
+                    if px[3] < 128:
+                        continue
+                    inside += 1
+                    fx = (x + 0.5 - x0) / HAND_PITCH_X
+                    if lo <= fx <= hi and lo <= fy <= hi:
+                        core.append(px)
+            if total and inside / total >= HAND_KEEP and core:
+                art[j][i] = [_median([p[0] for p in core]), _median([p[1] for p in core]),
+                             _median([p[2] for p in core]), 255]
+    return art
 
 
-def _rot(vx, vy, deg):
-    a = math.radians(deg)
-    return vx * math.cos(a) - vy * math.sin(a), vx * math.sin(a) + vy * math.cos(a)
-
-
-def _smax(a, b, k=1.6):
-    """The larger of two heights, with the corner between them rounded off."""
-    if a < b:
-        a, b = b, a
-    return a + math.log1p(math.exp(-k * (a - b))) / k
-
-
-class _Field:
-    """The height field, the tag under each pixel, and the albedo tints, at HAND_SS."""
-
-    def __init__(self):
-        self.W, self.H = HAND_HW * HAND_SS, HAND_HH * HAND_SS
-        self.h = [[0.0] * self.W for _ in range(self.H)]
-        self.tag = [[0] * self.W for _ in range(self.H)]
-        self.tint = {}
-
-    def capsule(self, x0, y0, x1, y1, r0, r1, flat, tag, lift=0.0):
-        """A rounded tube from (x0, y0) to (x1, y1) with radius r0 to r1, squashed by flat."""
-        S = HAND_SS
-        lx, ly = x1 - x0, y1 - y0
-        ll = lx * lx + ly * ly or 1.0
-        rmax = max(r0, r1) + 1.0
-        ax0, ay0 = int((min(x0, x1) - rmax) * S), int((min(y0, y1) - rmax) * S)
-        ax1, ay1 = int((max(x0, x1) + rmax) * S) + 1, int((max(y0, y1) + rmax) * S) + 1
-        for Y in range(max(0, ay0), min(self.H, ay1)):
-            py = (Y + 0.5) / S
-            for X in range(max(0, ax0), min(self.W, ax1)):
-                px = (X + 0.5) / S
-                t = max(0.0, min(1.0, ((px - x0) * lx + (py - y0) * ly) / ll))
-                cx, cy = x0 + lx * t, y0 + ly * t
-                d = math.hypot(px - cx, py - cy)
-                rr = r0 + (r1 - r0) * t
-                if d >= rr:
-                    continue
-                z = math.sqrt(rr * rr - d * d) * flat + lift
-                old = self.h[Y][X]
-                new = _smax(old, z) if old > 0.0 else z
-                if new > old:
-                    self.h[Y][X] = new
-                    if z >= old * 0.85:
-                        self.tag[Y][X] = tag
-
-    def bump(self, x, y, r, amount):
-        """A gaussian rise (or dip, when amount is negative) at (x, y)."""
-        S = HAND_SS
-        for Y in range(max(0, int((y - 2.5 * r) * S)), min(self.H, int((y + 2.5 * r) * S) + 1)):
-            py = (Y + 0.5) / S
-            for X in range(max(0, int((x - 2.5 * r) * S)), min(self.W, int((x + 2.5 * r) * S) + 1)):
-                px = (X + 0.5) / S
-                if self.h[Y][X] <= 0.0:
-                    continue
-                self.h[Y][X] += amount * math.exp(-((px - x) ** 2 + (py - y) ** 2) / (r * r))
-
-    def ridge(self, x0, y0, x1, y1, width, amount, taper=True):
-        """A low ridge (or a crease, when amount is negative) along a line."""
-        S = HAND_SS
-        lx, ly = x1 - x0, y1 - y0
-        ll = lx * lx + ly * ly or 1.0
-        m = width * 2.5
-        for Y in range(max(0, int((min(y0, y1) - m) * S)), min(self.H, int((max(y0, y1) + m) * S) + 1)):
-            py = (Y + 0.5) / S
-            for X in range(max(0, int((min(x0, x1) - m) * S)), min(self.W, int((max(x0, x1) + m) * S) + 1)):
-                px = (X + 0.5) / S
-                if self.h[Y][X] <= 0.0:
-                    continue
-                t = ((px - x0) * lx + (py - y0) * ly) / ll
-                if t < 0.0 or t > 1.0:
-                    continue
-                d = math.hypot(px - (x0 + lx * t), py - (y0 + ly * t))
-                k = math.exp(-(d / width) ** 2)
-                if taper:
-                    k *= math.sin(math.pi * t) ** 0.5
-                self.h[Y][X] += amount * k
-
-    def nail(self, x, y, ux, uy, length, width):
-        """A nail set into the end of a finger: a flattened oval with a rim of skin and a cuticle line."""
-        S = HAND_SS
-        nx, ny = -uy, ux
-        m = max(length, width) + 1.0
-        for Y in range(max(0, int((y - m) * S)), min(self.H, int((y + m) * S) + 1)):
-            py = (Y + 0.5) / S
-            for X in range(max(0, int((x - m) * S)), min(self.W, int((x + m) * S) + 1)):
-                px = (X + 0.5) / S
-                if self.h[Y][X] <= 0.0:
-                    continue
-                a = ((px - x) * ux + (py - y) * uy) / length
-                b = ((px - x) * nx + (py - y) * ny) / width
-                e = a * a + b * b
-                if e <= 1.0:
-                    self.tag[Y][X] = HAND_T_NAIL
-                    self.h[Y][X] = self.h[Y][X] * 0.92 + 0.35 * (1.0 - e)
-                    self.tint[(X, Y)] = (a, e)
-                elif e <= 1.5:
-                    self.h[Y][X] -= 0.25 * (1.0 - (e - 1.0) / 0.5)
-
-
-def hand_shade(albedo, n, spec_gain, red, ao):
-    ndl = max(0.0, n[0] * HAND_LAMP[0] + n[1] * HAND_LAMP[1] + n[2] * HAND_LAMP[2])
-    ndh = max(0.0, n[0] * HAND_HALF[0] + n[1] * HAND_HALF[1] + n[2] * HAND_HALF[2])
-    out = []
-    for i in range(3):
-        v = albedo[i] * (HAND_AMBIENT[i] * ao + 0.95 * ndl * HAND_KEY[i] * ao)
-        v += spec_gain * (ndh ** 26.0) * (248, 236, 224)[i] * ao
-        v += red * (176, 48, 32)[i]
-        out.append(max(0, min(255, int(round(v)))))
-    return out
-
-
-def build_hand_frame(img, ox, openness, rng):
-    S = HAND_SS
-    curl = 1.0 - openness
-    f = _Field()
-
-    ex, ey = HAND_ELBOW
-    wx, wy = HAND_WRIST
-    tx_, ty_ = HAND_TOP
-    length = math.hypot(wx - ex, wy - ey)
-    ux, uy = (wx - ex) / length, (wy - ey) / length      # along the forearm, toward the box
-    nx, ny = -uy, ux                                     # across it
-    if nx < 0:
-        nx, ny = -nx, -ny
-
-    # The forearm, a flattened tube up to the wrist, and the back of the hand, a flatter
-    # one from the wrist to the top.
-    f.capsule(ex, ey, wx, wy, 11.5, 7.0, 0.52, HAND_T_SKIN)
-    f.capsule(wx, wy, tx_, ty_, 8.0, 6.8, 0.42, HAND_T_SKIN)
-    # The knuckle ridge along the left edge of the hand, where the fingers come off it.
-    f.ridge(HAND_FINGERS[0][0][0] + 2.0, HAND_FINGERS[0][0][1], HAND_FINGERS[3][0][0] + 2.0, HAND_FINGERS[3][0][1], 2.2, 0.5 + 0.6 * curl)
-    # The wrist bone, the little knob on the outside of the wrist.
-    f.bump(wx + 5.0, wy - 1.0, 2.2, 0.55)
-
-    # Fingers: three segments each, off the left edge, each bending a little more toward
-    # the palm than the one before, and more when the hand is curled.
-    tips, nails = [], []
-    bend_mid = HAND_BEND_OPEN[0] + (HAND_BEND_CURLED[0] - HAND_BEND_OPEN[0]) * curl
-    bend_end = HAND_BEND_OPEN[1] + (HAND_BEND_CURLED[1] - HAND_BEND_OPEN[1]) * curl
-    for n_, ((bx, by), (dx, dy), flen) in enumerate(HAND_FINGERS):
-        reach = flen * (0.72 + 0.28 * openness)
-        thin = 0.92 if n_ == 3 else 1.0
-        joints = [(bx, by)]
-        dirs = [(dx, dy)]
-        x, y = bx, by
-        for s, seg in enumerate(HAND_SEGMENTS):
-            d = dirs[-1]
-            if s == 1:
-                d = _rot(d[0], d[1], bend_mid)
-            elif s == 2:
-                d = _rot(d[0], d[1], bend_end)
-            dirs.append(d)
-            x, y = x + d[0] * reach * seg, y + d[1] * reach * seg
-            joints.append((x, y))
-        for s in range(3):
-            (x0, y0), (x1, y1) = joints[s], joints[s + 1]
-            f.capsule(x0, y0, x1, y1, HAND_RADII[s] * thin, HAND_RADII[s + 1] * thin, 0.9, HAND_T_SKIN)
-        f.bump(bx, by, 2.2 * thin, 0.4 + 0.9 * curl)
-        for s in (1, 2):
-            jx, jy = joints[s]
-            d = dirs[s]
-            f.bump(jx, jy, 1.6 * thin, 0.2 + 0.5 * curl)
-            f.ridge(jx + d[1] * 2.4 * thin, jy - d[0] * 2.4 * thin, jx - d[1] * 2.4 * thin, jy + d[0] * 2.4 * thin, 0.42, -0.4, taper=False)
-        tips.append(joints[3])
-        if openness > 0.25:
-            (x2, y2), (x3, y3) = joints[2], joints[3]
-            d = dirs[3]
-            seg = math.hypot(x3 - x2, y3 - y2)
-            nails.append((x2 + d[0] * seg * 0.58, y2 + d[1] * seg * 0.58, d[0], d[1], seg * 0.42, HAND_RADII[3] * thin * 0.62))
-
-    # The thumb along the top edge, two segments, the second bending in over the index
-    # as the hand curls.
-    tbx, tby = 57.0, 34.0
-    tdx, tdy = _norm3h((-0.30, -0.95, 0.0))[:2]
-    tlen = 15.0 + 2.0 * openness
-    tmx, tmy = tbx + tdx * tlen * 0.55, tby + tdy * tlen * 0.55
-    d2 = _rot(tdx, tdy, -18.0 - 30.0 * curl)
-    ttx, tty = tmx + d2[0] * tlen * 0.45, tmy + d2[1] * tlen * 0.45
-    f.capsule(tbx, tby, tmx, tmy, 3.7, 3.2, 0.85, HAND_T_SKIN, lift=-0.6)
-    f.capsule(tmx, tmy, ttx, tty, 3.2, 2.4, 0.85, HAND_T_SKIN, lift=-0.6)
-    f.bump(tmx, tmy, 1.7, 0.25 + 0.4 * curl)
-    if openness > 0.25:
-        seg = tlen * 0.45
-        nails.append((tmx + d2[0] * seg * 0.6, tmy + d2[1] * seg * 0.6, d2[0], d2[1], seg * 0.4, 2.4 * 0.62))
-
-    # Tendons up the back of the hand to each knuckle, and the crease across the wrist.
-    for (bx, by), _, _ in HAND_FINGERS:
-        f.ridge(wx - 2.0, wy - 3.0, bx + 3.0, by, 0.85, 0.26)
-    hx, hy = tx_ - wx, ty_ - wy
-    hl = math.hypot(hx, hy) or 1.0
-    px_, py_ = -hy / hl, hx / hl
-    for i in (-1.0, 1.6):
-        f.ridge(wx + hx / hl * i - px_ * 7.0, wy + hy / hl * i - py_ * 7.0, wx + hx / hl * i + px_ * 7.0, wy + hy / hl * i + py_ * 7.0, 0.5, -0.35)
-
-    for cx_, cy_, dx, dy, ln, wd in nails:
-        f.nail(cx_, cy_, dx, dy, ln, wd)
-
-    # The cuff of a sleeve over the near end of the forearm.
-    cuff_cells = {}
-    for Y in range(f.H):
-        py = (Y + 0.5) / S
-        for X in range(f.W):
-            px = (X + 0.5) / S
-            sp = (px - ex) * ux + (py - ey) * uy
-            ap = (px - ex) * nx + (py - ey) * ny
-            if -16.0 <= sp <= 24.0 and abs(ap) <= 15.0:
-                rr = 11.5 + (7.0 - 11.5) * max(0.0, sp / length)
-                rr += 1.4
-                if abs(ap) >= rr:
-                    continue
-                z = math.sqrt(rr * rr - ap * ap) * 0.52 + 0.6
-                for fold in (-7.5, 0.5, 8.0):
-                    z += 0.35 * math.exp(-((ap - fold - 1.2 * math.sin(sp * 0.25)) / 1.1) ** 2)
-                if sp > 22.2:
-                    z += 0.5
-                f.h[Y][X] = z
-                f.tag[Y][X] = HAND_T_CLOTH
-                cuff_cells[(X, Y)] = sp
-
-    # Now light it.
-    ZS = 1.6
-    out = [[[0, 0, 0, 0] for _ in range(f.W)] for _ in range(f.H)]
-    noise = [[rng.uniform(-1.0, 1.0) for _ in range(f.W // 3 + 2)] for _ in range(f.H // 3 + 2)]
-
-    def hat(X, Y):
-        if 0 <= X < f.W and 0 <= Y < f.H:
-            v = f.h[Y][X]
-            return v if v > 0.0 else -3.0
-        if X >= f.W or Y >= f.H:
-            return f.h[min(f.H - 1, Y)][min(f.W - 1, X)]
-        return -3.0
-
-    for Y in range(f.H):
-        py = (Y + 0.5) / S
-        for X in range(f.W):
-            z = f.h[Y][X]
-            if z <= 0.0:
+def _components(art):
+    """Every 4-connected blob of opaque art pixels, as lists of (x, y)."""
+    h, w = len(art), len(art[0])
+    seen = [[False] * w for _ in range(h)]
+    blobs = []
+    for sy in range(h):
+        for sx in range(w):
+            if seen[sy][sx] or art[sy][sx][3] == 0:
                 continue
-            px = (X + 0.5) / S
-            dzdx = (hat(X + 1, Y) - hat(X - 1, Y)) * 0.5 * S
-            dzdy = (hat(X, Y + 1) - hat(X, Y - 1)) * 0.5 * S
-            n = _norm3h((-dzdx * ZS, -dzdy * ZS, 1.0))
-
-            ao = 1.0
-            for ddx, ddy in ((3, 0), (-3, 0), (0, 3), (0, -3), (5, 0), (-5, 0), (0, 5), (0, -5)):
-                nb = hat(X + ddx * S // 2, Y + ddy * S // 2)
-                if nb > z + 0.6:
-                    ao -= 0.09 * min(1.0, (nb - z - 0.6) / 1.5)
-            ao = max(0.45, ao)
-
-            s = ((px - ex) * ux + (py - ey) * uy) / length
-            reachlit = 0.55 + 0.45 * max(0.0, min(1.0, s / 1.6)) ** 1.1
-            tag = f.tag[Y][X]
-
-            if tag == HAND_T_CLOTH:
-                sp = cuff_cells.get((X, Y), 0.0)
-                alb = HAND_CLOTH
-                if sp > 22.2:
-                    alb = HAND_CLOTH_L
-                c = hand_shade(alb, n, 0.0, 0.0, ao * (0.5 + 0.5 * max(0.0, min(1.0, (sp + 16.0) / 38.0))))
-            else:
-                alb = HAND_SKIN
-                nz = noise[Y // 3][X // 3] * 0.5 + noise[(Y // 3 + 1) % len(noise)][(X // 3 + 1) % len(noise[0])] * 0.25
-                alb = tuple(max(0, min(255, int(alb[i] * (1.0 + 0.085 * nz)))) for i in range(3))
-                for (bx, by), _, _ in HAND_FINGERS:
-                    kk = math.exp(-((px - bx) ** 2 + (py - by) ** 2) / 9.0)
-                    alb = lerp_color(alb + (255,), HAND_KNUCKLE + (255,), 0.5 * kk)[:3]
-                if tag == HAND_T_NAIL:
-                    a_, e_ = f.tint.get((X, Y), (0.0, 0.0))
-                    alb = HAND_NAIL
-                    if a_ > 0.55:
-                        alb = lerp_color(HAND_NAIL + (255,), HAND_NAIL_TIP + (255,), min(1.0, (a_ - 0.55) / 0.35))[:3]
-                    if a_ < -0.62 and e_ > 0.72:
-                        alb = HAND_CUTICLE
-                else:
-                    # A vein or two, up the back of the hand from the wrist.
-                    for off in (-3.0, 2.5):
-                        vx0, vy0 = wx + px_ * off * 0.6, wy + py_ * off * 0.6
-                        vx1, vy1 = tx_ + px_ * off * 1.3 + 2.0, ty_ + py_ * off * 1.3 + 6.0
-                        lx, ly = vx1 - vx0, vy1 - vy0
-                        t = max(0.0, min(1.0, ((px - vx0) * lx + (py - vy0) * ly) / (lx * lx + ly * ly)))
-                        dv = math.hypot(px - (vx0 + lx * t), py - (vy0 + ly * t)) + 0.6 * math.sin(t * 9.0 + off)
-                        alb = lerp_color(alb + (255,), HAND_VEIN + (255,), 0.22 * math.exp(-(dv / 0.8) ** 2) * math.sin(math.pi * t))[:3]
-                ndl = max(0.0, n[0] * HAND_LAMP[0] + n[1] * HAND_LAMP[1] + n[2] * HAND_LAMP[2])
-                thin = max(0.0, 1.0 - z / 2.4)
-                red = 0.10 * thin * (1.0 - ndl) * reachlit
-                spec = 0.10 if tag == HAND_T_NAIL else 0.035
-                c = hand_shade(alb, n, spec, red, ao)
-                glow = max(0.0, (s - 1.15) / 0.6)
-                if glow > 0:
-                    c = list(lerp_color(tuple(c) + (255,), HAND_RED + (255,), min(0.30, glow * 0.30))[:3])
-
-            c = [int(v * reachlit) for v in c]
-            out[Y][X] = [c[0], c[1], c[2], 255]
-
-    for y in range(HAND_HH):
-        for x in range(HAND_HW):
-            acc, n_ = [0, 0, 0], 0
-            for Y in range(y * S, y * S + S):
-                for X in range(x * S, x * S + S):
-                    p = out[Y][X]
-                    if p[3]:
-                        acc[0] += p[0]
-                        acc[1] += p[1]
-                        acc[2] += p[2]
-                        n_ += 1
-            if n_:
-                img[y][ox + x] = [acc[0] // n_, acc[1] // n_, acc[2] // n_, 255 * n_ // (S * S)]
-    for y in range(HAND_HH - 1):
-        for x in range(HAND_HW - 1):
-            p = img[y][ox + x]
-            if p[3] < 40:
-                continue
-            for xx, yy in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
-                if xx < 0 or yy < 0 or (xx < HAND_HW and yy < HAND_HH and img[yy][ox + xx][3] < 40):
-                    img[y][ox + x] = list(lerp_color(tuple(p), HAND_RIM + (p[3],), 0.5))
-                    break
-
-    return tips[1]
+            blob, stack = [], [(sx, sy)]
+            seen[sy][sx] = True
+            while stack:
+                x, y = stack.pop()
+                blob.append((x, y))
+                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if 0 <= nx < w and 0 <= ny < h and not seen[ny][nx] and art[ny][nx][3]:
+                        seen[ny][nx] = True
+                        stack.append((nx, ny))
+            blobs.append(blob)
+    return blobs
 
 
 def build_hand_sheet():
-    img = new_image(HAND_HW * HAND_REACH, HAND_HH)
-    tip = None
-    for fr in range(HAND_REACH):
-        tip = build_hand_frame(img, fr * HAND_HW, fr / (HAND_REACH - 1), random.Random(9090))
-    # The open frame's middle fingertip is what HandSprite anchors by; if the geometry
-    # moves it, HAND_FINGERTIP and HandSprite.Fingertip have to move with it.
-    print("  middle fingertip, open frame: (%.1f, %.1f)" % tip)
-    assert abs(tip[0] - HAND_FINGERTIP[0]) <= 1.5 and abs(tip[1] - HAND_FINGERTIP[1]) <= 1.5, \
-        ("the fingertip moved", tip, HAND_FINGERTIP)
-    write_png(os.path.join(OUT, "hand-sheet.png"), img)
+    art = hand_sample()
+    arms = [b for b in _components(art) if len(b) >= HAND_SPECK]
+    assert len(arms) == HAND_FRAMES, ("expected one arm per frame", len(arms))
 
+    # Left to right is open to curled in the picture; the sheet wants curled first.
+    arms.sort(key=lambda b: -min(x for x, _ in b))
+
+    # Each arm's anchor: the middle of its lowest row, where the forearm leaves the picture.
+    anchors = []
+    for blob in arms:
+        bottom = max(y for _, y in blob)
+        xs = [x for x, y in blob if y == bottom]
+        anchors.append(((min(xs) + max(xs)) // 2, bottom))
+
+    # The frame is the smallest box every arm fits in once their anchors are on top of each other.
+    left = min(min(x for x, _ in b) - ax for b, (ax, _) in zip(arms, anchors)) - HAND_PAD
+    right = max(max(x for x, _ in b) - ax for b, (ax, _) in zip(arms, anchors)) + HAND_PAD
+    top = min(min(y for _, y in b) - ay for b, (_, ay) in zip(arms, anchors)) - HAND_PAD
+    fw, fh = right - left + 1, -top + 1
+
+    img = new_image(fw * HAND_FRAMES, fh)
+    for f, (blob, (ax, ay)) in enumerate(zip(arms, anchors)):
+        for x, y in blob:
+            img[y - ay - top][f * fw + x - ax - left] = list(art[y][x])
+
+    # The numbers the two hand sprites are written against. HandSprite anchors by the open
+    # frame's leading fingertip (its leftmost pixel); CatchHandSprite also wants its palm.
+    open_blob, (oax, oay) = arms[-1], anchors[-1]
+    tip_x = min(x for x, _ in open_blob)
+    tip_y = sorted(y for x, y in open_blob if x == tip_x)[0]
+    print("  hand frame %dx%d, fingertip (%d, %d), forearm leaves at (%d, %d)"
+          % (fw, fh, tip_x - oax - left, tip_y - oay - top, -left, fh - 1))
+    write_png(os.path.join(OUT, "hand-sheet.png"), img)
 
 # --------------------------------------------------------------------------- #
 # box-lid.png -- the box's mouth shut: the plate over the opening, 76x76
@@ -2913,7 +2146,6 @@ if __name__ == "__main__":
     build_button()
     build_panel()
     build_room()
-    build_opponent_sheet()
     build_second_opponent_sheet()
     build_hand_sheet()
     build_token_sheet()

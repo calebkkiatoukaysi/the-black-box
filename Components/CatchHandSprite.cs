@@ -18,10 +18,10 @@ namespace TheBlackBox;
 public class CatchHandSprite
 {
     /// <summary>Width and height of one frame in hand-sheet.png.</summary>
-    private const int FrameWidth = 96;
+    private const int FrameWidth = 87;
 
     /// <summary>The other dimension. See <see cref="FrameWidth"/>.</summary>
-    private const int FrameHeight = 96;
+    private const int FrameHeight = 115;
 
     /// <summary>The frame with the hand open and fanned: the last one in the sheet.</summary>
     private const int OpenFrame = 4;
@@ -29,15 +29,15 @@ public class CatchHandSprite
     /// <summary>How far the art is blown up. The catch happens in the close-up, so it matches the reaching arm there.</summary>
     private const float Scale = 6f;
 
-    /// <summary>Where the tip of the middle finger is inside a frame, in sheet pixels.</summary>
-    private static readonly Vector2 Fingertip = new(17f, 25f);
+    /// <summary>Where the leading fingertip is inside a frame, in sheet pixels. Same anchor as <see cref="HandSprite"/>.</summary>
+    private static readonly Vector2 Fingertip = new(7f, 45f);
 
-    /// <summary>Where the middle of the palm is, from the fingertip, in sheet pixels. Read off the generator's skeleton.</summary>
-    private static readonly Vector2 PalmFromTip = new(40f, 10f);
+    /// <summary>Where the middle of the palm is, from the fingertip, in sheet pixels. Read off the open frame.</summary>
+    private static readonly Vector2 PalmFromTip = new(32f, 6f);
 
     /// <summary>The palm's catching area, in sheet pixels: a little smaller than the hand looks.</summary>
-    private const float PalmWidth = 34f;
-    private const float PalmHeight = 30f;
+    private const float PalmWidth = 30f;
+    private const float PalmHeight = 32f;
 
     /// <summary>How fast the keys or the stick move the hand, in screen pixels a second.</summary>
     private const float Speed = 1150f;

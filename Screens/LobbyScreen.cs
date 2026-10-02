@@ -48,7 +48,6 @@ public partial class LobbyScreen : GameScreen
 
     /// <summary>The voices: how high each one's blip is.</summary>
     private const float SerenityPitch = 0.12f;
-    private const float SecondPitch = -0.22f;
     private const float ConscriptPitch = 0f;
     private const float BoxPitch = -0.55f;
 
@@ -69,6 +68,9 @@ public partial class LobbyScreen : GameScreen
     private const float ToastY = 96f;
     private const float ToastSeconds = 2.6f;
     private const float PromptRise = 160f;
+
+    /// <summary>The highest a prompt may float, so one over the door never sits on top of a message.</summary>
+    private const float PromptTop = 140f;
     private const float Margin = 24f;
     private static readonly Vector2 PocketsAt = new(Margin, 800f);
 
@@ -226,7 +228,7 @@ public partial class LobbyScreen : GameScreen
         float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
         _clock += elapsed;
 
-        foreach (LobbyNpc npc in _npcs) npc.Update(gameTime, _player.Position);
+        foreach (LobbyNpc npc in _npcs) npc.Update(gameTime);
         foreach (LobbyItem item in _items) item.Update(gameTime);
         _player.Update(gameTime);
         _camera.Follow(_player.Position, gameTime);
@@ -316,30 +318,25 @@ public partial class LobbyScreen : GameScreen
     /// <summary>The walking sheet for one of the two the player can be.</summary>
     private static string SheetFor(Conscript who) => who == Conscript.Second ? "conscript-second" : "conscript-first";
 
-    /// <summary>Puts the three people waiting in the room: Serenity, the one from the character sheet, and whichever conscript the player is not.</summary>
+    /// <summary>Puts the two people waiting in the room: Serenity, and whichever conscript the player is not.</summary>
     /// <param name="player">Who the player is.</param>
     private void AddPeople(Conscript player)
     {
         var serenity = new WalkerSprite { Sheet = _content.Load<Texture2D>("serenity-walker") };
-        var second = new WalkerSprite { Sheet = _content.Load<Texture2D>("opponent-walker") };
         Conscript otherWho = player == Conscript.First ? Conscript.Second : Conscript.First;
         Texture2D otherSheet = _content.Load<Texture2D>(SheetFor(otherWho));
         var other = new WalkerSprite { Sheet = otherSheet };
 
-        foreach (WalkerSprite walker in new[] { serenity, second, other }) walker.LoadContent(_content);
+        serenity.LoadContent(_content);
+        other.LoadContent(_content);
 
-        // Their pictures come off their table sheets, the even-tempered column.
-        Opponent first = Opponents.First, chapterTwo = Opponents.Second;
+        // Her picture comes off her table sheet, the even-tempered column.
+        Opponent first = Opponents.First;
         var serenityPicture = new Rectangle((int)OpponentPose.Even * first.FrameWidth, 0, first.FrameWidth, first.FrameHeight);
-        var secondPicture = new Rectangle((int)OpponentPose.Even * chapterTwo.FrameWidth, 0, chapterTwo.FrameWidth, chapterTwo.FrameHeight);
 
         _npcs.Add(new LobbyNpc(first.Id,
             new LobbySpeaker(first.Script.OpponentName, ButtonSprite.Amber, _content.Load<Texture2D>(first.Sheet), serenityPicture, PortraitScale, SerenityPitch),
             serenity, _map.SerenitySpot));
-
-        _npcs.Add(new LobbyNpc(chapterTwo.Id,
-            new LobbySpeaker(chapterTwo.Script.OpponentName, ButtonSprite.Amber, _content.Load<Texture2D>(chapterTwo.Sheet), secondPicture, PortraitScale, SecondPitch),
-            second, _map.SecondSpot) { Watches = true });
 
         _npcs.Add(new LobbyNpc(LobbyLines.ConscriptId,
             new LobbySpeaker(LobbyLines.ConscriptName, ButtonSprite.BoneWhite, otherSheet, WalkerBust, WalkerPortraitScale, ConscriptPitch),
@@ -499,7 +496,7 @@ public partial class LobbyScreen : GameScreen
         bool challenger = npc.Id == _challenger;
         bool spoken = _run.HasFlag(SpokenFlag(npc.Id));
 
-        _dialogue.Open(npc.Speaker, LobbyLines.For(npc.Id, challenger, spoken), () =>
+        _dialogue.Open(npc.Speaker, LobbyLines.For(npc.Id, spoken), () =>
         {
             _run.SetFlag(SpokenFlag(npc.Id));
             if (!challenger || DoorIsOpen) return;
@@ -633,6 +630,7 @@ public partial class LobbyScreen : GameScreen
         if (prompt is null) return;
 
         Vector2 at = _camera.ToScreen(over) - new Vector2(0f, PromptRise);
+        at.Y = MathF.Max(at.Y, PromptTop);
         Text.Draw(spriteBatch, _detailFont, prompt, at.X, at.Y, ButtonSprite.Amber, Palette.Shadow, centred: true);
     }
 }

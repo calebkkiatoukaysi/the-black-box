@@ -170,7 +170,7 @@ public partial class TableScreen
             case Settled + 591 + 2 * VerdictSettled:
                 return "table-advance.png";
 
-            // Chapter two: advance the run the way FinishRun does and enter it again, which seats the second opponent.
+            // Chapter two: advance the run the way FinishRun does and enter it again. Serenity is the whole roster, so she sits back down.
             case Settled + 592 + 2 * VerdictSettled:
                 ExitProofPopups();
                 _run.Advance();
@@ -178,7 +178,7 @@ public partial class TableScreen
                 return null;
 
             case Settled + 600 + 2 * VerdictSettled:
-                return "table-second.png";
+                return "table-chapter-two.png";
 
             // And win that one too, and take the results' way back to the lobby.
             case Settled + 602 + 2 * VerdictSettled:

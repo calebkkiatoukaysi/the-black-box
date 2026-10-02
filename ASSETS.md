@@ -26,8 +26,6 @@ Content/ash-drift.png - created by Caleb Kiatoukaysi for The Black Box, drawn pr
 
 Content/room.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
 
-Content/hand-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
-
 Content/token-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
 
 Content/item-sheet.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
@@ -50,9 +48,7 @@ Content/conscript-second.png - created by Caleb Kiatoukaysi for The Black Box, t
 
 Content/character-palettes.png - created by Caleb Kiatoukaysi for The Black Box, every hair, outfit and accent preset the customization screen offers, drawn procedurally by tools/generate_characters.py, released under public domain
 
-Content/serenity-walker.png - created by Caleb Kiatoukaysi for The Black Box, Serenity's walking sheet for the lobby, drawn to her picture, drawn procedurally by tools/generate_characters.py, released under public domain
-
-Content/opponent-walker.png - created by Caleb Kiatoukaysi for The Black Box, the chapter-two opponent's walking sheet for the lobby, drawn to her character sheet, drawn procedurally by tools/generate_characters.py, released under public domain
+Content/serenity-walker.png - built by tools/generate_characters.py from tools/source/serenity-sheet.png: Serenity standing and walking each way, cut off her character sheet, keyed off its backdrop and sampled down to 32x48 frames; walking left is walking right mirrored
 
 ## The lobby
 
@@ -178,18 +174,20 @@ Content/Sfx/Items/wild-card.wav - created by Caleb Kiatoukaysi for The Black Box
 
 tools/generate_assets.py, tools/generate_characters.py, tools/generate_lobby.py, tools/generate_audio.py - the four scripts every asset above that says "drawn procedurally" or "synthesised" comes out of; they need nothing but CPython, and every one is seeded, so a rerun gives the same files
 
-## The two opponents
+## The pictures the generators read
 
-These are the only sprites the generator does not draw from nothing. Both start from a picture
-I made, and the generator keys, recolours and samples it into a sheet.
+These are the only sprites the generators do not draw from nothing. Each starts from a picture
+I made, and the generator keys, samples and lays it out into a sheet.
 
 Content/opponent-second-sheet.png - built by tools/generate_assets.py from tools/source/opponent-second-portrait.png: Serenity's picture, the chapter-one opponent, keyed off the wall behind her, cleaned up, paled and sampled to art pixels, five columns of the one still; the picture was supplied by Caleb Kiatoukaysi for The Black Box
 
-tools/source/opponent-second-portrait.png - a picture of Serenity, the chapter-one opponent, sitting at the table, supplied by Caleb Kiatoukaysi for The Black Box; one of the two pictures the generator reads rather than draws
+tools/source/opponent-second-portrait.png - a picture of Serenity, the chapter-one opponent, sitting at the table, supplied by Caleb Kiatoukaysi for The Black Box
 
-Content/opponent-sheet.png - built by tools/generate_assets.py from tools/source/opponent-portrait.png: the portrait off the chapter-two opponent's character sheet, keyed and sampled to art pixels, with each of the five poses made as pixel edits on it; the character sheet was supplied by Caleb Kiatoukaysi for The Black Box
+tools/source/serenity-sheet.png - Serenity's character sheet (a portrait, then idle, walk, run, interact and hurt rows), supplied by Caleb Kiatoukaysi for The Black Box; tools/generate_characters.py cuts her lobby walker from it
 
-tools/source/opponent-portrait.png - the portrait from the chapter-two opponent's character sheet, supplied by Caleb Kiatoukaysi for The Black Box; the other picture the generator reads rather than draws
+Content/hand-sheet.png - built by tools/generate_assets.py from tools/source/hand.png: the player's arm, five hands from curled to open, sampled back down to the picture's own pixels and lined up by the forearm
+
+tools/source/hand.png - a picture of the player's arm, five hands from open to curled, supplied by Caleb Kiatoukaysi for The Black Box
 
 ## Text
 

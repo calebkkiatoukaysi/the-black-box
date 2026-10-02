@@ -99,9 +99,8 @@ public class LobbyMap
     /// <summary>Walking into this, once the door is open, is going through it. The strip of paint right under it.</summary>
     public BoundingRectangle Threshold { get; } = new(372f * Scale, 82f * Scale, 24f * Scale, 6f * Scale);
 
-    /// <summary>Where the three people waiting in here stand, in world pixels: Serenity, the one from chapter two, and the other conscript.</summary>
+    /// <summary>Where the two people waiting in here stand, in world pixels: Serenity, and the other conscript.</summary>
     public Vector2 SerenitySpot { get; } = new Vector2(150f, 300f) * Scale;
-    public Vector2 SecondSpot { get; } = new Vector2(596f, 132f) * Scale;
     public Vector2 ConscriptSpot { get; } = new Vector2(258f, 270f) * Scale;
 
     /// <summary>The spots things can be left on the floor, by name. The save remembers which have been emptied.</summary>

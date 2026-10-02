@@ -5,8 +5,9 @@ namespace TheBlackBox.Lobby;
 /// </summary>
 /// <remarks>
 /// Kept short and kept vague on purpose: the lobby is where people wait, not where the story is
-/// told. Same voice as the table scripts, no contractions. Whoever the chapter seats at the
-/// table is the one who asks the player to it; everyone else is just passing the time.
+/// told. Same voice as the table scripts, no contractions. Serenity is the one the box seats
+/// across from the player, so hers are the lines that ask them to the table; the other conscript
+/// is just passing the time.
 /// </remarks>
 public static class LobbyLines
 {
@@ -27,59 +28,28 @@ public static class LobbyLines
     public const string ThroughTheDoor = "THE DOOR CLOSES BEHIND YOU.";
 
     /// <summary>The pages someone says when they are talked to.</summary>
-    /// <param name="id">Who: an opponent's id, or <see cref="ConscriptId"/>.</param>
-    /// <param name="challenger">Whether they are the one the box has seated across from the player this chapter.</param>
+    /// <param name="id">Who: Serenity's id, or <see cref="ConscriptId"/>.</param>
     /// <param name="spokenBefore">Whether the player has already talked to them this chapter.</param>
     /// <returns>One page per press.</returns>
-    public static string[] For(string id, bool challenger, bool spokenBefore) => (id, challenger, spokenBefore) switch
+    public static string[] For(string id, bool spokenBefore) => (id == ConscriptId, spokenBefore) switch
     {
-        ("serenity", true, false) => new[]
+        (false, false) => new[]
         {
             "Oh -- sorry. I did not hear you come in.",
-            "They put the list on the door this morning. It is the two of us, at the first table.",
+            "They put the list on the door again. It is the two of us, at the table tonight.",
             "I will not make it worse than it has to be. I do not think I could if I tried.",
             "Whenever you are ready. The door will open for you now.",
         },
-        ("serenity", true, true) => new[]
+        (false, true) => new[]
         {
             "I will be at the table. Take your time. It will not give you much.",
         },
-        ("serenity", false, false) => new[]
-        {
-            "You got up from the table. Good. I mean that.",
-            "Get some sleep, if they let you. I never can in here.",
-        },
-        ("serenity", false, true) => new[]
-        {
-            "The light over the door only comes on for one of us at a time.",
-        },
-
-        (_, true, false) when id != ConscriptId => new[]
-        {
-            "There you are.",
-            "She went easy on you. I will not. That is not a threat. It is only the rules.",
-            "The door is open. I will be across from you.",
-        },
-        (_, true, true) when id != ConscriptId => new[]
-        {
-            "Do not keep me waiting. I keep count.",
-        },
-        (_, false, false) when id != ConscriptId => new[]
-        {
-            "First night. It shows. You keep looking at that door.",
-            "Not tonight. Tonight you belong to her. I can wait.",
-        },
-        (_, false, true) when id != ConscriptId => new[]
-        {
-            "Go on. The box hates waiting more than I do.",
-        },
-
-        (_, _, false) => new[]
+        (true, false) => new[]
         {
             "Do not stand under the cameras for long. They look back.",
             "If you find anything on the floor, keep it. The box does not care where it came from.",
         },
-        _ => new[]
+        (true, true) => new[]
         {
             "Three nights I have been on the list. It has not called me once.",
         },

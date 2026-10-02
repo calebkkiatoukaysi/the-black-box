@@ -6,8 +6,8 @@ namespace TheBlackBox;
 /// One opponent: the id on the save, their sheet and how to draw it, and their script.
 /// </summary>
 /// <remarks>
-/// Frame size and scale are per opponent because the two are not made the same way. The first
-/// is her picture sampled to art pixels at 4x, the second is the character sheet at 6x.
+/// Frame size and scale are per opponent because no two pictures are made the same way:
+/// Serenity's is her picture sampled to art pixels at 4x.
 /// Anything that changes during a run (disposition, lives) lives on SaveData, not here.
 /// </remarks>
 /// <param name="Id">What SaveData.OpponentId holds while they are in the seat.</param>

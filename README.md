@@ -107,12 +107,12 @@ parallax tutorial scrolls.
   `BoundingRectangle` (the collision tutorial's), moved one axis at a time and pushed back out of
   walls, furniture and people, so a wall stops you one way and lets you slide along it the other.
   Everything on the floor is sorted by how far down the room it stands.
-- **People.** Serenity, the one from the character sheet, and whichever conscript you did not
-  pick are waiting in here. Walk up to one and press E: the dialogue box types their lines out
-  a letter at a time, with a blip pitched for their voice, their picture (the two opponents use
-  their table pictures; the conscript gets a close crop of their walking sheet) and their name.
-  Everything they say is in `LobbyLines`.
-- **The challenge.** Whoever the chapter seats across from you asks you to the table. Until
+- **People.** Serenity and whichever conscript you did not pick are waiting in here. Walk up to
+  one and press E: the dialogue box types their lines out a letter at a time, with a blip pitched
+  for their voice, their picture (Serenity's is her table picture; the conscript gets a close crop
+  of their walking sheet) and their name. Everything they say is in `LobbyLines`.
+- **The challenge.** Whoever the chapter seats across from you asks you to the table -- for now
+  that is always Serenity, the only one on the roster. Until
   they have, the red door at the far end does not open, and the box says so. Once they have, the
   lamp over the door comes on, the floor in front of it is painted, and walking into it -- or
   pressing E at it -- goes through. The door shuts behind you and the table comes up.
@@ -133,15 +133,18 @@ python tools/generate_audio.py sfx             # every sound effect
 python tools/generate_audio.py holding revolver
 ```
 
-Three songs, all in D minor with its flat second, so they sound like one score. Each one is an
-exact number of bars long and wraps its own echoes back round to the start, so it loops under
+Three songs, all in D minor with its flat second, so they sound like one score: slow, sparse and
+dark, more about what is in the silence than what fills it. The direction came from the kind of
+unsettling, minimal scoring in Chainsaw Man and in horror films like Obsession -- detuned piano,
+sub-bass, bowed drones, dissonant clusters -- but every note is written here; nothing is taken
+from either. Each one is an exact number of bars long and wraps its own echoes back round to the start, so it loops under
 `MediaPlayer.IsRepeating` without a seam.
 
 | Song | Where | What it is |
 | --- | --- | --- |
-| *It Is Watching* | Title, options, customization | 66 BPM. A detuned music box over a low drone that breathes, a heartbeat once a bar, tape hiss, a creak somewhere far off |
-| *Holding* | The lobby | 84 BPM. An electric piano comping minor ninths, a round bass, brushed drums, a vibraphone in the middle, and the hum of a fluorescent tube under all of it |
-| *Place Your Hand* | The table | 124 BPM. A driving bass, industrial drums with a clank of steel on the backbeat, a clock ticking the eighths, a tritone ostinato, a lead in the second section, a breakdown and a roll back into the top |
+| *It Is Watching* | Title, options, customization | 52 BPM. A broken music box that hangs on notes it never resolves, over a bowed bass, slow string swells rubbing a semitone against the root, a faint choir, a far-off heartbeat that skips, and two deep impacts in the dark |
+| *Holding* | The lobby | 58 BPM. A felt piano, slightly detuned, rolling slow minor chords, one high note knocking on the same beats every bar, strings under it, a soft pulse, reversed chords pulling into the next section, and the hum of a fluorescent tube |
+| *Place Your Hand* | The table | 92 BPM in half time. A distorted sub kick, steel clanging on the backbeat, the clock ticking, low strings sawing a tritone, a choir cluster, a breakdown where a detuned piano plays over a held tritone, and a stuttering roll back into the top |
 
 Sound effects are `SoundEffect`s, balanced against each other in the script so the game plays
 them all at one volume. Every item has its own, heard when it is picked up in the lobby and
@@ -173,9 +176,8 @@ the round, not the rules: the opponent's revolver is heard when THEY USED REVOLV
 | `button.png` | `ButtonSprite` | Nine-sliced plate; idle smoulder, kindles on hover, sinks on press |
 | `panel.png` | `FormPanel` | Nine-sliced slab the forms are built on: the save form, the options, the pause menu and the customization screen |
 | `room.png` | `TableScreen` | The room, drawn at twice the resolution of the rest of the table so it reads as a photograph: poured concrete under three sizes of noise, damp streaks and bloom, a rusting steel door, pipes, a vent, a camera, tally marks, and the one lamp with its haze. `ROOM_HORIZON` is where the opponent is cut off |
-| `opponent-second-sheet.png` | `OpponentSprite` | The default opponent, chapter one: her picture cleaned up, paled and sampled to art pixels at 4x, five columns of the one still |
-| `opponent-sheet.png` | `OpponentSprite` | The opponent from the character sheet, chapter two: 5 poses across, one row. Static |
-| `hand-sheet.png` | `HandSprite`, `CatchHandSprite` | 5 frames of your own arm, elbow to fingertips, curled through offered; the open frame is also the hand that catches the payout |
+| `opponent-second-sheet.png` | `OpponentSprite` | Serenity: her picture cleaned up, paled and sampled to art pixels at 4x, five columns of the one still |
+| `hand-sheet.png` | `HandSprite`, `CatchHandSprite` | 5 frames of your own arm, 87x115, curled through open, cut from my picture of it (`tools/source/hand.png`); the open frame is also the hand that catches the payout |
 | `token-sheet.png` | `TokenSprite` | 8 frames of the steel tag the box pays with, spinning; slides down the table under its own physics |
 | `hearts.png` | `HeartsSprite` | A heart, full and hollow, for both sides' lives on the heading |
 | `item-sheet.png` | `ItemSprite` | A picture of every item, 18 of them in `ItemId` order; on the pocket plates and beside the dealt item's line |
@@ -186,7 +188,7 @@ the round, not the rules: the opponent's revolver is heard when THEY USED REVOLV
 | `button.png` again | `PocketStrip` | Three pocket plates a side, live on your turn |
 | `conscript-first.png`, `conscript-second.png` | `WalkerSprite` | The two people you can be, 32x48: five frames across (standing, four steps) and four directions down, three times over (nothing on top, a scarf, a cap). Painted in key colours and recoloured to your choices |
 | `character-palettes.png` | `CharacterPalettes` | Every hair, outfit and accent preset, one ramp a row. The first of each is the key the sheets are painted in |
-| `serenity-walker.png`, `opponent-walker.png` | `WalkerSprite` | The two opponents as they stand around the lobby, same layout. Not recoloured |
+| `serenity-walker.png` | `WalkerSprite` | Serenity as she stands around the lobby, same layout, cut from her character sheet (`tools/source/serenity-sheet.png`). Not recoloured |
 | `lobby-tiles.png` | `LobbyMap` | The lobby's floor, walls and the painted threshold, 16x16 tiles at 3x |
 | `Lobby/*.png` | `LobbyProp` | The furniture, one picture each: lockers, cots, a bench, a chair, columns, crates, a bucket, a sink, two blinking cameras, and the door to the box (locked, lit, open) |
 
@@ -205,19 +207,25 @@ centre, the near ones large and bright out by the mouth.
 Every PNG in `Content/` is produced by a script rather than painted by hand:
 
 ```
-python tools/generate_assets.py       # the box, the table, the opponents, the items
+python tools/generate_assets.py       # the box, the table, Serenity, the hand, the items
 python tools/generate_characters.py   # the walking sheets and character-palettes.png
 python tools/generate_lobby.py        # lobby-tiles.png and everything in Content/Lobby
 ```
 
 The walking sheets are 32x48 frames, five across (standing, then four steps) and one row per
-direction, the same five columns Serenity's table sheet has. Every figure is built out of
-rounded shapes, lit from the lamp's side, and cut down to pixels with a dark edge on the shadow
-side. The two opponents' walking sheets are drawn to their pictures: Serenity's hair, knit,
-strap and pendant; the other's black hair, dark knit and gold hoop.
+direction, the same five columns Serenity's table sheet has. The two conscripts are built out
+of rounded shapes, lit from the lamp's side, and cut down to pixels with a dark edge on the
+shadow side. Serenity's is cut from the character sheet I made of her: her standing and her four
+walking frames each way, keyed off its backdrop and sampled down to the same frames, feet on the
+same row as everybody else's. The sheet only has her walking right, so left is that mirrored.
+
+The player's arm at the table is cut from my picture of it the same way: the picture is pixel art
+that was blown up about 5.4 times, so it is sampled back down to its own pixels, and the five
+hands are lined up by where the forearm leaves the picture so the arm stays put while the hand
+opens.
 
 It needs nothing but CPython - the PNG encoder is built into the script, and so is the decoder
-for the two pictures it reads rather than draws (the opponents' portraits, see below). Every
+for the pictures it reads rather than draws (Serenity, her sheet and the hand). Every
 drawing is seeded, so running it again produces the same bytes; only the sprite you changed
 changes.
 
@@ -286,8 +294,8 @@ and went straight to the reply without ever seeing what they had said. `Discussi
 is what the screen reads it from now.
 
 The clock does not stop for any of it. A line costs the time it takes to say, the same as it
-would across a real table, which is why `DemoDiscussion.Seconds` went up by about what a played
-discussion now spends on speech -- the player is left with the deliberation time they had
+would across a real table, which is why `SerenityDiscussion.Seconds` has room in it for what a
+played discussion spends on speech -- the player is left with the deliberation time they had
 before, and the pressure still comes from the box rather than from the reading.
 
 ## Talking
@@ -322,7 +330,6 @@ writing does not branch on the past, it only has to sound like it remembers it.
 | `DialogueScript` | One opponent's whole conversation, how long the box allows each round of it, and where each round opens |
 | `DiscussionPeriod` | One round's discussion being played. Draws nothing, so it can be tested with no window open |
 | `SerenityDiscussion` | Serenity, the first person across the table: polite, shy, worn down by the games, and on your side as far as anyone here can be. Her hostile lines are her going quiet, not cruel |
-| `DemoDiscussion` | A stand-in opponent, meant to be thrown away |
 
 The two axes are the point. One affection meter cannot express the opponent who is perfectly
 friendly and tells you nothing. It also means you cannot probe your way to candour -- asking
@@ -438,7 +445,7 @@ on which run is loaded.
 ## Assets
 
 Every picture, song and sound in the game is original: drawn or synthesised by the three
-`tools/` scripts and `tools/generate_audio.py`, or (the opponents' two pictures) supplied by me.
+`tools/` scripts and `tools/generate_audio.py`, or (the pictures in `tools/source/`) supplied by me.
 The only outside work is the Spectral font and the MonoGame template files. See
 [ASSETS.md](ASSETS.md) for every file.
 
