@@ -3,7 +3,7 @@
 Every asset the game ships, and where it came from. Nothing here was downloaded or recorded:
 the art is drawn by `tools/generate_assets.py`, `tools/generate_characters.py` and
 `tools/generate_lobby.py`, the music and sound effects are synthesised by
-`tools/generate_audio.py`, the two pictures the art script reads instead of drawing are mine,
+`tools/generate_audio.py`, the three pictures the scripts read instead of drawing are mine,
 and the only outside work is the font and the MonoGame template files.
 
 ## Sprites
@@ -172,20 +172,20 @@ Content/Sfx/Items/wild-card.wav - created by Caleb Kiatoukaysi for The Black Box
 
 ## The scripts
 
-tools/generate_assets.py, tools/generate_characters.py, tools/generate_lobby.py, tools/generate_audio.py - the four scripts every asset above that says "drawn procedurally" or "synthesised" comes out of; they need nothing but CPython, and every one is seeded, so a rerun gives the same files
+tools/generate_assets.py, tools/generate_characters.py, tools/generate_lobby.py, tools/generate_audio.py - the four scripts every asset above that says "drawn procedurally" or "synthesised" comes out of; they need nothing but CPython (3.12 or newer for generate_audio.py), and every one is seeded, so a rerun gives the same files
 
 ## The pictures the generators read
 
 These are the only sprites the generators do not draw from nothing. Each starts from a picture
 I made, and the generator keys, samples and lays it out into a sheet.
 
-Content/opponent-second-sheet.png - built by tools/generate_assets.py from tools/source/opponent-second-portrait.png: Serenity's picture, the chapter-one opponent, keyed off the wall behind her, cleaned up, paled and sampled to art pixels, five columns of the one still; the picture was supplied by Caleb Kiatoukaysi for The Black Box
+Content/opponent-second-sheet.png - built by tools/generate_assets.py from tools/source/opponent-second-portrait.png: Serenity's picture (she's the only opponent for now, so every chapter), keyed off the wall behind her, cleaned up, paled and sampled to art pixels, five columns of the one still; the picture was supplied by Caleb Kiatoukaysi for The Black Box
 
-tools/source/opponent-second-portrait.png - a picture of Serenity, the chapter-one opponent, sitting at the table, supplied by Caleb Kiatoukaysi for The Black Box
+tools/source/opponent-second-portrait.png - a picture of Serenity sitting at the table, supplied by Caleb Kiatoukaysi for The Black Box
 
 tools/source/serenity-sheet.png - Serenity's character sheet (a portrait, then idle, walk, run, interact and hurt rows), supplied by Caleb Kiatoukaysi for The Black Box; tools/generate_characters.py cuts her lobby walker from it
 
-Content/hand-sheet.png - built by tools/generate_assets.py from tools/source/hand.png: the player's arm, five hands from curled to open, sampled back down to the picture's own pixels and lined up by the forearm
+Content/hand-sheet.png - built by tools/generate_assets.py from tools/source/hand.png: the player's arm, five 87x115 frames from curled to open, sampled back down to the picture's own pixels and lined up by the forearm; the open frame is also the hand that catches the payout
 
 tools/source/hand.png - a picture of the player's arm, five hands from open to curled, supplied by Caleb Kiatoukaysi for The Black Box
 
