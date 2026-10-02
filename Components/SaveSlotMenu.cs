@@ -10,8 +10,8 @@ namespace TheBlackBox;
 /// </summary>
 /// <remarks>
 /// Drawn over the title screen rather than replacing it, so the box keeps watching while the
-/// player decides. All the file handling is in <see cref="SaveSystem"/>; this just draws what it
-/// gets back. SaveSlotScreen puts it on the screen stack and walks it with the keyboard.
+/// player decides. All the file stuff is in SaveSystem, this just draws what it gets back.
+/// SaveSlotScreen puts it on the screen stack and handles the keyboard for it.
 /// </remarks>
 public class SaveSlotMenu
 {
@@ -39,7 +39,7 @@ public class SaveSlotMenu
     /// <summary>Gap between the back button and the line that reports what went wrong.</summary>
     private const int StatusGap = 14;
 
-    /// <summary>The row the back button is on, under the slots, for the keyboard.</summary>
+    /// <summary>The keyboard row for the back button, under the slots.</summary>
     private const int BackRow = SaveSystem.SlotCount;
 
     private readonly FormPanel _panel = new();
@@ -65,7 +65,7 @@ public class SaveSlotMenu
     /// <summary>What went wrong with the last thing the player asked for, or null.</summary>
     private string _status;
 
-    /// <summary>Where the keyboard is: which row (a slot, or the back button), and the slot or its erase button.</summary>
+    /// <summary>Where the keyboard is: the row (a slot or the back button), and the column (the slot or its erase button).</summary>
     private int _focusRow;
     private int _focusColumn;
 
@@ -171,7 +171,7 @@ public class SaveSlotMenu
         _backButton.Update(gameTime);
     }
 
-    /// <summary>Moves the keyboard's place: up and down through the slots and BACK, left and right between a slot and its erase button.</summary>
+    /// <summary>Moves the keyboard selection. Up and down goes through the slots and BACK, left and right switches between a slot and its erase button.</summary>
     /// <param name="rows">-1, 0 or 1.</param>
     /// <param name="columns">-1, 0 or 1.</param>
     /// <returns>True if the place moved.</returns>
@@ -180,14 +180,14 @@ public class SaveSlotMenu
         int row = Math.Clamp(_focusRow + rows, 0, BackRow);
         int column = row == BackRow ? 0 : Math.Clamp(_focusColumn + columns, 0, 1);
 
-        // An empty slot cannot be erased and an unreadable one cannot be picked, so the keyboard steps over them.
+        // You can't erase an empty slot or pick a broken one, so the keyboard skips those.
         if (row < BackRow && column == 1 && !_eraseButtons[row].Enabled) column = 0;
         if (row < BackRow && column == 0 && !_slotButtons[row].Enabled) column = _eraseButtons[row].Enabled ? 1 : 0;
 
         return FocusOn(row, column);
     }
 
-    /// <summary>Puts the keyboard's place on whatever the mouse is over, so the two never light different plates.</summary>
+    /// <summary>Moves the keyboard selection to whatever the mouse is over, so they never light up different plates.</summary>
     /// <param name="mouse">Where the mouse is.</param>
     /// <returns>True if the place moved.</returns>
     public bool FollowMouse(Point mouse)
@@ -201,7 +201,7 @@ public class SaveSlotMenu
         return _backButton.Bounds.Contains(mouse) && FocusOn(BackRow, 0);
     }
 
-    /// <summary>Presses whatever the keyboard is on, the same as clicking it.</summary>
+    /// <summary>Presses whatever the keyboard is on, same as clicking it.</summary>
     public void Press()
     {
         if (_focusRow == BackRow) _backButton.Activate();
@@ -210,7 +210,7 @@ public class SaveSlotMenu
     }
 
     /// <summary>Draws the veil, the panel and everything on it. Call it in its own batch, over the title screen.</summary>
-    /// <remarks>Drawn closed too, so it can fade out after a slot is picked. The screen decides when it is on.</remarks>
+    /// <remarks>It still draws when closed so it can fade out after you pick a slot. The screen decides when it's open.</remarks>
     /// <param name="gameTime">The GameTime.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void Draw(GameTime gameTime, SpriteBatch spriteBatch)
@@ -313,7 +313,7 @@ public class SaveSlotMenu
         _status = null;
         Refresh();
 
-        // The erase button just went away with the run, so the keyboard goes back to the slot.
+        // The erase button is gone now that the run's deleted, so move the keyboard back to the slot.
         Navigate(0, 0);
     }
 
@@ -326,7 +326,7 @@ public class SaveSlotMenu
         _confirmingErase = -1;
     }
 
-    /// <summary>Moves the keyboard's place to one plate.</summary>
+    /// <summary>Moves the keyboard selection to one plate.</summary>
     /// <param name="row">A slot, or the back button's row.</param>
     /// <param name="column">0 for the slot, 1 for its erase button.</param>
     /// <returns>True if the place moved.</returns>

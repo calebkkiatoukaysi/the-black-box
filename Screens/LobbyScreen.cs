@@ -13,63 +13,61 @@ using TheBlackBox.StateManagement;
 namespace TheBlackBox.Screens;
 
 /// <summary>
-/// The lobby: the room the players wait in between tables. Walk about, talk to whoever is
-/// waiting, pick up what has been left on the floor, and go through the red door when the
-/// one who is seated across from you has asked you to.
+/// The lobby, where you wait between tables. You can walk around, talk to people, pick stuff up
+/// off the floor, and go through the red door once your opponent asks you to the table.
 /// </summary>
 /// <remarks>
-/// Seen from above, in a room bigger than the window, with a camera that follows the player and
-/// stops at the walls. The door stays shut until the chapter's opponent has been spoken to; that
-/// is the challenge. Through the door is the table.
+/// Top down, and the room is bigger than the window so the camera follows you and stops at the
+/// walls. The door stays locked until you talk to the chapter's opponent (that's the challenge).
 /// </remarks>
 public partial class LobbyScreen : GameScreen
 {
-    /// <summary>How fast the player walks, in world pixels a second.</summary>
+    /// <summary>How fast the player walks, in world pixels per second.</summary>
     private const float WalkSpeed = 230f;
 
-    /// <summary>The player's feet on the floor, wide and deep, in world pixels. What they collide with.</summary>
+    /// <summary>The size of the player's feet box in world pixels. This is what actually collides.</summary>
     private static readonly Vector2 FeetSize = new(36f, 15f);
 
-    /// <summary>How close to the door's foot the player has to be to try it.</summary>
+    /// <summary>How close the player has to be to the door to try it.</summary>
     private const float DoorReach = 170f;
 
-    /// <summary>How long the door stands open, and the room fades, before the table comes up.</summary>
+    /// <summary>How long the door stays open before the fade, and how long the fades take.</summary>
     private const float DoorOpenSeconds = 0.5f;
     private static readonly TimeSpan FadeInTime = TimeSpan.FromSeconds(0.8);
     private static readonly TimeSpan FadeOutTime = TimeSpan.FromSeconds(1.0);
 
-    /// <summary>The blink of the cameras' lights, on and off, in seconds.</summary>
+    /// <summary>How fast the camera lights blink, in seconds.</summary>
     private const float CameraBlink = 0.9f;
 
-    /// <summary>Footsteps: how loud, how far the pitch wanders, and how far left and right they are panned in turn.</summary>
+    /// <summary>Footsteps: how loud, how much the pitch varies, and how far they pan left and right.</summary>
     private const float StepVolume = 0.8f;
     private const float StepPitch = 0.1f;
     private const float StepPan = 0.12f;
 
-    /// <summary>The voices: how high each one's blip is.</summary>
+    /// <summary>How high or low each person's text blip is.</summary>
     private const float SerenityPitch = 0.12f;
     private const float ConscriptPitch = 0f;
     private const float BoxPitch = -0.55f;
 
-    /// <summary>How the portraits are blown up in the dialogue box, and the part of a walking sheet used as a portrait.</summary>
+    /// <summary>How big the portraits are in the dialogue box, and which part of a walking sheet gets used as a portrait.</summary>
     private const float PortraitScale = 2f;
     private const float WalkerPortraitScale = 6f;
     private static readonly Rectangle WalkerBust = new(0, 0, WalkerSprite.FrameWidth, 36);
 
-    /// <summary>The red light over the door when it is open, and how it breathes.</summary>
+    /// <summary>The red glow over the door once it's open, and how fast it pulses.</summary>
     private static readonly Point DoorGlowSize = new(240, 150);
     private static readonly Vector2 DoorGlowOffset = new(0f, -150f);
     private static readonly Color DoorGlowColor = new(210, 36, 24);
     private const float DoorGlowBreath = 2.2f;
 
-    /// <summary>Where the words on the heading go, and how long a message stays up.</summary>
+    /// <summary>Where the heading text goes and how long a message stays up.</summary>
     private const float HeadingY = 14f;
     private const float ObjectiveY = 42f;
     private const float ToastY = 96f;
     private const float ToastSeconds = 2.6f;
     private const float PromptRise = 160f;
 
-    /// <summary>The highest a prompt may float, so one over the door never sits on top of a message.</summary>
+    /// <summary>The highest a prompt can go, so the one over the door doesn't overlap a message.</summary>
     private const float PromptTop = 140f;
     private const float Margin = 24f;
     private static readonly Vector2 PocketsAt = new(Margin, 800f);
@@ -101,13 +99,13 @@ public partial class LobbyScreen : GameScreen
     private SpriteFont _detailFont;
     private SpriteFont _font;
 
-    /// <summary>The box, as somebody to be spoken to: no picture, red name, a low voice.</summary>
+    /// <summary>The box as a speaker: no picture, red name, low voice.</summary>
     private LobbySpeaker _box;
 
-    /// <summary>Who the box has seated across from the player this chapter.</summary>
+    /// <summary>Who the player is up against this chapter.</summary>
     private string _challenger;
 
-    /// <summary>Seconds since the door was opened to go through, or a negative number while it has not been.</summary>
+    /// <summary>Seconds since the player went through the door, or negative if they haven't yet.</summary>
     private float _entering = -1f;
 
     private float _clock;
@@ -115,7 +113,7 @@ public partial class LobbyScreen : GameScreen
     private float _toastLeft;
     private bool _stepLeft;
 
-    /// <summary>The item the player is standing on with full pockets, so the warning is said once and not every frame.</summary>
+    /// <summary>The item the player is standing on with full pockets, so the warning only shows once and not every frame.</summary>
     private LobbyItem _warnedAbout;
 
     /// <summary>Puts the player in the lobby with a run.</summary>
@@ -129,7 +127,7 @@ public partial class LobbyScreen : GameScreen
         TransitionOffTime = FadeOutTime;
     }
 
-    /// <summary>Loads the room and everyone in it, dresses the player, and starts the lobby's song.</summary>
+    /// <summary>Loads the room and everyone in it, recolours the player, and starts the lobby music.</summary>
     public override void Activate()
     {
         _content ??= new ContentManager(ScreenManager.Game.Services, "Content");
@@ -156,7 +154,7 @@ public partial class LobbyScreen : GameScreen
         _player.Facing = Direction.Up;
         _player.Stepped += Footstep;
 
-        // Between chapters the seat is empty and the roster fills it, the same way the table does.
+        // Between chapters the save has no opponent yet, so pick one off the roster like the table does.
         _challenger = string.IsNullOrWhiteSpace(_run.OpponentId) ? Opponents.ForChapter(_run.Chapter).Id : _run.OpponentId;
 
         AddPeople(look.Who);
@@ -169,7 +167,7 @@ public partial class LobbyScreen : GameScreen
         _audio.PlaySong(Track.Lobby);
     }
 
-    /// <summary>Unloads the room, and lets go of what was made rather than loaded.</summary>
+    /// <summary>Unloads the room and disposes the textures I made myself (the recoloured sheet and the dark).</summary>
     public override void Unload()
     {
         _playerSheet?.Dispose();
@@ -210,7 +208,7 @@ public partial class LobbyScreen : GameScreen
             GoThroughDoor();
     }
 
-    /// <summary>Runs everything that moves on its own: the people, the items, the cameras, the camera, and the door.</summary>
+    /// <summary>Runs everything that moves on its own: the people, the items, the camera lights, the camera, and the door.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="otherScreenHasFocus">Whether a screen above has the input.</param>
     /// <param name="coveredByOtherScreen">Whether a non-popup screen is on top.</param>
@@ -218,7 +216,7 @@ public partial class LobbyScreen : GameScreen
     {
         base.Update(gameTime, otherScreenHasFocus, coveredByOtherScreen);
 
-        // Paused: nothing moves, and the player stops mid-stride rather than walking on the spot.
+        // Paused, so nothing moves. The player stops walking so they don't walk in place under the menu.
         if (!IsActive && _entering < 0f)
         {
             _player.IsWalking = false;
@@ -249,7 +247,7 @@ public partial class LobbyScreen : GameScreen
         }
     }
 
-    /// <summary>Draws the room, the dark over it, the lights in it, and the heading, pockets and dialogue over all of that.</summary>
+    /// <summary>Draws the room, the darkness over it, the door light, then the heading, pockets and dialogue on top.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     public override void Draw(GameTime gameTime)
     {
@@ -257,7 +255,7 @@ public partial class LobbyScreen : GameScreen
         Matrix world = _camera.Transform;
         float roomHeight = _map.Bounds.Height;
 
-        // 1. The room: tiles, the wall's fittings, and everyone and everything on the floor, sorted by how far down the room they stand.
+        // 1. The room: tiles, the stuff on the walls, and everything on the floor, sorted by how far down the room it is.
         spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp, transformMatrix: world);
         _map.DrawTiles(spriteBatch, _camera.View);
         foreach (LobbyProp prop in _map.Props)
@@ -270,12 +268,12 @@ public partial class LobbyScreen : GameScreen
         _player.Draw(spriteBatch, Layers.OnFloor(_player.Position.Y, roomHeight));
         spriteBatch.End();
 
-        // 2. The dark, with the lamps' pools cut out of it. Smooth, so the pools have soft edges.
+        // 2. The darkness with the lamp light cut out of it. Linear sampling so the edges are soft.
         spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, transformMatrix: world);
         _map.DrawShade(spriteBatch);
         spriteBatch.End();
 
-        // 3. The door's red lamp, once it is lit.
+        // 3. The door's red light, once it's open.
         if (DoorIsOpen)
         {
             spriteBatch.Begin(SpriteSortMode.Deferred, BoxScene.PremultipliedAdditive, SamplerState.LinearClamp, transformMatrix: world);
@@ -283,7 +281,7 @@ public partial class LobbyScreen : GameScreen
             spriteBatch.End();
         }
 
-        // 4. On the glass: the pockets, or the dialogue box's frame and picture when somebody is talking.
+        // 4. The HUD: the pockets, or the dialogue box and portrait when someone is talking.
         spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
         if (_dialogue.IsOpen)
         {
@@ -296,7 +294,7 @@ public partial class LobbyScreen : GameScreen
         }
         spriteBatch.End();
 
-        // 5. The words: the heading, what to do, a message, a prompt, and whatever is being said.
+        // 5. Text: the heading, the objective, messages, the prompt, and the dialogue.
         spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.LinearClamp);
         DrawHeading(spriteBatch);
         DrawPrompt(spriteBatch);
@@ -306,19 +304,19 @@ public partial class LobbyScreen : GameScreen
         ScreenManager.FadeBackBufferToBlack(TransitionPosition);
     }
 
-    /// <summary>Whether the chapter's opponent has asked the player to the table yet.</summary>
+    /// <summary>Whether the chapter's opponent has challenged the player yet.</summary>
     private bool DoorIsOpen => _run.HasFlag(ChallengedFlag);
 
-    /// <summary>The flag that says the door is open this chapter. Per chapter, so the next one starts with it shut.</summary>
+    /// <summary>The flag for the door being open. It's per chapter so the door starts locked again next chapter.</summary>
     private string ChallengedFlag => "lobby." + _run.Chapter + ".challenged";
 
-    /// <summary>The flag that says somebody has already been spoken to this chapter.</summary>
+    /// <summary>The flag for having already talked to someone this chapter.</summary>
     private string SpokenFlag(string id) => "lobby." + _run.Chapter + ".spoke." + id;
 
-    /// <summary>The walking sheet for one of the two the player can be.</summary>
+    /// <summary>The walking sheet for one of the two conscripts.</summary>
     private static string SheetFor(Conscript who) => who == Conscript.Second ? "conscript-second" : "conscript-first";
 
-    /// <summary>Puts the two people waiting in the room: Serenity, and whichever conscript the player is not.</summary>
+    /// <summary>Adds the two people in the room: Serenity, and whichever conscript the player didn't pick.</summary>
     /// <param name="player">Who the player is.</param>
     private void AddPeople(Conscript player)
     {
@@ -330,7 +328,7 @@ public partial class LobbyScreen : GameScreen
         serenity.LoadContent(_content);
         other.LoadContent(_content);
 
-        // Her picture comes off her table sheet, the even-tempered column.
+        // Her portrait comes off her table sheet (the Even column).
         Opponent first = Opponents.First;
         var serenityPicture = new Rectangle((int)OpponentPose.Even * first.FrameWidth, 0, first.FrameWidth, first.FrameHeight);
 
@@ -343,7 +341,7 @@ public partial class LobbyScreen : GameScreen
             other, _map.ConscriptSpot));
     }
 
-    /// <summary>Puts this chapter's items on the floor, minus whatever has already been picked up since the table was cleared.</summary>
+    /// <summary>Puts this chapter's items on the floor, minus anything already picked up.</summary>
     private void AddItems()
     {
         foreach ((string spot, ItemId item) in LobbyMap.ItemsFor(_run.Chapter))
@@ -352,7 +350,7 @@ public partial class LobbyScreen : GameScreen
         }
     }
 
-    /// <summary>Which way the player is pushing: WASD, the arrows, the stick or the d-pad, added up.</summary>
+    /// <summary>Which way the player is pushing, from WASD, the arrows or the stick.</summary>
     private Vector2 ReadMovement(InputState input)
     {
         if (_proofMove is Vector2 scripted) return scripted;
@@ -369,7 +367,7 @@ public partial class LobbyScreen : GameScreen
         return push;
     }
 
-    /// <summary>Moves the player one axis at a time, so a wall stops one direction and lets them slide along it in the other.</summary>
+    /// <summary>Moves the player one axis at a time, so walking into a wall at an angle slides along it instead of stopping dead.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="push">Which way, from the input.</param>
     private void Walk(GameTime gameTime, Vector2 push)
@@ -380,7 +378,7 @@ public partial class LobbyScreen : GameScreen
             return;
         }
 
-        // Diagonals are not faster.
+        // So diagonals aren't faster.
         if (push.LengthSquared() > 1f) push.Normalize();
 
         Vector2 step = push * WalkSpeed * (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -394,12 +392,12 @@ public partial class LobbyScreen : GameScreen
         _player.Position = at;
         _player.IsWalking = true;
 
-        // Face the way they are pushing hardest; on a dead diagonal, keep whichever they already had.
+        // Face whichever way they're pushing the most. On a perfect diagonal keep the old facing.
         if (MathF.Abs(push.X) > MathF.Abs(push.Y) + 0.01f) _player.Facing = push.X < 0 ? Direction.Left : Direction.Right;
         else if (MathF.Abs(push.Y) > MathF.Abs(push.X) + 0.01f) _player.Facing = push.Y < 0 ? Direction.Up : Direction.Down;
     }
 
-    /// <summary>Backs the feet out of anything they walked into sideways, flush against its edge.</summary>
+    /// <summary>Pushes the feet back out of anything they walked into sideways, right up against its edge.</summary>
     private float ResolveX(Vector2 at, float moved)
     {
         foreach (BoundingRectangle solid in Solids())
@@ -412,7 +410,7 @@ public partial class LobbyScreen : GameScreen
         return at.X;
     }
 
-    /// <summary>Backs the feet out of anything they walked into up or down the room.</summary>
+    /// <summary>Same thing for walking up or down.</summary>
     private float ResolveY(Vector2 at, float moved)
     {
         foreach (BoundingRectangle solid in Solids())
@@ -425,10 +423,10 @@ public partial class LobbyScreen : GameScreen
         return at.Y;
     }
 
-    /// <summary>How far off a wall the feet are left. The tutorial's rectangles count touching as hitting.</summary>
+    /// <summary>How far off a wall the feet get left. The tutorial's rectangles count touching as colliding, so it can't be exactly 0.</summary>
     private const float CollisionGap = 0.01f;
 
-    /// <summary>Everything the player cannot walk through: walls, furniture and people.</summary>
+    /// <summary>Everything the player can't walk through: walls, furniture and people.</summary>
     private IEnumerable<BoundingRectangle> Solids()
     {
         foreach (BoundingRectangle wall in _map.Walls) yield return wall;
@@ -437,11 +435,11 @@ public partial class LobbyScreen : GameScreen
         foreach (LobbyNpc npc in _npcs) yield return npc.Footprint;
     }
 
-    /// <summary>The player's feet as a box, for a given position.</summary>
+    /// <summary>The player's feet box at a position.</summary>
     private static BoundingRectangle FeetAt(Vector2 at) =>
         new(at.X - FeetSize.X / 2f, at.Y - FeetSize.Y, FeetSize.X, FeetSize.Y);
 
-    /// <summary>E, Space or Enter: talk to whoever is closest, or try the door.</summary>
+    /// <summary>E, Space or Enter: talks to whoever is closest, or tries the door.</summary>
     private void Interact()
     {
         LobbyNpc nearest = NearestInReach();
@@ -463,7 +461,7 @@ public partial class LobbyScreen : GameScreen
         _dialogue.Open(_box, LobbyLines.DoorLocked);
     }
 
-    /// <summary>Whoever is close enough to talk to, closest first, or null.</summary>
+    /// <summary>The closest person in talking range, or null.</summary>
     private LobbyNpc NearestInReach()
     {
         LobbyNpc nearest = null;
@@ -482,11 +480,11 @@ public partial class LobbyScreen : GameScreen
         return nearest;
     }
 
-    /// <summary>Whether the player is standing close enough to the door to try it.</summary>
+    /// <summary>Whether the player is close enough to the door to try it.</summary>
     private bool NearDoor => Vector2.Distance(_player.Position, _map.Door.Foot) < DoorReach;
 
-    /// <summary>Starts a conversation. When the chapter's opponent finishes theirs, the door opens.</summary>
-    /// <param name="npc">Who is being spoken to.</param>
+    /// <summary>Starts a conversation. When the chapter's opponent finishes talking the door opens.</summary>
+    /// <param name="npc">Who the player is talking to.</param>
     private void Talk(LobbyNpc npc)
     {
         npc.Walker.Face(_player.Position);
@@ -501,14 +499,14 @@ public partial class LobbyScreen : GameScreen
             _run.SetFlag(SpokenFlag(npc.Id));
             if (!challenger || DoorIsOpen) return;
 
-            // The challenge: the door unlocks and its lamp comes on.
+            // This is the challenge, so unlock the door and turn its light on.
             _run.SetFlag(ChallengedFlag);
             _audio.Play(Sfx.DoorOpen, pan: Pan(_map.Door.Foot));
             ShowToast(OpenObjective);
         });
     }
 
-    /// <summary>Picks up anything the player is standing on, if there is room for it.</summary>
+    /// <summary>Picks up anything the player is standing on, if their pockets have room.</summary>
     private void PickUpItems()
     {
         BoundingRectangle feet = FeetAt(_player.Position);
@@ -541,7 +539,7 @@ public partial class LobbyScreen : GameScreen
         }
     }
 
-    /// <summary>Opens the door the rest of the way and starts the walk through it. The table comes up once the room has gone dark.</summary>
+    /// <summary>Opens the door and starts going through. The table comes up once the room fades out.</summary>
     private void GoThroughDoor()
     {
         if (_entering >= 0f) return;
@@ -552,15 +550,15 @@ public partial class LobbyScreen : GameScreen
         _audio.StopSong();
         _audio.Play(Sfx.EnterArena);
 
-        // Saved on the way in, so the pockets go to the table even if the game is closed there.
+        // Save on the way in so the pockets carry over even if the game gets closed at the table.
         _session.Save();
     }
 
-    /// <summary>The pause menu's way out: save the run as it is.</summary>
+    /// <summary>What the pause menu calls on RETURN TO TITLE: saves the run as it is.</summary>
     /// <returns>Why the save failed, or null.</returns>
     private string SaveAndLeave() => _session.Save() ? null : _session.LastError;
 
-    /// <summary>A footstep, a little different every time, left and right in turn.</summary>
+    /// <summary>Plays a footstep, a little different each time and alternating left and right.</summary>
     private void Footstep()
     {
         _stepLeft = !_stepLeft;
@@ -568,18 +566,18 @@ public partial class LobbyScreen : GameScreen
         _audio.Play(Sfx.Footstep, StepVolume, pitch, _stepLeft ? -StepPan : StepPan);
     }
 
-    /// <summary>How far left or right of the middle of the screen something is, for panning a sound to it.</summary>
+    /// <summary>How far left or right of the screen's middle something is, for panning its sound.</summary>
     private float Pan(Vector2 world) =>
         Math.Clamp((_camera.ToScreen(world).X - BlackBoxGame.ScreenWidth / 2f) / (BlackBoxGame.ScreenWidth / 2f), -1f, 1f) * 0.6f;
 
-    /// <summary>Puts a message up near the top of the screen for a moment.</summary>
+    /// <summary>Shows a message near the top of the screen for a couple seconds.</summary>
     private void ShowToast(string message)
     {
         _toast = message;
         _toastLeft = ToastSeconds;
     }
 
-    /// <summary>The door's red lamp, breathing.</summary>
+    /// <summary>Draws the pulsing red glow over the door.</summary>
     private void DrawDoorLight(SpriteBatch spriteBatch)
     {
         float breath = 0.55f + 0.25f * MathF.Sin(_clock * DoorGlowBreath);
@@ -588,7 +586,7 @@ public partial class LobbyScreen : GameScreen
         spriteBatch.Draw(_glow, glow, DoorGlowColor * breath);
     }
 
-    /// <summary>The chapter and the room, what is left to do, any message, and the way to pause.</summary>
+    /// <summary>Draws the chapter, the objective, any message, and the pause hint.</summary>
     private void DrawHeading(SpriteBatch spriteBatch)
     {
         string heading = "CHAPTER " + _run.Chapter + "  ·  THE LOBBY";
@@ -607,7 +605,7 @@ public partial class LobbyScreen : GameScreen
         }
     }
 
-    /// <summary>What E would do here, floating over whoever or whatever it would do it to.</summary>
+    /// <summary>Draws what E would do right now, over whoever or whatever it would do it to.</summary>
     private void DrawPrompt(SpriteBatch spriteBatch)
     {
         if (_dialogue.IsOpen || _entering >= 0f || !IsActive) return;

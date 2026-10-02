@@ -19,18 +19,18 @@ namespace TheBlackBox;
 /// 3. The game will automatically capture and save proof shots to the specified directory.
 /// </summary>
 /// <remarks>
-/// The run goes the way a player would: the title, the options, the save form, the customization
-/// screen, the lobby, the door, the table, the verdict, back to the lobby, and out to the title
-/// through the pause menu. Each screen with a schedule of its own (customization, lobby, table)
-/// is handed its own frame count once it is up. It plays a scratch run that is never written,
-/// and it is silent: every sound that would have played goes into audio.log instead.
+/// It goes through the game like a player would: the title, options, the save form,
+/// customization, the lobby, the door, the table, the verdict, back to the lobby, and out to the
+/// title through the pause menu. The screens with their own schedule (customization, lobby, table)
+/// get their own frame count once they're up. It uses a scratch run that never saves, and it's
+/// silent. Every sound that would have played gets written to audio.log instead.
 /// </remarks>
 public partial class BlackBoxGame
 {
     /// <summary>Where the shots go, or null when the game is being played.</summary>
     public string ProofDirectory { get; init; }
 
-    // The menus, by frame: each one is given time to fade in before it is shot.
+    // The menus by frame. Each one gets time to fade in before its shot.
     private const int ProofTitleShot = 50;
     private const int ProofOptionsOpen = 51;
     private const int ProofOptionsShot = 75;
@@ -39,7 +39,7 @@ public partial class BlackBoxGame
     private const int ProofSlotsShot = 120;
     private const int ProofCustomizeOpen = 121;
 
-    /// <summary>How long the lobby is given after the verdict sends the player back to it, and the title after the pause menu does.</summary>
+    /// <summary>How long the lobby gets after the verdict sends you back, and how long the title gets after the pause menu.</summary>
     private const int ProofSettle = 60;
 
     /// <summary>The frame the proof run is on, which is what schedules it.</summary>
@@ -59,12 +59,12 @@ public partial class BlackBoxGame
     /// <summary>The target the frame is being drawn into while a shot is pending.</summary>
     private RenderTarget2D _proofTarget;
 
-    /// <summary>Which leg of the run it is on, the screen whose own schedule is running, and the frame that screen came up on.</summary>
+    /// <summary>Which part of the run it's on, the screen whose schedule is running, and the frame that screen opened on.</summary>
     private ProofStage _proofStage = ProofStage.Menus;
     private GameScreen _proofSubject;
     private int _proofSubjectStart;
 
-    /// <summary>Every sound the run asked for, by frame, written out at the end.</summary>
+    /// <summary>Every sound the run played, by frame. Gets written out at the end.</summary>
     private readonly StringBuilder _proofAudio = new();
     private int _proofAudioSeen;
 
@@ -111,7 +111,7 @@ public partial class BlackBoxGame
         }
     }
 
-    /// <summary>The title, the options over it, the save form over it, and then the customization screen with a scratch run.</summary>
+    /// <summary>The title, then options on top of it, then the save form, then customization with a scratch run.</summary>
     private string ProofMenus()
     {
         switch (_proofFrame)
@@ -131,7 +131,7 @@ public partial class BlackBoxGame
                     if (screen is OptionsScreen) screen.ExitScreen();
                 return null;
 
-            // The save form reads the real slots off disk to show them. It never writes unless one is clicked.
+            // The save form reads the real slots so it can show them. It never writes unless you click one.
             case ProofSlotsOpen:
                 _screenManager.AddScreen(new SaveSlotScreen());
                 return null;
@@ -139,7 +139,7 @@ public partial class BlackBoxGame
             case ProofSlotsShot:
                 return "slots.png";
 
-            // A run of its own, never written anywhere, dressed and named on the customization screen.
+            // A scratch run that never saves. It gets customized and named on the customization screen.
             case ProofCustomizeOpen:
                 foreach (GameScreen screen in _screenManager.GetScreens())
                     if (screen is not BoxBackgroundScreen) _screenManager.RemoveScreen(screen);
@@ -152,7 +152,7 @@ public partial class BlackBoxGame
         }
     }
 
-    /// <summary>Back in the lobby off the verdict: a shot of it, then the pause menu's way out to the title.</summary>
+    /// <summary>Back in the lobby after the verdict. Takes a shot, then goes out to the title through the pause menu.</summary>
     private string LobbyAgain(LobbyScreen lobby)
     {
         if (Frame() == ProofSettle) return "lobby-again.png";
@@ -168,11 +168,11 @@ public partial class BlackBoxGame
         return null;
     }
 
-    /// <summary>Waits for a screen of a type to come up, then runs a step of its schedule each frame until it is done.</summary>
+    /// <summary>Waits for a screen of type T to open, then runs one step of its schedule each frame until it's done.</summary>
     /// <typeparam name="T">The screen to wait for.</typeparam>
-    /// <param name="step">One frame of its schedule. Returns the file to shoot, or null.</param>
+    /// <param name="step">One frame of its schedule. Returns the file name to save, or null.</param>
     /// <param name="end">The last frame of its schedule.</param>
-    /// <param name="next">Which leg comes after.</param>
+    /// <param name="next">Which part comes next.</param>
     private string RunSubject<T>(System.Func<T, string> step, int end, ProofStage next) where T : GameScreen
     {
         if (_proofSubject is not T subject)
@@ -198,10 +198,10 @@ public partial class BlackBoxGame
         return step(subject);
     }
 
-    /// <summary>How many frames the current subject has been up.</summary>
+    /// <summary>How many frames the current screen has been open.</summary>
     private int Frame() => _proofFrame - _proofSubjectStart;
 
-    /// <summary>Copies any new sounds off the audio manager's log with the frame they were asked for on.</summary>
+    /// <summary>Copies any new sounds from the audio manager's log, along with the frame they played on.</summary>
     private void RecordProofAudio()
     {
         for (; _proofAudioSeen < _audio.Log.Count; _proofAudioSeen++)

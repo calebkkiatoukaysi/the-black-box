@@ -6,12 +6,12 @@ using TheBlackBox.StateManagement;
 namespace TheBlackBox.Screens;
 
 /// <summary>
-/// Escape in the lobby or at the table: RESUME, or save and go back to the title. A popup, so
-/// whatever was paused stays on screen under the veil.
+/// Escape in the lobby or at the table: RESUME, or save and go back to the title. It's a popup so
+/// the paused screen stays drawn underneath.
 /// </summary>
 /// <remarks>
-/// The screen underneath stops itself while this has focus (that is the IsActive check in its
-/// Update), so the discussion clock does not run while the menu is up.
+/// The screen underneath stops itself while this has focus (the IsActive check in its Update), so
+/// the discussion clock doesn't keep running while you're paused.
 /// </remarks>
 public class PauseMenuScreen : MenuScreen
 {
@@ -37,11 +37,11 @@ public class PauseMenuScreen : MenuScreen
     private float _noteY;
     private float _statusY;
 
-    /// <summary>Why the save on the way out failed, or null.</summary>
+    /// <summary>Why the save failed on the way out, or null.</summary>
     private string _status;
 
     /// <summary>Builds the menu.</summary>
-    /// <param name="leave">Saves the run on the way out. Returns why it could not, or null.</param>
+    /// <param name="leave">Saves the run on the way out. Returns why it couldn't, or null.</param>
     public PauseMenuScreen(Func<string> leave)
     {
         _leave = leave;
@@ -50,7 +50,7 @@ public class PauseMenuScreen : MenuScreen
         TransitionOnTime = FadeTime;
         TransitionOffTime = FadeTime;
 
-        // Amber keeps playing; red is the way out.
+        // Amber keeps playing, red is the way out.
         var resume = new MenuEntry(ResumeLabel, ButtonSprite.Amber);
         var title = new MenuEntry(TitleLabel, ButtonSprite.EmberRed);
 
@@ -61,7 +61,7 @@ public class PauseMenuScreen : MenuScreen
         MenuEntries.Add(title);
     }
 
-    /// <summary>Loads the form, lays it out, and plays the pause sound.</summary>
+    /// <summary>Loads the form, lays it out and plays the pause sound.</summary>
     public override void Activate()
     {
         base.Activate();
@@ -74,7 +74,7 @@ public class PauseMenuScreen : MenuScreen
         Audio.Play(Sfx.Pause);
     }
 
-    /// <summary>Escape again is RESUME.</summary>
+    /// <summary>Pressing Escape again is the same as RESUME.</summary>
     protected override void OnCancel()
     {
         Audio.Play(Sfx.MenuBack);
@@ -108,10 +108,10 @@ public class PauseMenuScreen : MenuScreen
         base.Draw(gameTime);
     }
 
-    /// <summary>For the proof run: RETURN TO TITLE, without a key to press it.</summary>
+    /// <summary>For the proof run, since it can't press keys: RETURN TO TITLE.</summary>
     internal void ProofReturnToTitle() => ReturnToTitle();
 
-    /// <summary>Saves, and goes back to the box on the title screen. A failed save keeps the player where they are.</summary>
+    /// <summary>Saves and goes back to the title. If the save fails you stay where you are.</summary>
     private void ReturnToTitle()
     {
         _status = _leave();
@@ -124,7 +124,7 @@ public class PauseMenuScreen : MenuScreen
         LoadingScreen.Load(ScreenManager, null, new BoxBackgroundScreen(), new TitleScreen());
     }
 
-    /// <summary>Sizes the panel around its contents and centres it.</summary>
+    /// <summary>Sizes the panel to fit everything and centres it.</summary>
     private void LayOut()
     {
         float entries = -EntryGap;

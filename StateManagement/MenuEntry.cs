@@ -9,8 +9,8 @@ using Microsoft.Xna.Framework.Graphics;
 namespace TheBlackBox.StateManagement;
 
 /// <summary>
-/// One entry on a MenuScreen. The sample draws plain text; here every entry is one of the game's
-/// button plates, so a menu looks like the rest of the game and can still be clicked.
+/// One entry on a MenuScreen. The sample just draws text, but I made each entry one of my button
+/// plates so the menus match the rest of the game and can still be clicked.
 /// </summary>
 public class MenuEntry
 {
@@ -24,10 +24,10 @@ public class MenuEntry
         set => Plate.Label = value;
     }
 
-    /// <summary>Whether left and right change this entry instead of moving off it. True once something listens to <see cref="Adjusted"/>.</summary>
+    /// <summary>Whether left and right change this entry instead of moving off it. True once something listens to Adjusted.</summary>
     public bool IsAdjustable => Adjusted is not null;
 
-    /// <summary>Raised when the entry is picked, by Enter or by a click.</summary>
+    /// <summary>Raised when the entry is picked, by Enter or a click.</summary>
     public event Action Selected;
 
     /// <summary>Raised with -1 or 1 when left or right is pressed on it.</summary>
@@ -47,14 +47,14 @@ public class MenuEntry
     /// <param name="content">The content manager to load with.</param>
     public void LoadContent(ContentManager content) => Plate.LoadContent(content);
 
-    /// <summary>Raises <see cref="Selected"/>.</summary>
+    /// <summary>Raises Selected.</summary>
     protected internal virtual void OnSelectEntry() => Selected?.Invoke();
 
-    /// <summary>Raises <see cref="Adjusted"/>.</summary>
+    /// <summary>Raises Adjusted.</summary>
     /// <param name="direction">-1 for left, 1 for right.</param>
     protected internal virtual void OnAdjust(int direction) => Adjusted?.Invoke(direction);
 
-    /// <summary>Runs the plate. Only called while the menu has focus, so a click cannot land on a menu under a popup.</summary>
+    /// <summary>Runs the plate. Only called while the menu has focus, so you can't click a menu that's under a popup.</summary>
     /// <param name="isSelected">Whether this is the entry the keyboard is on.</param>
     /// <param name="gameTime">The frame's timing.</param>
     public void Update(bool isSelected, GameTime gameTime)

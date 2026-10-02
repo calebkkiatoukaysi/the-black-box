@@ -11,13 +11,13 @@ namespace TheBlackBox;
 /// <remarks>
 /// Comes in from the bottom-right on a diagonal, like your own arm reaching for something, and
 /// slides along its own length so the elbow never leaves the bottom edge. Five frames, curled
-/// through open, cut from my own picture of the arm (tools/source/hand.png). Every frame is
-/// lined up by where the forearm leaves the picture, so the arm stays put while the hand opens.
-/// Drawn in front of the box, not clipped into it.
+/// to open, cut out of my own drawing of the arm (tools/source/hand.png). Every frame is lined
+/// up by where the forearm goes off the bottom, so the arm stays still while the hand opens.
+/// It's drawn in front of the box, not clipped into it.
 /// </remarks>
 public class HandSprite
 {
-    /// <summary>Width and height of one frame in hand-sheet.png. The generator prints them.</summary>
+    /// <summary>Width and height of one frame in hand-sheet.png. The generator prints these.</summary>
     private const int FrameWidth = 87;
 
     /// <summary>The other dimension. See <see cref="FrameWidth"/>.</summary>
@@ -27,7 +27,7 @@ public class HandSprite
     private const int Frames = 5;
 
     /// <summary>Where the leading fingertip of the open hand is inside a frame, in sheet pixels.</summary>
-    /// <remarks>The sprite is placed by its fingertip, since that's the part the game cares about. tools/generate_assets.py prints it when it cuts the sheet.</remarks>
+    /// <remarks>The sprite gets placed by its fingertip since that's the part that matters. tools/generate_assets.py prints it when it cuts the sheet.</remarks>
     private static readonly Vector2 Fingertip = new(7f, 45f);
 
     private Texture2D _sheet;

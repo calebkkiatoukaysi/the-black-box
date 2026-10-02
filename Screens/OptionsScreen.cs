@@ -7,11 +7,11 @@ using TheBlackBox.StateManagement;
 namespace TheBlackBox.Screens;
 
 /// <summary>
-/// The three volumes, on a form over the title. Left and right turn one down or up.
+/// The three volumes on a form over the title. Left and right turn one down or up.
 /// </summary>
 /// <remarks>
-/// The change is heard straight away, since AudioManager reads the settings every frame. The
-/// file is only written once the form closes, not on every press.
+/// You hear the change right away since AudioManager reads the settings every frame. The file
+/// only gets written when the form closes, not on every press.
 /// </remarks>
 public class OptionsScreen : MenuScreen
 {
@@ -108,13 +108,13 @@ public class OptionsScreen : MenuScreen
         base.Draw(gameTime);
     }
 
-    /// <summary>Moves one volume a step, and puts the new number on the plates.</summary>
+    /// <summary>Moves one volume by a step and puts the new number on its plate.</summary>
     /// <param name="set">Writes the new value back to the settings.</param>
     /// <param name="value">The value now.</param>
     /// <param name="step">-1 or 1.</param>
     private void Change(Action<float> set, float value, int step)
     {
-        // Rounded to the step, so ten presses always land back on a clean number.
+        // Rounded to the step so it always lands on a clean number (no 69.999%).
         float next = MathF.Round((value + step * VolumeStep) / VolumeStep) * VolumeStep;
         set(Math.Clamp(next, 0f, 1f));
         Relabel();
@@ -128,7 +128,7 @@ public class OptionsScreen : MenuScreen
         _sound.Text = Label(SoundLabel, Audio.Settings.SfxVolume);
     }
 
-    /// <summary>A plate's label: the name, then the volume as a percentage between the two arrows that change it.</summary>
+    /// <summary>A plate's label: the name, then the volume as a percent between the arrows.</summary>
     private static string Label(string name, float value) => string.Format(CultureInfo.InvariantCulture,
         "{0}   <  {1}%  >", name, (int)MathF.Round(value * 100f));
 
@@ -139,7 +139,7 @@ public class OptionsScreen : MenuScreen
         ExitScreen();
     }
 
-    /// <summary>Sizes the panel around the heading, the entries and the note, and centres it.</summary>
+    /// <summary>Sizes the panel to fit the heading, the entries and the note, and centres it.</summary>
     private void LayOut()
     {
         float entries = -EntryGap;

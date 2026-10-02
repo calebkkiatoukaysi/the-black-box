@@ -7,29 +7,29 @@ using TheBlackBox.Audio;
 namespace TheBlackBox.Lobby;
 
 /// <summary>
-/// The box along the bottom of the lobby that conversations are typed out in, a letter at a time,
-/// with the speaker's picture and name beside it and a blip for their voice.
+/// The dialogue box at the bottom of the lobby. Lines type out a letter at a time, with the
+/// speaker's portrait and name next to them and a blip sound for their voice.
 /// </summary>
 /// <remarks>
-/// Pressing on while a page is still typing finishes it; pressing on a finished page turns it.
-/// The blip is one sound re-pitched per speaker, every other letter, with a little wobble so a
-/// long line does not sound like a machine gun.
+/// Pressing while a page is typing finishes it, pressing on a finished page goes to the next one.
+/// The blip is one sound pitched differently per speaker, every other letter, with a bit of random
+/// wobble so long lines don't sound like a machine gun.
 /// </remarks>
 public class DialogueBox
 {
     /// <summary>Where the box is on screen.</summary>
     private static readonly Rectangle Box = new(60, 596, 1480, 280);
 
-    /// <summary>The square the picture sits in, inside the box on the left.</summary>
+    /// <summary>The frame the portrait sits in, on the left side of the box.</summary>
     private static readonly Rectangle PortraitFrame = new(Box.X + 18, Box.Y + 18, 300, Box.Height - 36);
 
-    /// <summary>Where the words go, right of the picture.</summary>
+    /// <summary>Where the text goes, to the right of the portrait.</summary>
     private const int TextPadding = 32;
     private const float NameY = 616f;
     private const float LinesY = 664f;
     private const float HintRise = 34f;
 
-    /// <summary>How fast a line types out, in letters a second, and how often it blips.</summary>
+    /// <summary>How fast a line types out (letters per second) and how often it blips.</summary>
     private const float LettersPerSecond = 44f;
     private const int BlipEvery = 2;
     private const float BlipVolume = 0.75f;
@@ -72,7 +72,7 @@ public class DialogueBox
         }
     }
 
-    /// <summary>Loads the fonts and the pixel the box is drawn with, and remembers where the blips go.</summary>
+    /// <summary>Loads the fonts and the pixel the box is drawn with, and keeps the audio for the blips.</summary>
     /// <param name="content">The content manager to load with.</param>
     /// <param name="graphicsDevice">The device, for the pixel.</param>
     /// <param name="audio">The sounds.</param>
@@ -88,8 +88,8 @@ public class DialogueBox
 
     /// <summary>Starts a conversation.</summary>
     /// <param name="speaker">Who is talking.</param>
-    /// <param name="pages">What they say, a page a press.</param>
-    /// <param name="finished">What to do once the last page is closed, or null.</param>
+    /// <param name="pages">What they say, one page per press.</param>
+    /// <param name="finished">What to do after the last page closes, or null.</param>
     public void Open(LobbySpeaker speaker, string[] pages, Action finished = null)
     {
         _speaker = speaker;
@@ -100,7 +100,7 @@ public class DialogueBox
         ShowPage();
     }
 
-    /// <summary>Types the page out, and moves on when the player presses.</summary>
+    /// <summary>Types the page out and moves on when the player presses.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="pressed">Whether the player pressed on this frame.</param>
     public void Update(GameTime gameTime, bool pressed)
@@ -134,7 +134,7 @@ public class DialogueBox
         _typed += LettersPerSecond * (float)gameTime.ElapsedGameTime.TotalSeconds;
         int letters = Math.Min(TotalLetters, (int)_typed);
 
-        // Blip on every other letter that is not a space, as it appears.
+        // Blip on every other letter that isn't a space.
         for (int i = _letters; i < letters; i++)
         {
             if (i % BlipEvery == 0 && !char.IsWhiteSpace(LetterAt(i)))
@@ -148,14 +148,14 @@ public class DialogueBox
         _letters = letters;
     }
 
-    /// <summary>Draws the box, the picture frame and the picture. The point-sampled batch.</summary>
+    /// <summary>Draws the box, the portrait frame and the portrait. Goes in the point sampled batch.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with, in screen space.</param>
     /// <param name="opacity">How far the screen has faded in, 0 to 1.</param>
     public void DrawFrame(SpriteBatch spriteBatch, float opacity)
     {
         if (!IsOpen) return;
 
-        // Its own batch, so the box, the frame and the picture sort among themselves: box at the back, picture at the front.
+        // Box at the back, portrait in front. This has its own batch so they only sort against each other.
         spriteBatch.Draw(_pixel, Box, null, BoxColor * opacity, 0f, Vector2.Zero, SpriteEffects.None, Layers.Veil);
         spriteBatch.Draw(_pixel, new Rectangle(Box.X, Box.Y, Box.Width, 2), null, Lip * opacity,
             0f, Vector2.Zero, SpriteEffects.None, Layers.PanelPlate);
@@ -164,7 +164,7 @@ public class DialogueBox
 
         spriteBatch.Draw(_pixel, PortraitFrame, null, FrameColor * opacity, 0f, Vector2.Zero, SpriteEffects.None, Layers.PanelPlate);
 
-        // The picture stands on the bottom of its frame and is cut off by it, like the opponent is by the table.
+        // The portrait sits on the bottom of its frame and gets cut off there, like Serenity is by the table.
         Rectangle source = _speaker.PortraitSource;
         float scale = _speaker.PortraitScale;
         int visible = Math.Min(source.Height, (int)(PortraitFrame.Height / scale));
@@ -175,7 +175,7 @@ public class DialogueBox
         spriteBatch.Draw(_speaker.Portrait, at, source, Color.White * opacity, 0f, Vector2.Zero, scale, SpriteEffects.None, Layers.ButtonAccent);
     }
 
-    /// <summary>Draws the name, the words typed so far, and the hint. The linear-sampled text batch.</summary>
+    /// <summary>Draws the name, the text typed so far, and the hint. Goes in the linear sampled text batch.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with, in screen space.</param>
     /// <param name="opacity">How far the screen has faded in, 0 to 1.</param>
     public void DrawText(SpriteBatch spriteBatch, float opacity)
@@ -201,10 +201,10 @@ public class DialogueBox
             HintColor * opacity, Palette.Shadow * opacity, rightAligned: true);
     }
 
-    /// <summary>Where the words start: right of the picture, or at the box's edge if there is none.</summary>
+    /// <summary>Where the text starts: right of the portrait, or at the box's edge if there isn't one.</summary>
     private float TextLeft => (_speaker.Portrait is null ? Box.X : PortraitFrame.Right) + TextPadding;
 
-    /// <summary>Wraps the page for the room the box has and starts typing it.</summary>
+    /// <summary>Wraps the page to fit the box and starts typing it.</summary>
     private void ShowPage()
     {
         float width = Box.Right - TextPadding - TextLeft;
@@ -213,7 +213,7 @@ public class DialogueBox
         _typed = 0f;
     }
 
-    /// <summary>The letter at a position, counting through the wrapped lines.</summary>
+    /// <summary>The letter at a position, counting across the wrapped lines.</summary>
     private char LetterAt(int index)
     {
         foreach (string line in _lines)

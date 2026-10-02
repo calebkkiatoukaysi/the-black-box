@@ -5,9 +5,9 @@ using Microsoft.Xna.Framework.Graphics;
 namespace TheBlackBox;
 
 /// <summary>
-/// The concrete slab the forms are built on, and the veil that dims whatever is behind them.
+/// The concrete panel the forms sit on, and the veil that darkens whatever is behind them.
 /// </summary>
-/// <remarks>The save form and the options, pause and customization screens all sit on one of these, so the panel's numbers live here once.</remarks>
+/// <remarks>The save form, options, pause and customization screens all use this, so the panel numbers only live in one place.</remarks>
 public class FormPanel
 {
     /// <summary>Width and height of the single frame in panel.png.</summary>
@@ -16,19 +16,19 @@ public class FormPanel
     /// <summary>Fixed corner of the panel's nine-slice. Has to match PANEL_CORNER in tools/generate_assets.py.</summary>
     private const int CornerSize = 12;
 
-    /// <summary>Blown up by the same whole number as the buttons that sit on it.</summary>
+    /// <summary>Scaled up by the same amount as the buttons on it.</summary>
     private const float Scale = 3f;
 
-    /// <summary>How far the veil darkens what is behind. Enough to read the panel, not enough to hide the box.</summary>
+    /// <summary>How dark the veil is. Dark enough to read the panel, but you can still see the box.</summary>
     private const float VeilOpacity = 0.62f;
 
-    /// <summary>Breathing room inside the panel's recess. Forms lay their contents out from this.</summary>
+    /// <summary>Padding inside the panel. The forms lay things out from this.</summary>
     public const int Padding = 40;
 
     private Texture2D _panel;
     private Texture2D _pixel;
 
-    /// <summary>Loads the panel and the pixel the veil is stretched from.</summary>
+    /// <summary>Loads the panel and the pixel the veil is drawn with.</summary>
     /// <param name="content">The content manager to load with.</param>
     /// <param name="graphicsDevice">The device, for the pixel.</param>
     public void LoadContent(ContentManager content, GraphicsDevice graphicsDevice)
@@ -48,9 +48,9 @@ public class FormPanel
             Palette.Veil * (VeilOpacity * opacity), 0f, Vector2.Zero, SpriteEffects.None, Layers.Veil);
     }
 
-    /// <summary>Draws the slab, nine-sliced to any size.</summary>
+    /// <summary>Draws the panel, nine-sliced so it can be any size.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with. Point-sampled.</param>
-    /// <param name="bounds">Where the slab goes, in screen pixels.</param>
+    /// <param name="bounds">Where the panel goes, in screen pixels.</param>
     /// <param name="opacity">How far the form has faded in, 0 to 1.</param>
     public void Draw(SpriteBatch spriteBatch, Rectangle bounds, float opacity)
     {

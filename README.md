@@ -17,7 +17,7 @@ dotnet run
 ```
 
 **START GAME** opens the save form. A slot that has never been named goes to the
-customization screen first, where you pick who you are, dress them and name them; a slot that
+customization screen first, where you pick your character, their look and their name; a slot that
 has been picks up where it was -- in the lobby between tables, or back at the table, mid-decision
 if you left with something in your hand. **OPTIONS** has the three volumes. **EXIT** and **Esc**
 close the game. Past the title screen, Esc is "back" on a form and the pause menu everywhere else.
@@ -59,27 +59,27 @@ does it (`StateManagement/` is that tutorial's code, adapted). Each has its own
 
 | Screen | What it is |
 | --- | --- |
-| `BoxBackgroundScreen` | The box in the dead sky, under the title and every form. It never transitions off for being covered, so it keeps watching through all of them |
+| `BoxBackgroundScreen` | The box and the ash behind the title and every form. It doesn't transition off when something covers it, so it stays up behind all of them |
 | `TitleScreen` | The title, with START GAME, OPTIONS and EXIT |
 | `OptionsScreen` | Master, music and sound volume, on a form over the title. Saved to `settings.json` |
 | `SaveSlotScreen` | The save form, over the title |
 | `CustomizationScreen` | Who you are, your colours, what you wear, and your name, with a preview walking in place |
-| `LobbyScreen` | The room the players wait in between tables |
+| `LobbyScreen` | The room you wait in between tables |
 | `TableScreen` | The table: the Black Box arena. Everything under [The table](#the-table) |
 | `PauseMenuScreen` | RESUME or RETURN TO TITLE, over the lobby or the table. Nothing under it moves while it is up |
 | `ResultsScreen` | The verdict, how the run went, and RETURN TO THE LOBBY or RETURN TO TITLE |
-| `LoadingScreen` | The tutorial's: waits for everything to fade out, then brings the next screens in. Going through the door puts a line on the black in between |
+| `LoadingScreen` | From the tutorial. Waits for everything to fade out, then adds the next screens. Going through the door shows a line of text on the black screen in between |
 
 A run goes title -> save form -> customization (new slots only) -> lobby -> through the door ->
-the table -> results -> the lobby again, a chapter on if you got up, or the title.
+the table -> results -> back to the lobby (next chapter if you won) or the title.
 
 ## Customization
 
 You are one of two conscripts: the one in the jacket, or the one in the long coat. Each has
 three colour channels -- hair, outfit, and an accent that colours the shirt, the belt, the
 collar and whatever is worn on top -- with six presets each, and three things to wear on top
-(nothing, a scarf, a cap). The preview turns through all four directions while it walks, so a
-change is seen from every side.
+(nothing, a scarf, a cap). The preview turns through all four directions while it walks, so you
+can see a change from every side.
 
 The recolouring is a palette swap. `tools/generate_characters.py` paints the two player sheets in
 key colours (the first preset of each channel) and writes every preset into
@@ -89,11 +89,11 @@ back a new texture. It runs once per change, not per frame. A shader would have 
 way to do it, but nothing in the course has used one yet, and pre-baking every combination would
 have been 2 x 6 x 6 x 6 x 3 sheets.
 
-The choice is kept on the save (`SaveData.Look`), and the lobby dresses the player from it.
+The choice is kept on the save (`SaveData.Look`), and the lobby recolours the player from it.
 
 ## The lobby
 
-The lobby is the room the players wait in between tables, seen from slightly above. It is
+The lobby is the room you wait in between tables, seen from slightly above. It is
 2304x1440 on screen, bigger than the window both ways, and a `Camera2D` follows the player: it
 eases after them, stops at the walls so it never shows past the edge of the room, and rounds its
 translation to whole pixels. Its `Transform` is what `SpriteBatch.Begin` gets, the same way the
@@ -106,20 +106,20 @@ parallax tutorial scrolls.
 - **Walking** is WASD or the arrows, with four-direction walk cycles. The feet are a
   `BoundingRectangle` (the collision tutorial's), moved one axis at a time and pushed back out of
   walls, furniture and people, so a wall stops you one way and lets you slide along it the other.
-  Everything on the floor is sorted by how far down the room it stands.
+  Everything on the floor is sorted by how far down the room it is.
 - **People.** Serenity and whichever conscript you did not pick are waiting in here. Walk up to
   one and press E: the dialogue box types their lines out a letter at a time, with a blip pitched
   for their voice, their picture (Serenity's is her table picture; the conscript gets a close crop
   of their walking sheet) and their name. Everything they say is in `LobbyLines`.
-- **The challenge.** Whoever the chapter seats across from you asks you to the table -- for now
-  that is always Serenity, the only one on the roster. Until
-  they have, the red door at the far end does not open, and the box says so. Once they have, the
+- **The challenge.** Your opponent for the chapter has to challenge you first -- for now that
+  is always Serenity, the only one on the roster. Until
+  they do, the red door at the far end does not open, and the box tells you so. Once they have, the
   lamp over the door comes on, the floor in front of it is painted, and walking into it -- or
   pressing E at it -- goes through. The door shuts behind you and the table comes up.
-- **Things on the floor.** A few items are left lying about each chapter. Walk over one and it
+- **Things on the floor.** A few items are lying around each chapter. Walk over one and it
   goes in your pockets, with its sound, and it comes with you to the table. Four of them and
   three pockets, so not everything can be taken; none of them takes a life. What has been
-  picked up is kept on the save (`SaveData.LobbyTaken`) until the table is cleared.
+  picked up is kept on the save (`SaveData.LobbyTaken`) until you restart the table.
 
 ## Music and sound
 
@@ -133,16 +133,15 @@ python tools/generate_audio.py sfx             # every sound effect
 python tools/generate_audio.py holding revolver
 ```
 
-Three songs, all in D minor with its flat second, so they sound like one score: slow, sparse and
-dark, more about what is in the silence than what fills it. The direction came from the kind of
-unsettling, minimal scoring in Chainsaw Man and in horror films like Obsession -- detuned piano,
-sub-bass, bowed drones, dissonant clusters -- but every note is written here; nothing is taken
-from either. Each one is an exact number of bars long and wraps its own echoes back round to the start, so it loops under
+Three songs, all in D minor with its flat second, so they sound like they go together: slow,
+sparse and dark, with a lot of empty space. I went for the kind of unsettling, minimal scoring
+in Chainsaw Man and horror films like Obsession -- detuned piano, sub-bass, bowed drones,
+dissonant clusters -- but every note is original and nothing is taken from either. Each one is an exact number of bars long and wraps its own echoes back round to the start, so it loops under
 `MediaPlayer.IsRepeating` without a seam.
 
 | Song | Where | What it is |
 | --- | --- | --- |
-| *It Is Watching* | Title, options, customization | 52 BPM. A broken music box that hangs on notes it never resolves, over a bowed bass, slow string swells rubbing a semitone against the root, a faint choir, a far-off heartbeat that skips, and two deep impacts in the dark |
+| *It Is Watching* | Title, options, customization | 52 BPM. A broken music box that never resolves, over a bowed bass, slow string swells rubbing a semitone against the root, a faint choir, a far-off heartbeat that skips, and two deep impacts |
 | *Holding* | The lobby | 58 BPM. A felt piano, slightly detuned, rolling slow minor chords, one high note knocking on the same beats every bar, strings under it, a soft pulse, reversed chords pulling into the next section, and the hum of a fluorescent tube |
 | *Place Your Hand* | The table | 92 BPM in half time. A distorted sub kick, steel clanging on the backbeat, the clock ticking, low strings sawing a tritone, a choir cluster, a breakdown where a detuned piano plays over a held tritone, and a stuttering roll back into the top |
 
@@ -159,9 +158,9 @@ a guard stopping something, and the two verdicts.
 `Audio/AudioManager` is where all of it lives: the same `Content.Load<Song>`, `MediaPlayer` and
 `SoundEffect.Play` calls as the audio tutorial, in one game service any screen can reach, with
 a master, a music and a sound volume. Each screen asks for its song as it comes on, and the
-manager fades the old one out and the new one in. At the table, sounds go with the reading of
-the round, not the rules: the opponent's revolver is heard when THEY USED REVOLVER comes up
-(`TableCues`), not when the player clicked the button before it.
+manager fades the old one out and the new one in. At the table, the sounds go with the lines of
+the round as they show up: the opponent's revolver goes off when THEY USED REVOLVER shows up
+(`TableCues`), not when you clicked the button before it.
 
 ## What is on screen
 

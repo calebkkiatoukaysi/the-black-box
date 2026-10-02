@@ -1,13 +1,13 @@
 namespace TheBlackBox;
 
 /// <summary>
-/// Where a lobby prop sits in the picture, which decides what it sorts against.
+/// Where a lobby prop sits, which decides how it gets sorted.
 /// </summary>
 public enum PropPlacement
 {
-    /// <summary>Standing on the floor: sorted against the figures by how far down the room its foot is, and solid.</summary>
+    /// <summary>On the floor. Sorted with the people by how far down the room it is, and you can't walk through it.</summary>
     Floor,
 
-    /// <summary>Fixed to the wall: always behind the figures, never in the way.</summary>
+    /// <summary>On the wall. Always drawn behind people and never blocks anything.</summary>
     Wall,
 }

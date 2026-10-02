@@ -1,34 +1,33 @@
 namespace TheBlackBox.Lobby;
 
 /// <summary>
-/// Everything anybody says in the lobby, in one place so it can be rewritten in one place.
+/// Everything anyone says in the lobby, all in one place so it's easy to rewrite.
 /// </summary>
 /// <remarks>
-/// Kept short and kept vague on purpose: the lobby is where people wait, not where the story is
-/// told. Same voice as the table scripts, no contractions. Serenity is the one the box seats
-/// across from the player, so hers are the lines that ask them to the table; the other conscript
-/// is just passing the time.
+/// Kept short and vague on purpose since the lobby isn't where the story gets told (lore is still
+/// being written!). Same voice as the table scripts, no contractions. Serenity's lines are the
+/// ones that challenge you, the other conscript is just passing the time.
 /// </remarks>
 public static class LobbyLines
 {
-    /// <summary>The id the other conscript goes by, since they are not an opponent and have no script.</summary>
+    /// <summary>The id for the other conscript, since they're not an opponent and don't have a script.</summary>
     public const string ConscriptId = "conscript";
 
     /// <summary>What the other conscript is called on the dialogue box.</summary>
     public const string ConscriptName = "ANOTHER CONSCRIPT";
 
-    /// <summary>What the box says when the door is tried before anyone has asked for the player.</summary>
+    /// <summary>What the box says if you try the door before you've been challenged.</summary>
     public static readonly string[] DoorLocked =
     {
         "NOT YET.",
         "SOMEONE IN THIS ROOM IS WAITING TO SIT ACROSS FROM YOU.",
     };
 
-    /// <summary>The line on the black while the door shuts behind the player.</summary>
+    /// <summary>The line on the black screen while the door shuts behind you.</summary>
     public const string ThroughTheDoor = "THE DOOR CLOSES BEHIND YOU.";
 
-    /// <summary>The pages someone says when they are talked to.</summary>
-    /// <param name="id">Who: Serenity's id, or <see cref="ConscriptId"/>.</param>
+    /// <summary>The pages someone says when you talk to them.</summary>
+    /// <param name="id">Serenity's id, or ConscriptId.</param>
     /// <param name="spokenBefore">Whether the player has already talked to them this chapter.</param>
     /// <returns>One page per press.</returns>
     public static string[] For(string id, bool spokenBefore) => (id == ConscriptId, spokenBefore) switch

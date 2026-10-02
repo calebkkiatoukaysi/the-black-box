@@ -84,19 +84,19 @@ public static class Layers
     /// <summary>Foreground text.</summary>
     public const float Text = 0.10f;
 
-    // The lobby, which is one world-space batch sorted by how far down the room things stand.
+    // The lobby. It's one world space batch, sorted by how far down the room things are.
 
-    /// <summary>Things fixed to the north wall: the door, the cameras, the sink. Behind every figure.</summary>
+    /// <summary>Stuff on the back wall like the door, the cameras and the sink. Behind everyone.</summary>
     public const float WorldWall = 0.96f;
 
-    /// <summary>The far end and the near end of the band the figures and props sort in.</summary>
+    /// <summary>The back and front of the range that people and props get sorted into.</summary>
     private const float WorldFar = 0.90f;
     private const float WorldNear = 0.12f;
 
-    /// <summary>The south wall and the lamp shades, between the viewer and the room.</summary>
+    /// <summary>The front wall, in front of everything else in the room.</summary>
     public const float WorldFront = 0.06f;
 
-    /// <summary>Where something standing on the lobby floor sorts: further down the room is nearer, so in front.</summary>
+    /// <summary>The layer for something on the lobby floor. The further down the room, the more in front it is.</summary>
     /// <param name="footY">How far down the room its feet are, in world pixels.</param>
     /// <param name="roomHeight">How tall the room is, in world pixels.</param>
     public static float OnFloor(float footY, float roomHeight) =>

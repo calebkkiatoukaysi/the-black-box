@@ -1,19 +1,19 @@
 namespace TheBlackBox;
 
 /// <summary>
-/// Which way a figure in the lobby is facing. The value is the row on its walking sheet.
+/// Which way someone in the lobby is facing. The value is the row on their walking sheet.
 /// </summary>
 public enum Direction
 {
-    /// <summary>Toward the viewer.</summary>
+    /// <summary>Facing the screen.</summary>
     Down,
 
-    /// <summary>To the left of the screen.</summary>
+    /// <summary>Facing left.</summary>
     Left,
 
-    /// <summary>To the right of the screen.</summary>
+    /// <summary>Facing right.</summary>
     Right,
 
-    /// <summary>Away from the viewer.</summary>
+    /// <summary>Facing away from the screen.</summary>
     Up,
 }

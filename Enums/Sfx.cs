@@ -1,61 +1,61 @@
 namespace TheBlackBox;
 
 /// <summary>
-/// Every sound effect that is not an item. The file is the name in kebab case under Content/Sfx,
-/// so MenuMove is Sfx/menu-move. Items have their own sounds, one per ItemId, under Sfx/Items.
+/// Every sound effect that isn't an item. The file is the name in kebab case under Content/Sfx,
+/// so MenuMove is Sfx/menu-move. Items each have their own sound under Sfx/Items.
 /// </summary>
-/// <remarks>Grouped by where they are heard. Renaming one means renaming its file and its line in Content.mgcb.</remarks>
+/// <remarks>Grouped by where you hear them. If you rename one, rename its file and its line in Content.mgcb too.</remarks>
 public enum Sfx
 {
     // Menus.
 
-    /// <summary>The cursor moving onto another plate.</summary>
+    /// <summary>Moving the cursor to another plate.</summary>
     MenuMove,
 
-    /// <summary>A plate pressed.</summary>
+    /// <summary>Pressing a plate.</summary>
     MenuConfirm,
 
     /// <summary>Backing out of a menu.</summary>
     MenuBack,
 
-    /// <summary>A value changed with left or right, on the options or the customization screen.</summary>
+    /// <summary>Changing a value with left or right (options and customization).</summary>
     OptionChange,
 
     /// <summary>A key typed into the name field.</summary>
     Type,
 
-    /// <summary>The pause menu coming up.</summary>
+    /// <summary>Opening the pause menu.</summary>
     Pause,
 
     // The lobby.
 
-    /// <summary>One character of a line being typed out. Re-pitched per speaker.</summary>
+    /// <summary>One character of dialogue getting typed out. The pitch changes per speaker.</summary>
     TextBlip,
 
-    /// <summary>One step on concrete. Re-pitched and panned per step.</summary>
+    /// <summary>One footstep. The pitch and pan change every step.</summary>
     Footstep,
 
-    /// <summary>Trying the door to the box before anyone has asked you to.</summary>
+    /// <summary>Trying the door before you've been challenged.</summary>
     DoorLocked,
 
-    /// <summary>The door to the box unlocking once you have been challenged.</summary>
+    /// <summary>The door unlocking after you get challenged.</summary>
     DoorOpen,
 
-    /// <summary>Walking through the door, into the box's room.</summary>
+    /// <summary>Walking through the door to the table.</summary>
     EnterArena,
 
-    /// <summary>Walking over something with nowhere to put it.</summary>
+    /// <summary>Walking over an item with full pockets.</summary>
     PocketsFull,
 
     // The table.
 
-    /// <summary>The box's jaws drawing back for a hand.</summary>
+    /// <summary>The box opening up for a hand.</summary>
     BoxOpen,
 
     /// <summary>The box taking the hand.</summary>
     HandIn,
 
-    /// <summary>The tag thrown out of the mouth.</summary>
+    /// <summary>The box throwing the tag out.</summary>
     Payout,
 
     /// <summary>The tag landing in the palm.</summary>
@@ -64,27 +64,27 @@ public enum Sfx
     /// <summary>The tag going off the edge of the table.</summary>
     Drop,
 
-    /// <summary>A skill check done well.</summary>
+    /// <summary>Passing a skill check.</summary>
     CheckGood,
 
-    /// <summary>A skill check done badly.</summary>
+    /// <summary>Failing a skill check.</summary>
     CheckBad,
 
-    /// <summary>A life taken off the opponent.</summary>
+    /// <summary>The opponent losing a life.</summary>
     Hit,
 
-    /// <summary>A life taken off the player.</summary>
+    /// <summary>The player losing a life.</summary>
     Damage,
 
-    /// <summary>A life given back, to either side.</summary>
+    /// <summary>Either side getting a life back.</summary>
     Heal,
 
-    /// <summary>A veil or a mirror stopping something.</summary>
+    /// <summary>A veil or mirror blocking something.</summary>
     Guard,
 
-    /// <summary>The verdict when the player gets up from the table.</summary>
+    /// <summary>The verdict when the player survives.</summary>
     Win,
 
-    /// <summary>The verdict when they do not.</summary>
+    /// <summary>The verdict when they don't.</summary>
     Lose,
 }

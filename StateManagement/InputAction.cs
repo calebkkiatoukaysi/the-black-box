@@ -8,7 +8,7 @@ using Microsoft.Xna.Framework.Input;
 namespace TheBlackBox.StateManagement;
 
 /// <summary>
-/// A set of keys and buttons that all mean the same thing to the game, like W, the up arrow and up on the d-pad.
+/// A group of keys and buttons that all do the same thing, like W, the up arrow and up on the d-pad.
 /// </summary>
 public class InputAction
 {
@@ -16,7 +16,7 @@ public class InputAction
     private readonly Keys[] _keys;
     private readonly bool _firstPressOnly;
 
-    // Delegate types for the two checks, so Occurred can pick the held or the new-press version once.
+    // Delegate types for the two kinds of check, so Occurred can pick held or new press once at the top.
     private delegate bool ButtonPress(Buttons button, PlayerIndex? controllingPlayer, out PlayerIndex playerIndex);
     private delegate bool KeyPress(Keys key);
 

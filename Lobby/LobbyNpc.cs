@@ -6,46 +6,45 @@ using TheBlackBox.Collisions;
 namespace TheBlackBox.Lobby;
 
 /// <summary>
-/// Someone waiting in the lobby: where they stand, who they are on the dialogue box, and how they
-/// pass the time.
+/// Someone waiting in the lobby: where they stand, how they show up in the dialogue box, and what they do.
 /// </summary>
 /// <remarks>
-/// They do not walk. They stand, look about now and then, and turn to face the player when spoken to.
+/// They don't walk around. They stand there, look around every few seconds, and face you when you talk to them.
 /// </remarks>
 public class LobbyNpc
 {
     /// <summary>How close the player has to be to talk to them, in world pixels.</summary>
     public const float TalkReach = 150f;
 
-    /// <summary>How long somebody looks one way before looking another, give or take.</summary>
+    /// <summary>About how long they look one way before turning.</summary>
     private const float GlanceSeconds = 3.2f;
 
-    /// <summary>The patch of floor they stand on, wide and deep, in world pixels.</summary>
+    /// <summary>The size of their feet box, in world pixels.</summary>
     private static readonly Vector2 FootprintSize = new(42f, 18f);
 
-    /// <summary>Where they look when they are glancing about. Never away; a figure facing the wall reads as a mistake.</summary>
+    /// <summary>Which ways they look. Never up, since someone facing the wall looks like a bug.</summary>
     private static readonly Direction[] Glances = { Direction.Down, Direction.Left, Direction.Down, Direction.Right };
 
     private readonly Random _random;
     private float _glanceClock;
 
-    /// <summary>Who they are: an opponent's id, or the other conscript's.</summary>
+    /// <summary>Who they are: Serenity's id or the conscript's.</summary>
     public string Id { get; }
 
-    /// <summary>The name and picture on the dialogue box, and their voice.</summary>
+    /// <summary>Their name, portrait and voice for the dialogue box.</summary>
     public LobbySpeaker Speaker { get; }
 
     /// <summary>The figure.</summary>
     public WalkerSprite Walker { get; }
 
-    /// <summary>The floor they stand on, which the player cannot walk through.</summary>
+    /// <summary>Their feet box. The player can't walk through it.</summary>
     public BoundingRectangle Footprint => new(
         Walker.Position.X - FootprintSize.X / 2f, Walker.Position.Y - FootprintSize.Y, FootprintSize.X, FootprintSize.Y);
 
     /// <summary>Puts someone in the room.</summary>
     /// <param name="id">Who they are.</param>
-    /// <param name="speaker">How they appear on the dialogue box.</param>
-    /// <param name="walker">Their figure, already given its sheet.</param>
+    /// <param name="speaker">How they show up in the dialogue box.</param>
+    /// <param name="walker">Their sprite, with its sheet already set.</param>
     /// <param name="position">Where they stand, in world pixels.</param>
     public LobbyNpc(string id, LobbySpeaker speaker, WalkerSprite walker, Vector2 position)
     {
@@ -54,15 +53,15 @@ public class LobbyNpc
         Walker = walker;
         Walker.Position = position;
 
-        // Seeded off the id so the room is the same every time it is entered. Not string.GetHashCode,
-        // which .NET changes every run.
+        // Seeded from the id so they act the same every time. Can't use string.GetHashCode since
+        // .NET changes it every run.
         int seed = 17;
         foreach (char c in id) seed = seed * 31 + c;
         _random = new Random(seed);
         _glanceClock = (float)_random.NextDouble() * GlanceSeconds;
     }
 
-    /// <summary>Glances about now and then.</summary>
+    /// <summary>Looks around every so often.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     public void Update(GameTime gameTime)
     {

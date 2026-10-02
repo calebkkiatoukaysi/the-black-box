@@ -8,7 +8,7 @@ namespace TheBlackBox;
 /// </summary>
 public partial class TableScreen
 {
-    /// <summary>How far down the blip is pitched when a line lands across the table. The lobby uses the same idea per speaker.</summary>
+    /// <summary>How much lower the blip is for the opponent's lines. The lobby does the same thing per speaker.</summary>
     private const float LineBlipPitch = -0.2f;
 
     // How long the player's own line is held: a base, a bit per character, and a floor and
@@ -114,7 +114,7 @@ public partial class TableScreen
         else EndDiscussion();
     }
 
-    /// <summary>Puts the current beat on the wheel, with a blip for their line landing.</summary>
+    /// <summary>Puts the current beat on the wheel and plays a blip for their line.</summary>
     private void ShowBeat()
     {
         _wheel.Show(_discussion.Current, _discussion.Disposition);

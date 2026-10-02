@@ -6,13 +6,13 @@ using TheBlackBox.StateManagement;
 namespace TheBlackBox;
 
 /// <summary>
-/// The Black Box. Sets up the window, the three things every screen shares (the screen
-/// manager, the box and the sound), and puts the title up.
+/// The Black Box. Sets up the window and the three things every screen shares (the screen
+/// manager, the box and the sound), then opens the title.
 /// </summary>
 /// <remarks>
-/// This used to be the title screen, the forms and the table's sprite batches all in one class
-/// with a Screen enum deciding which was in front. Now every screen is its own GameScreen on a
-/// ScreenManager, the way the game state management tutorial does it, and this is just the setup.
+/// This used to have the title screen, the forms and the table all in one class with a Screen
+/// enum picking which one was showing. Now every screen is its own GameScreen on a ScreenManager
+/// like the game state management tutorial, so this class is just setup.
 /// </remarks>
 public partial class BlackBoxGame : Game
 {
@@ -38,8 +38,8 @@ public partial class BlackBoxGame : Game
         // The eyes follow the cursor, so the player needs to be able to see it.
         IsMouseVisible = true;
 
-        // The box and the sound are components so they keep running whatever screen is up, and
-        // services so any screen can reach them, like the achievement service in the services tutorial.
+        // The box and the sound are components so they keep running no matter what screen is up, and
+        // services so any screen can get to them (like the achievement service in the services tutorial).
         _boxScene = new BoxScene(this);
         Components.Add(_boxScene);
         Services.AddService(_boxScene);
@@ -53,11 +53,11 @@ public partial class BlackBoxGame : Game
         Services.AddService(_screenManager);
     }
 
-    /// <summary>Loads the box and every sound, then puts the box and the title up.</summary>
-    /// <remarks>The first screens go on here and not in the constructor, because the box screen starts the title music as it comes on.</remarks>
+    /// <summary>Loads the box and all the sounds, then opens the box screen and the title.</summary>
+    /// <remarks>The first screens get added here instead of the constructor because the box screen starts the title music when it opens.</remarks>
     protected override void LoadContent()
     {
-        // The proof run is silent, never writes the settings file, and plays on with the window behind other things.
+        // The proof run has no sound, doesn't write the settings file, and keeps going even if the window isn't focused.
         if (ProofDirectory is not null)
         {
             _audio.Silent = true;

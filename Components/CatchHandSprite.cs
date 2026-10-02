@@ -29,10 +29,10 @@ public class CatchHandSprite
     /// <summary>How far the art is blown up. The catch happens in the close-up, so it matches the reaching arm there.</summary>
     private const float Scale = 6f;
 
-    /// <summary>Where the leading fingertip is inside a frame, in sheet pixels. Same anchor as <see cref="HandSprite"/>.</summary>
+    /// <summary>Where the leading fingertip is inside a frame, in sheet pixels. Same anchor as HandSprite.</summary>
     private static readonly Vector2 Fingertip = new(7f, 45f);
 
-    /// <summary>Where the middle of the palm is, from the fingertip, in sheet pixels. Read off the open frame.</summary>
+    /// <summary>Where the middle of the palm is from the fingertip, in sheet pixels. Measured off the open frame.</summary>
     private static readonly Vector2 PalmFromTip = new(32f, 6f);
 
     /// <summary>The palm's catching area, in sheet pixels: a little smaller than the hand looks.</summary>

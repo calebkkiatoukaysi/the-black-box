@@ -1,14 +1,15 @@
 """
-The lobby for The Black Box: the room the players wait in between tables, seen from above.
+Lobby art for The Black Box: the holding room the players wait in between tables, seen from
+above.
 
     python tools/generate_lobby.py
 
-lobby-tiles.png is a sheet of 16x16 tiles (floor, wall faces, wall tops, the painted
-threshold in front of the box's door). Every prop is its own PNG under Content/Lobby, so the
-game can read each one's size straight off the texture. The lamp light is not painted in: the
-game lays the dark over the room itself, so a figure walking out of a pool of light goes dark too.
+lobby-tiles.png is a sheet of 16x16 tiles (floor, walls, wall tops, the painted line in front of
+the box's door). Each prop is its own PNG in Content/Lobby so the game can read its size from the
+texture. I don't paint the lamp light in. The game darkens the room itself, so the characters go
+dark too when they walk out of the light.
 
-Same rules as the other two scripts: CPython only, seeded, so a rerun gives the same bytes.
+CPython only and seeded like the other scripts, so a rerun gives the same files.
 """
 
 import math
@@ -24,7 +25,7 @@ LOBBY_OUT = os.path.join(OUT, "Lobby")
 TILE = 16
 TILE_COLUMNS = 8
 
-# The concrete of the table's room, lit a little brighter: the game darkens it again.
+# Same concrete as the table's room, a bit brighter since the game darkens it again.
 FLOOR = (60, 56, 63)
 FLOOR_D = (44, 41, 48)
 FLOOR_L = (74, 70, 76)
@@ -78,7 +79,7 @@ def fill(img, x0, y0, x1, y1, c):
 
 
 def speckle(img, x0, y0, x1, y1, rng, amount, lo=0.92, hi=1.08):
-    """Breaks a flat area up into grain, the way poured concrete never is one colour."""
+    """Adds grain to a flat area so it isn't all one colour."""
     for y in range(y0, y1 + 1):
         for x in range(x0, x1 + 1):
             if rng.random() < amount:
@@ -117,8 +118,8 @@ def floor_base(img, ox, oy, rng):
         for x in range(TILE):
             k = rng.uniform(0.94, 1.06)
             put(img, ox + x, oy + y, rgba(shade(FLOOR, k)))
-    # A few pits of aggregate and lighter flecks. Faint, and only a few: the same tile is laid
-    # hundreds of times, and anything strong in it shows up as a grid across the floor.
+    # A few dark pits and light flecks. I keep them faint because the same tile gets laid hundreds
+    # of times, and anything strong in it shows up as a grid across the floor.
     for _ in range(3):
         put(img, ox + rng.randrange(TILE), oy + rng.randrange(TILE), rgba(shade(FLOOR, 0.86)))
     for _ in range(2):
@@ -177,7 +178,7 @@ def build_tiles(seed=8080):
             put(img, ox + 9, oy + 13, rgba(RUST, 160))
             put(img, ox + 10, oy + 13, rgba(RUST_D, 160))
         elif name == "hazard":
-            # Painted stripes, worn through to the concrete where people stand waiting.
+            # Painted hazard stripes, worn through in places.
             for y in range(TILE):
                 for x in range(TILE):
                     stripe = ((x + y) // 4) % 2 == 0
@@ -189,7 +190,7 @@ def build_tiles(seed=8080):
                 for x in range(TILE):
                     put(img, ox + x, oy + y, rgba(shade(TOP, rng.uniform(0.9, 1.1))))
             if name == "wall-top-lip":
-                # The edge of the wall where it drops away into the room, caught by the light.
+                # Lit edge where the wall top drops down into the room.
                 for x in range(TILE):
                     put(img, ox + x, oy + TILE - 2, rgba(TOP_L))
                     put(img, ox + x, oy + TILE - 1, rgba(shade(TOP_L, 0.8)))
@@ -223,7 +224,7 @@ def build_tiles(seed=8080):
                     put(img, ox + 0, oy + y, rgba(SEAM))
                     put(img, ox + 1, oy + y, rgba(WALL_L, 90))
             elif name == "wall-tally":
-                # Somebody has been counting.
+                # Chalk tally marks, two groups of five.
                 for gx in (1, 9):
                     for k in range(4):
                         for y in range(4, 11):
@@ -245,7 +246,7 @@ def build_tiles(seed=8080):
 # --------------------------------------------------------------------------- #
 
 def outline(img):
-    """A dark rim round anything opaque, so props sit on the floor instead of melting into it."""
+    """Puts a dark outline around anything opaque so the props stand out from the floor."""
     h, w = len(img), len(img[0])
     edge = []
     for y in range(h):
@@ -443,14 +444,14 @@ def build_door(rng):
         for y in range(8, 58):
             put(img, ox + 1, y, rgba(STEEL))
         if f == 2:
-            # Open: nothing behind it but dark, and the faintest red from deep inside.
+            # Open: dark inside, with a little red fading in at the bottom.
             fill(img, ox + 4, 11, ox + 31, 57, (6, 4, 8))
             for y in range(40, 58):
                 for x in range(4, 32):
                     a = int(60 * (y - 40) / 18.0)
                     put(img, ox + x, y, (RED_D[0], RED_D[1], RED_D[2], a))
             continue
-        # The door itself: heavy steel, riveted, with a slot of a window like the one in the table's room.
+        # The door: riveted steel with a slot window like the one in the table's room.
         bevel_box(img, ox + 4, 11, ox + 31, 57, (60, 58, 66), rng, 0.1)
         for y in range(14, 56, 6):
             put(img, ox + 6, y, rgba(STEEL_L))
@@ -470,7 +471,7 @@ def build_door(rng):
             if rng.random() < 0.4:
                 put(img, ox + x, 56, rgba(RUST_D))
         if f == 1:
-            # Unlocked: the seam glows where it has come away from the frame.
+            # Unlocked: a red line down the seam where it's come away from the frame.
             for y in range(11, 58):
                 put(img, ox + 31, y, rgba(RED, 200))
     write_png(os.path.join(LOBBY_OUT, "arena-door.png"), img)

@@ -9,14 +9,13 @@ using TheBlackBox.StateManagement;
 namespace TheBlackBox.Screens;
 
 /// <summary>
-/// Before a new run starts: who the player is, their colours, what they wear, and their name.
-/// A preview walks in place and turns, in whatever has been picked.
+/// Before a new run starts you pick who you are, your colours, what you wear, and your name. The
+/// preview walks in place and turns around so you can see it from every side.
 /// </summary>
 /// <remarks>
-/// Every option is a plate on a MenuScreen, so the keyboard walks it the same way as the title
-/// and left and right change the value. The name row is the exception: while it is picked,
-/// letters type instead of steering, and only the arrows leave it. The box stays up behind the
-/// veil, watching.
+/// Every option is a plate on a MenuScreen, so the keyboard works the same as the title and left
+/// and right change the value. The name row is different: while it's picked, letters type into it
+/// and only the arrow keys leave it.
 /// </remarks>
 public partial class CustomizationScreen : MenuScreen
 {
@@ -25,7 +24,7 @@ public partial class CustomizationScreen : MenuScreen
     private const string BeginLabel = "SIT DOWN";
     private const string BackLabel = "BACK";
 
-    /// <summary>What each conscript and each accessory is called on the plates.</summary>
+    /// <summary>What the two conscripts and the accessories are called on the plates.</summary>
     private static readonly string[] ConscriptNames = { "THE JACKET", "THE COAT" };
     private static readonly string[] AccessoryNames = { "NOTHING", "A SCARF", "A CAP" };
 
@@ -35,31 +34,31 @@ public partial class CustomizationScreen : MenuScreen
     private const float RowGap = 10f;
     private const float RowsTop = 196f;
 
-    /// <summary>The rows sit left of the panel's middle, so the colour swatches fit to their right.</summary>
+    /// <summary>The rows sit a bit left of the middle of the panel so the colour swatches fit next to them.</summary>
     private const float RowsShift = -40f;
     private static readonly Point ButtonSize = new(300, 74);
     private const float ButtonGap = 40f;
 
-    /// <summary>Where the preview stands, and how big. Twice the lobby's size, so the colours can be read.</summary>
+    /// <summary>Where the preview stands and how big it is. Twice the lobby size so you can actually see the colours.</summary>
     private static readonly Vector2 PreviewFeet = new(420f, 700f);
     private const float PreviewScale = 6f;
 
     /// <summary>How long the preview faces each way before it turns.</summary>
     private const float TurnSeconds = 1.6f;
 
-    /// <summary>The pool of light the preview stands in.</summary>
+    /// <summary>The light on the floor under the preview.</summary>
     private static readonly Point PoolSize = new(420, 110);
     private static readonly Color PoolColor = new Color(232, 214, 170) * 0.22f;
     private const float NoteY = 770f;
 
-    /// <summary>Where the box hangs while the player is dressed: over the preview's shoulder, at the size it sits on the table.</summary>
-    /// <remarks>Left in the middle of the screen it was half under the panel, which looked like a mistake rather than a choice.</remarks>
+    /// <summary>Where the box goes on this screen: above the preview, at the size it is on the table.</summary>
+    /// <remarks>In the middle of the screen it was half hidden under the panel and looked like a bug.</remarks>
     private static readonly Vector2 BoxAt = new(420f, 250f);
 
-    /// <summary>How dark the veil over the box is. Darker than a form's, since the preview has to read against it.</summary>
+    /// <summary>How dark the veil over the box is. Darker than the other forms so the preview stands out.</summary>
     private const float VeilOpacity = 0.86f;
 
-    /// <summary>A colour swatch beside a row: how big a square, the gap between them, and how far off the plate.</summary>
+    /// <summary>The colour swatches next to a row: square size, the gap between squares, and how far from the plate.</summary>
     private const int SwatchSize = 14;
     private const int SwatchGap = 3;
     private const int SwatchOffset = 14;
@@ -84,7 +83,7 @@ public partial class CustomizationScreen : MenuScreen
     private readonly MenuEntry _nameRow;
     private readonly MenuEntry _begin;
 
-    /// <summary>The arrows still steer while the name row is picked. Letters do not.</summary>
+    /// <summary>The arrow keys still move you while the name row is picked. Letters don't.</summary>
     private readonly InputAction _arrowUp = new(new[] { Buttons.DPadUp }, new[] { Keys.Up }, true);
     private readonly InputAction _arrowDown = new(new[] { Buttons.DPadDown }, new[] { Keys.Down }, true);
     private readonly InputAction _enter = new(new[] { Buttons.A }, new[] { Keys.Enter }, true);
@@ -97,7 +96,7 @@ public partial class CustomizationScreen : MenuScreen
     private BoxScene _scene;
     private float _turnClock;
 
-    /// <summary>Why the save failed when the player tried to sit down, or null.</summary>
+    /// <summary>Why the save failed when you hit SIT DOWN, or null.</summary>
     private string _status;
 
     /// <summary>Builds the rows for a run that has no name yet.</summary>
@@ -116,7 +115,7 @@ public partial class CustomizationScreen : MenuScreen
         _accent = Option(step => _look.Accent = CharacterPalettes.Wrap(_look.Accent + step, CharacterPalettes.AccentNames.Length));
         _wearing = Option(step => _look.Accessory = ((Accessory)CharacterPalettes.Wrap((int)_look.Wearing + step, AccessoryNames.Length)).ToString());
 
-        // The name row is a plate with the field drawn over it. Picking it does nothing; typing does.
+        // The name row is just a plate with the text field drawn on top. Picking it does nothing, typing does.
         _nameRow = new MenuEntry(string.Empty, ButtonSprite.Amber, RowSize);
         MenuEntries.Add(_nameRow);
 
@@ -129,7 +128,7 @@ public partial class CustomizationScreen : MenuScreen
         MenuEntries.Add(back);
     }
 
-    /// <summary>Loads the sheets, the palettes and the form, and puts the preview in the starting colours.</summary>
+    /// <summary>Loads the sheets, palettes and form, and puts the preview in the starting colours.</summary>
     public override void Activate()
     {
         base.Activate();
@@ -153,14 +152,14 @@ public partial class CustomizationScreen : MenuScreen
         Refresh();
     }
 
-    /// <summary>Lets go of the recoloured sheet, which is not the content manager's to unload.</summary>
+    /// <summary>Disposes the recoloured sheet, since the content manager didn't load it.</summary>
     public override void Unload()
     {
         _recoloured?.Dispose();
         base.Unload();
     }
 
-    /// <summary>Steers the menu, except on the name row, where letters type and only the arrows leave.</summary>
+    /// <summary>Normal menu input, except on the name row where letters type and only the arrows leave.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="input">The input this frame.</param>
     public override void HandleInput(GameTime gameTime, InputState input)
@@ -176,7 +175,7 @@ public partial class CustomizationScreen : MenuScreen
         else if (_escape.Occurred(input)) OnCancel();
     }
 
-    /// <summary>Typing goes into the name, but only while its row is picked.</summary>
+    /// <summary>Typing goes into the name, but only while the name row is picked.</summary>
     /// <param name="character">The character the window reported.</param>
     public override void HandleTextInput(char character)
     {
@@ -186,7 +185,7 @@ public partial class CustomizationScreen : MenuScreen
         _begin.Plate.Enabled = _name.IsValid;
     }
 
-    /// <summary>Runs the menu, the caret, and the preview turning round.</summary>
+    /// <summary>Runs the menu, the caret, and the preview turning around.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="otherScreenHasFocus">Whether a screen above has the input.</param>
     /// <param name="coveredByOtherScreen">Whether a non-popup screen is on top.</param>
@@ -210,7 +209,7 @@ public partial class CustomizationScreen : MenuScreen
         GoBack();
     }
 
-    /// <summary>Draws the veil over the box, the preview in its pool of light, the panel and its plates, and the name.</summary>
+    /// <summary>Draws the veil, the preview, the panel and its plates, and the name.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     public override void Draw(GameTime gameTime)
     {
@@ -249,7 +248,7 @@ public partial class CustomizationScreen : MenuScreen
         spriteBatch.End();
     }
 
-    /// <summary>Makes one adjustable row. Clicking it steps it forward, the same as right.</summary>
+    /// <summary>Makes one adjustable row. Clicking it is the same as pressing right.</summary>
     /// <param name="change">Moves the value by -1 or 1.</param>
     private MenuEntry Option(Action<int> change)
     {
@@ -269,10 +268,10 @@ public partial class CustomizationScreen : MenuScreen
         return entry;
     }
 
-    /// <summary>Puts every value on its plate and the new colours on the preview.</summary>
+    /// <summary>Puts every value on its plate and recolours the preview.</summary>
     private void Refresh()
     {
-        // Wrapped, so a save edited by hand to something out of range still shows a name.
+        // Wrapped in case a save got hand edited to something out of range.
         _look.Hair = CharacterPalettes.Wrap(_look.Hair, CharacterPalettes.HairNames.Length);
         _look.Outfit = CharacterPalettes.Wrap(_look.Outfit, CharacterPalettes.OutfitNames.Length);
         _look.Accent = CharacterPalettes.Wrap(_look.Accent, CharacterPalettes.AccentNames.Length);
@@ -290,10 +289,10 @@ public partial class CustomizationScreen : MenuScreen
         _preview.Wearing = _look.Wearing;
     }
 
-    /// <summary>A row's label: what it is, then the value between the arrows that change it.</summary>
+    /// <summary>A row's label: what it is, then the value between the arrows.</summary>
     private static string Row(string name, string value) => name + "   <  " + value + "  >";
 
-    /// <summary>Moves the selection from the name row, which steers itself.</summary>
+    /// <summary>Moves the selection off the name row (it handles its own input).</summary>
     /// <param name="step">-1 for up, 1 for down.</param>
     private void Step(int step)
     {
@@ -301,7 +300,7 @@ public partial class CustomizationScreen : MenuScreen
         Audio.Play(Sfx.MenuMove);
     }
 
-    /// <summary>Writes the name and the look to the run, saves it, and goes down to the lobby.</summary>
+    /// <summary>Puts the name and look on the run, saves it, and goes to the lobby.</summary>
     private void Begin()
     {
         if (!_name.IsValid) return;
@@ -309,7 +308,7 @@ public partial class CustomizationScreen : MenuScreen
         _session.Run.PlayerName = _name.Name;
         _session.Run.Look = _look.Clone();
 
-        // Saved straight away so the name is never asked for twice. A failed write keeps the player here.
+        // Saved right away so it never asks for the name twice. If the save fails you stay here.
         if (!_session.Save())
         {
             _status = "COULD NOT SAVE -- " + _session.LastError;
@@ -319,7 +318,7 @@ public partial class CustomizationScreen : MenuScreen
         LoadingScreen.Load(ScreenManager, null, new LobbyScreen(_session));
     }
 
-    /// <summary>Back to the title, leaving the slot claimed but unnamed, the way the old name form did.</summary>
+    /// <summary>Back to the title. The slot stays claimed but unnamed, same as the old name form.</summary>
     private void GoBack()
     {
         _scene.PlaceOnTitle();
@@ -327,7 +326,7 @@ public partial class CustomizationScreen : MenuScreen
         ScreenManager.AddScreen(new TitleScreen());
     }
 
-    /// <summary>Lays the rows down the panel, the two buttons side by side under them, and the name field into its row.</summary>
+    /// <summary>Lays out the rows, the two buttons side by side under them, and the name field inside its row.</summary>
     private void LayOut()
     {
         float y = RowsTop;
@@ -346,7 +345,7 @@ public partial class CustomizationScreen : MenuScreen
         _preview.Position = PreviewFeet;
     }
 
-    /// <summary>Draws a ramp's shades as little squares beside a row, so the colour is seen and not just named.</summary>
+    /// <summary>Draws a ramp's shades as little squares next to a row, so you see the colour and not just its name.</summary>
     private void DrawSwatch(SpriteBatch spriteBatch, MenuEntry entry, IReadOnlyList<Color> ramp, float alpha)
     {
         Rectangle plate = entry.Plate.Bounds;

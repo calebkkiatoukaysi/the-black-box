@@ -32,8 +32,8 @@ public class SaveData
     /// <summary>What the player called themselves. Swapped into any line with {name} in it.</summary>
     public string PlayerName { get; set; } = string.Empty;
 
-    /// <summary>Who the player is and what they are wearing, from the customization screen.</summary>
-    /// <remarks>New with the lobby. A save from before it reads as the default look, so no version bump.</remarks>
+    /// <summary>Which conscript the player picked and what they're wearing, from the customization screen.</summary>
+    /// <remarks>Added with the lobby. Older saves just load with the default look, so no version bump.</remarks>
     public PlayerLook Look { get; set; } = new();
 
     /// <summary>How far through the story the run is.</summary>
@@ -111,8 +111,8 @@ public class SaveData
     /// <remarks>The marked deck shows the next deal, so the next deal has to be rolled ahead of time and kept here.</remarks>
     public string NextDeal { get; set; } = string.Empty;
 
-    /// <summary>Which of the lobby's items have been picked up since the table was last cleared, by spot.</summary>
-    /// <remarks>Cleared by Restart along with the pockets, so whatever was on the floor is back for the next try.</remarks>
+    /// <summary>Which lobby items have been picked up since the last restart, by spot.</summary>
+    /// <remarks>Restart clears this along with the pockets, so the items are back on the floor for the next try.</remarks>
     public List<string> LobbyTaken { get; set; } = new();
 
     /// <summary>Everything that has happened and has to be remembered, by id: dialogue taken, lore found, endings seen.</summary>
@@ -160,7 +160,7 @@ public class SaveData
         return new SaveData { CreatedUtc = now, SavedUtc = now };
     }
 
-    /// <summary>Clears the table for another go: lives, pockets, hands, wards, the round count, and the lobby floor.</summary>
+    /// <summary>Resets for another try: lives, pockets, hands, wards, the round count, and the lobby items.</summary>
     /// <remarks>The name, chapter, opponent, disposition, flags and clock all stay. Same table, same person, and they remember.</remarks>
     public void Restart()
     {

@@ -1,21 +1,21 @@
 namespace TheBlackBox.Screens;
 
 /// <summary>
-/// The customization screen's part of the proof run: as it opens, then dressed differently with a name typed in.
+/// The customization screen's part of the proof run: a shot when it opens, then with different picks and a name typed in.
 /// </summary>
-/// <remarks>Changes go through the same calls left, right and typing make, so the shots prove the recolour and the name field.</remarks>
+/// <remarks>The changes go through the same calls that left, right and typing use, so the shots actually test the recolour and the name field.</remarks>
 public partial class CustomizationScreen
 {
-    /// <summary>How many frames the screen is given to come up out of the fade.</summary>
+    /// <summary>How many frames the screen gets to fade in before the first shot.</summary>
     private const int Settled = 40;
 
-    /// <summary>The last frame of the screen's schedule. SIT DOWN is pressed on it.</summary>
+    /// <summary>The last frame of this schedule. SIT DOWN gets pressed on it.</summary>
     internal const int ProofEnd = Settled + 64;
 
-    /// <summary>The name typed in, as long as the field allows, so the heading is proved at its widest later on.</summary>
+    /// <summary>The name to type. It's as long as the field allows so the heading gets tested at its widest later.</summary>
     private const string ProofName = "Proof Of Concept";
 
-    /// <summary>Sets up whatever this frame calls for, and names the file if the frame is to be kept.</summary>
+    /// <summary>Sets up whatever this frame needs, and returns a file name if this frame should be saved.</summary>
     /// <param name="frame">Which drawn frame this is, counted from the screen's first.</param>
     /// <returns>The file the frame should be written to, or null.</returns>
     internal string ProofStep(int frame)

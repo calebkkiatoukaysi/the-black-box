@@ -7,18 +7,17 @@ using Microsoft.Xna.Framework.Graphics;
 namespace TheBlackBox.Characters;
 
 /// <summary>
-/// The hair, outfit and accent presets, read off character-palettes.png, and the swap that turns
-/// a player sheet into the colours they picked.
+/// The hair, outfit and accent presets from character-palettes.png, and the palette swap that
+/// recolours a player sheet to whatever they picked.
 /// </summary>
 /// <remarks>
-/// tools/generate_characters.py paints the player's sheets in the first preset of each list (the
-/// keys) and writes every preset into the palette PNG, one row each. Reading the ramps from that
-/// PNG instead of copying them in here means the keys can never drift from what was painted.
-/// The names are here because they are only words on a screen.
+/// generate_characters.py paints the player sheets in the first preset of each list (the "keys")
+/// and writes every preset to the palette PNG, one row each. I read the colours from that PNG
+/// instead of copying them in here so they can't get out of sync with the sheets.
 /// </remarks>
 public class CharacterPalettes
 {
-    /// <summary>What each preset is called on the customization screen, in the order the PNG has them.</summary>
+    /// <summary>The preset names on the customization screen, in the same order as the PNG.</summary>
     public static readonly string[] HairNames = { "INK", "ASH BROWN", "CHESTNUT", "AUBURN", "BLEACHED", "GREY" };
     public static readonly string[] OutfitNames = { "CANVAS", "SLATE", "OXBLOOD", "CHARCOAL", "BONE", "RUST" };
     public static readonly string[] AccentNames = { "EMBER", "AMBER", "BONE", "TEAL", "MOSS", "VIOLET" };
@@ -28,7 +27,7 @@ public class CharacterPalettes
     private Color[][] _accent;
 
     /// <summary>Reads every preset out of character-palettes.png.</summary>
-    /// <remarks>Throws if the PNG does not have the rows the names expect. That is a mismatch between the script and this file, and I would rather hear about it at once.</remarks>
+    /// <remarks>Throws if the PNG doesn't have as many rows as there are names. That means the script and this file don't match, and I'd rather find out right away.</remarks>
     /// <param name="content">The content manager to load with.</param>
     public void LoadContent(ContentManager content)
     {
@@ -47,28 +46,28 @@ public class CharacterPalettes
         _accent = ReadBlock(pixels, palettes.Width, ref row, AccentNames.Length);
     }
 
-    /// <summary>A hair preset's ramp, dark to light. For the swatch on the customization screen.</summary>
+    /// <summary>A hair preset's colours, dark to light. Used for the swatches on the customization screen.</summary>
     /// <param name="index">Which preset.</param>
     public IReadOnlyList<Color> Hair(int index) => _hair[Wrap(index, _hair.Length)];
 
-    /// <summary>An outfit preset's ramp.</summary>
+    /// <summary>An outfit preset's colours.</summary>
     /// <param name="index">Which preset.</param>
     public IReadOnlyList<Color> Outfit(int index) => _outfit[Wrap(index, _outfit.Length)];
 
-    /// <summary>An accent preset's ramp.</summary>
+    /// <summary>An accent preset's colours.</summary>
     /// <param name="index">Which preset.</param>
     public IReadOnlyList<Color> Accent(int index) => _accent[Wrap(index, _accent.Length)];
 
-    /// <summary>Makes a copy of a player sheet in the colours of a look.</summary>
+    /// <summary>Makes a recoloured copy of a player sheet for a look.</summary>
     /// <remarks>
-    /// Every key colour in the sheet is swapped for the same shade of the chosen ramp. Done on
-    /// the CPU once per change, not per frame: a sheet is 160x576, so it is instant, and it keeps
-    /// to the Texture2D calls the sprite tutorials already use.
+    /// Every key colour gets swapped for the same shade of the picked preset. It only runs when an
+    /// option changes, not every frame, and the sheet is small so it's instant. (No shader needed,
+    /// just GetData and SetData like the sprite tutorials.)
     /// </remarks>
     /// <param name="device">The device to make the new texture on.</param>
-    /// <param name="sheet">The sheet as painted, in the keys.</param>
+    /// <param name="sheet">The sheet in its key colours.</param>
     /// <param name="look">The colours to put on it.</param>
-    /// <returns>A new texture. The caller owns it and disposes of it.</returns>
+    /// <returns>A new texture. Whoever calls this has to dispose it.</returns>
     public Texture2D Recolour(GraphicsDevice device, Texture2D sheet, PlayerLook look)
     {
         var swap = new Dictionary<Color, Color>();
@@ -90,18 +89,18 @@ public class CharacterPalettes
         return recoloured;
     }
 
-    /// <summary>Wraps a preset index into range, so stepping left off the first lands on the last.</summary>
+    /// <summary>Wraps a preset index around, so going left from the first one lands on the last.</summary>
     /// <param name="index">The index, possibly out of range.</param>
     /// <param name="count">How many presets there are.</param>
     public static int Wrap(int index, int count) => (index % count + count) % count;
 
-    /// <summary>Maps each shade of the key ramp to the same shade of the chosen one.</summary>
+    /// <summary>Maps each key shade to the same shade of the picked preset.</summary>
     private static void AddSwap(Dictionary<Color, Color> swap, IReadOnlyList<Color> key, IReadOnlyList<Color> chosen)
     {
         for (int i = 0; i < key.Count && i < chosen.Count; i++) swap[key[i]] = chosen[i];
     }
 
-    /// <summary>Reads one block of rows. A transparent pixel ends a ramp: the accents are only three long.</summary>
+    /// <summary>Reads one block of rows. A transparent pixel ends a ramp since the accents only have three shades.</summary>
     private static Color[][] ReadBlock(Color[] pixels, int width, ref int row, int count)
     {
         var block = new Color[count][];

@@ -1,14 +1,14 @@
 namespace TheBlackBox;
 
 /// <summary>
-/// What the player wears on top. The value picks the block of rows on their walking sheet: four rows (one per direction) each.
+/// What the player wears. The value picks which block of rows to use on the walking sheet (four rows each, one per direction).
 /// </summary>
 public enum Accessory
 {
     /// <summary>Nothing.</summary>
     None,
 
-    /// <summary>A scarf, wound twice with one end hanging.</summary>
+    /// <summary>A scarf with one end hanging down.</summary>
     Scarf,
 
     /// <summary>A knit cap.</summary>

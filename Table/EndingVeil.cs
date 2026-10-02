@@ -7,7 +7,7 @@ namespace TheBlackBox;
 /// <summary>
 /// The end of a run: a veil over the table, and what became of the player, set large across it.
 /// </summary>
-/// <remarks>Two endings, one screen. ResultsScreen draws it, and the chapter only turns when the player leaves, in TableScreen.FinishRun.</remarks>
+/// <remarks>Both endings use this. ResultsScreen draws it, and the chapter only changes when the player leaves (TableScreen.FinishRun).</remarks>
 public class EndingVeil
 {
     /// <summary>How dark the veil is, and its colour.</summary>
@@ -43,7 +43,7 @@ public class EndingVeil
     /// <summary>Draws the veil and the verdict. The text batch.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     /// <param name="won">Whether the player is still standing.</param>
-    /// <param name="fade">How far the veil has come down, 0 to 1.</param>
+    /// <param name="fade">How far the veil has faded in, 0 to 1.</param>
     public void Draw(SpriteBatch spriteBatch, bool won, float fade)
     {
         spriteBatch.Draw(_pixel, new Rectangle(0, 0, BlackBoxGame.ScreenWidth, BlackBoxGame.ScreenHeight), null,

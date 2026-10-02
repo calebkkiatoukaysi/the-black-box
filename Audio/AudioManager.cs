@@ -9,21 +9,20 @@ using Microsoft.Xna.Framework.Media;
 namespace TheBlackBox.Audio;
 
 /// <summary>
-/// Every song and sound effect in the game, and the three volumes they play at.
+/// Every song and sound effect in the game, and the three volume settings.
 /// </summary>
 /// <remarks>
-/// Same calls as the audio tutorial (Content.Load of a Song and a SoundEffect, MediaPlayer with
-/// IsRepeating, SoundEffect.Play), just in one place instead of in the Game class. It is a game
-/// service, like the achievement service in the services tutorial, so any screen can get it
-/// without it being passed around. MediaPlayer only plays one song at a time, so changing track
-/// fades the old one out and the new one in rather than cutting.
+/// Same calls as the audio tutorial (loading a Song and SoundEffects, MediaPlayer with IsRepeating,
+/// SoundEffect.Play), just all in one place. It's a game service like the achievement service from
+/// the services tutorial, so any screen can grab it. MediaPlayer can only play one song at a time,
+/// so switching songs fades the old one out and the new one in.
 /// </remarks>
 public class AudioManager : GameComponent
 {
-    /// <summary>How long a song takes to fade out, and the next one to fade in, in seconds.</summary>
+    /// <summary>How long a song takes to fade out or in, in seconds.</summary>
     private const float FadeSeconds = 0.6f;
 
-    /// <summary>The folders under Content the sounds are built into.</summary>
+    /// <summary>The folders under Content where the sounds are.</summary>
     private const string SfxFolder = "Sfx/";
     private const string ItemFolder = "Sfx/Items/";
 
@@ -31,27 +30,27 @@ public class AudioManager : GameComponent
     private readonly Dictionary<Sfx, SoundEffect> _effects = new();
     private readonly Dictionary<ItemId, SoundEffect> _items = new();
 
-    /// <summary>The song playing (or fading in), and the one waiting for it to fade out.</summary>
+    /// <summary>The song that's playing, and the one waiting for it to finish fading out.</summary>
     private Track? _current;
     private Track? _next;
 
-    /// <summary>How far up the current song is, 0 silent to 1 full.</summary>
+    /// <summary>How faded in the current song is, 0 is silent and 1 is full.</summary>
     private float _fade;
 
-    /// <summary>Whether the current song is on its way out.</summary>
+    /// <summary>Whether the current song is fading out.</summary>
     private bool _fadingOut;
 
-    /// <summary>The volumes, saved between sessions. See <see cref="Settings"/>.</summary>
+    /// <summary>The volumes. These get saved between sessions.</summary>
     public Settings Settings { get; }
 
-    /// <summary>When true nothing is heard, but every cue is still written to <see cref="Log"/>.</summary>
-    /// <remarks>For the proof run, which should not play music at whoever is at the desk.</remarks>
+    /// <summary>When true nothing plays, but every sound still gets written to Log.</summary>
+    /// <remarks>For the proof run, so it doesn't blast music while it runs.</remarks>
     public bool Silent { get; set; }
 
-    /// <summary>Every cue asked for while <see cref="Silent"/>, in order, so the proof run can check them.</summary>
+    /// <summary>Every sound asked for while Silent is on, in order, so the proof run can check them.</summary>
     public List<string> Log { get; } = new();
 
-    /// <summary>Creates the manager with the settings it should play at.</summary>
+    /// <summary>Creates the manager with the volume settings.</summary>
     /// <param name="game">The game it belongs to.</param>
     /// <param name="settings">The volumes.</param>
     public AudioManager(Game game, Settings settings) : base(game)
@@ -59,8 +58,8 @@ public class AudioManager : GameComponent
         Settings = settings;
     }
 
-    /// <summary>Loads every song and every sound effect.</summary>
-    /// <remarks>All of them up front. They are small, and a sound loading mid-game would hitch the frame it is first heard on.</remarks>
+    /// <summary>Loads every song and sound effect.</summary>
+    /// <remarks>All up front. They're small, and loading a sound in the middle of the game would hitch the frame.</remarks>
     /// <param name="content">The content manager to load with.</param>
     public void LoadContent(ContentManager content)
     {
@@ -76,11 +75,11 @@ public class AudioManager : GameComponent
         MediaPlayer.IsRepeating = true;
     }
 
-    /// <summary>Starts a song, fading out whatever is playing first. Asking for the one already playing does nothing.</summary>
+    /// <summary>Starts a song, fading out whatever's playing first. Asking for the song that's already playing does nothing.</summary>
     /// <param name="track">The song to play.</param>
     public void PlaySong(Track track)
     {
-        // Already the song, even if it was on its way out: bring it back up rather than restart it.
+        // Already playing this one (even if it was fading out), so just bring it back up instead of restarting it.
         if (_current == track)
         {
             _next = null;
@@ -102,7 +101,7 @@ public class AudioManager : GameComponent
         _fadingOut = true;
     }
 
-    /// <summary>Fades the song out and leaves silence. The verdict at the end of a run uses it, so its stinger is heard alone.</summary>
+    /// <summary>Fades the song out to silence. Used for the verdict so the win/lose sound plays on its own.</summary>
     public void StopSong()
     {
         if (_current is null) return;
@@ -116,12 +115,12 @@ public class AudioManager : GameComponent
     /// <summary>Plays one sound effect.</summary>
     /// <param name="sfx">Which one.</param>
     /// <param name="volume">How loud, before the settings, 0 to 1.</param>
-    /// <param name="pitch">Up or down, -1 to 1 (an octave either way).</param>
+    /// <param name="pitch">Up or down, -1 to 1 (one octave either way).</param>
     /// <param name="pan">Left or right, -1 to 1.</param>
     public void Play(Sfx sfx, float volume = 1f, float pitch = 0f, float pan = 0f) =>
         Play(sfx.ToString(), _effects.GetValueOrDefault(sfx), volume, pitch, pan);
 
-    /// <summary>Plays an item's own sound, for picking it up or using it.</summary>
+    /// <summary>Plays an item's sound, for picking it up or using it.</summary>
     /// <param name="item">The item.</param>
     /// <param name="volume">How loud, before the settings, 0 to 1.</param>
     public void PlayItem(ItemId item, float volume = 1f) =>
@@ -160,7 +159,7 @@ public class AudioManager : GameComponent
         base.Update(gameTime);
     }
 
-    /// <summary>Starts a song from silence. Update brings it up.</summary>
+    /// <summary>Starts a song at 0 volume. Update fades it in.</summary>
     /// <param name="track">The song.</param>
     private void Start(Track track)
     {
@@ -170,7 +169,7 @@ public class AudioManager : GameComponent
         MediaPlayer.Play(_songs[track]);
     }
 
-    /// <summary>Plays a loaded effect at the settings' volume, or writes it to the log when silent.</summary>
+    /// <summary>Plays an effect at the settings' volume, or logs it when Silent is on.</summary>
     private void Play(string name, SoundEffect effect, float volume, float pitch, float pan)
     {
         if (Silent)
@@ -185,7 +184,7 @@ public class AudioManager : GameComponent
         effect.Play(level, Math.Clamp(pitch, -1f, 1f), Math.Clamp(pan, -1f, 1f));
     }
 
-    /// <summary>The content name of a song. Named for the song, not the screen, so they are spelled out here.</summary>
+    /// <summary>The content name for a song. The files are named after the song, not the screen, so they're spelled out here.</summary>
     /// <param name="track">The song.</param>
     private static string SongName(Track track) => track switch
     {
@@ -194,7 +193,7 @@ public class AudioManager : GameComponent
         _ => "Music/place-your-hand",
     };
 
-    /// <summary>Turns an enum name into the file name it is built from: MenuMove to menu-move.</summary>
+    /// <summary>Turns an enum name into its file name, like MenuMove to menu-move.</summary>
     /// <param name="name">The PascalCase name.</param>
     private static string Kebab(string name)
     {

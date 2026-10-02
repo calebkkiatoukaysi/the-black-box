@@ -1,14 +1,14 @@
 namespace TheBlackBox;
 
 /// <summary>
-/// Which leg of the proof run is playing. The run goes the way a player would, one screen after another.
+/// Which part of the proof run is playing. It goes through the screens in the same order a player would.
 /// </summary>
 public enum ProofStage
 {
     /// <summary>The title, the options and the save form.</summary>
     Menus,
 
-    /// <summary>Dressing and naming the scratch run.</summary>
+    /// <summary>Customizing and naming the scratch run.</summary>
     Customization,
 
     /// <summary>The lobby, up to going through the door.</summary>
@@ -17,10 +17,10 @@ public enum ProofStage
     /// <summary>The table, through both verdicts and into the next chapter.</summary>
     Table,
 
-    /// <summary>Back in the lobby off the verdict, and out through the pause menu.</summary>
+    /// <summary>Back in the lobby after the verdict, then out through the pause menu.</summary>
     LobbyAgain,
 
-    /// <summary>The title again, which is the end of it.</summary>
+    /// <summary>Back on the title, which is the end.</summary>
     TitleAgain,
 
     /// <summary>Writing the audio log and quitting.</summary>

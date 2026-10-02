@@ -8,23 +8,23 @@ namespace TheBlackBox;
 /// The table's part of the proof run: one state after another, set up by hand, and which frames to keep.
 /// </summary>
 /// <remarks>
-/// Frames are counted from the first frame the table is drawn, by BlackBoxGame, which takes
-/// the shots. Anything animated is pinned on the frame of its shot, because saving a PNG stalls
+/// Frames are counted from the first frame the table gets drawn. BlackBoxGame does the counting
+/// and takes the shots. Anything animated is pinned on the frame of its shot, because saving a PNG stalls
 /// the fixed timestep and the catch-up updates would move it.
 /// </remarks>
 public partial class TableScreen
 {
-    /// <summary>How many frames the table is given to come up out of the fade before anything is shot.</summary>
+    /// <summary>How many frames the table gets to fade in before the first shot.</summary>
     private const int Settled = 50;
 
-    /// <summary>How many frames the results veil is given to come down.</summary>
+    /// <summary>How many frames the results screen gets to fade in.</summary>
     private const int VerdictSettled = 80;
 
-    /// <summary>The last frame of the table's schedule.</summary>
+    /// <summary>The last frame of the table schedule.</summary>
     internal const int ProofEnd = Settled + 604 + 3 * VerdictSettled;
 
     /// <summary>Sets up whatever state this frame calls for, and names the file if the frame is to be kept.</summary>
-    /// <param name="frame">Which drawn frame this is, counted from the table's first.</param>
+    /// <param name="frame">Which frame this is, counting from the table's first one.</param>
     /// <returns>The file the frame should be written to, or null.</returns>
     internal string ProofStep(int frame)
     {
@@ -139,7 +139,7 @@ public partial class TableScreen
             case Settled + 558:
                 return "table-resolved.png";
 
-            // The pause menu over the table, and then away again.
+            // Open the pause menu over the table, then close it.
             case Settled + 560:
                 ScreenManager.AddScreen(new PauseMenuScreen(SaveAndLeave));
                 return null;
@@ -151,7 +151,7 @@ public partial class TableScreen
                 ExitProofPopups();
                 return null;
 
-            // The two endings, forced by setting lives and phase. Update puts the results up off the phase.
+            // Force both endings by setting the lives and phase. Update shows the results based on the phase.
             case Settled + 590:
                 _run.PlayerLives = 0;
                 _phase = RoundPhase.Over;
@@ -170,7 +170,7 @@ public partial class TableScreen
             case Settled + 591 + 2 * VerdictSettled:
                 return "table-advance.png";
 
-            // Chapter two: advance the run the way FinishRun does and enter it again. Serenity is the whole roster, so she sits back down.
+            // Chapter two: advance the run like FinishRun does and start it again. Serenity's the only one on the roster so she's the opponent again.
             case Settled + 592 + 2 * VerdictSettled:
                 ExitProofPopups();
                 _run.Advance();
@@ -180,7 +180,7 @@ public partial class TableScreen
             case Settled + 600 + 2 * VerdictSettled:
                 return "table-chapter-two.png";
 
-            // And win that one too, and take the results' way back to the lobby.
+            // Win that one too, then go back to the lobby from the results.
             case Settled + 602 + 2 * VerdictSettled:
                 _run.OpponentLives = 0;
                 _phase = RoundPhase.Over;
@@ -198,7 +198,7 @@ public partial class TableScreen
         }
     }
 
-    /// <summary>Takes the pause menu or the results straight off the stack, with no fade.</summary>
+    /// <summary>Removes the pause menu or the results right away, with no fade.</summary>
     private void ExitProofPopups()
     {
         foreach (GameScreen screen in ScreenManager.GetScreens())

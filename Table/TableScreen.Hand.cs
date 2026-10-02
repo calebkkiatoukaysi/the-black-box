@@ -23,9 +23,9 @@ public partial class TableScreen
 
     /// <summary>Where the fingertips wait before the hand is offered, and where they end up: inside the mouth.</summary>
     /// <remarks>
-    /// Both are on the line the arm is drawn along, so it slides out along its own length instead
-    /// of drifting sideways. The mouth end is low enough that the cut end of the forearm is still
-    /// under the bottom of the screen when the hand is all the way in.
+    /// Both points are on the same line as the arm, so it slides straight in and out instead of
+    /// drifting sideways. The mouth point is low enough that the end of the forearm stays below the
+    /// bottom of the screen when the hand is all the way in.
     /// </remarks>
     private static readonly Vector2 HandRest = new(1560f, 1120f);
     private static readonly Vector2 HandMouth = new(540f, 505f);
@@ -98,7 +98,7 @@ public partial class TableScreen
             _reach = MathF.Min(1f, _reach + elapsed / ReachSeconds);
             _hand.Reach = _reach;
 
-            // The moment the fingers are all the way in, the box has them.
+            // Once the fingers are all the way in, the box has them.
             if (_reach >= 1f) _audio.Play(Sfx.HandIn);
             return;
         }

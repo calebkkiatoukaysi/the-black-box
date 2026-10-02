@@ -10,7 +10,7 @@ namespace TheBlackBox;
 /// </summary>
 public partial class TableScreen
 {
-    /// <summary>How well a check has to go to sound like it went well. Same line ItemResolver draws for the sight items.</summary>
+    /// <summary>How good a check has to be to play the good sound. Same cutoff ItemResolver uses for the sight items.</summary>
     private const float CheckWellDone = 0.5f;
 
     /// <summary>What KEEP IT says under itself when it cannot be pressed.</summary>
@@ -168,7 +168,7 @@ public partial class TableScreen
         _opponentLivesShown = _run.OpponentLives;
     }
 
-    /// <summary>CONTINUE: the next line, with a tick if the line has no sound of its own.</summary>
+    /// <summary>CONTINUE: shows the next line, with a tick if the line doesn't have its own sound.</summary>
     private void Continue()
     {
         if (_log.Count == 0 || !TableCues.Play(_audio, _log.Peek())) _audio.Play(Sfx.MenuMove);
@@ -188,7 +188,7 @@ public partial class TableScreen
 
         _logLine = null;
 
-        // Out of lives on either side means no next round. Update puts the results up.
+        // If either side is out of lives there's no next round. Update shows the results.
         if (RoundEngine.IsOver(_run))
         {
             _phase = RoundPhase.Over;

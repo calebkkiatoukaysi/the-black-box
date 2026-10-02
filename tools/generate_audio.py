@@ -1,7 +1,6 @@
 """
-Procedural audio generator for The Black Box.
-
-Every WAV in Content/Music and Content/Sfx comes out of this script. Run it from the repo root:
+Audio generator for The Black Box. Every WAV in Content/Music and Content/Sfx comes out of
+this script. Run it from the repo root:
 
     python tools/generate_audio.py                     # everything
     python tools/generate_audio.py music               # the three songs
@@ -9,13 +8,13 @@ Every WAV in Content/Music and Content/Sfx comes out of this script. Run it from
     python tools/generate_audio.py holding revolver    # just these, by file name
     python tools/generate_audio.py -v holding          # also print each layer's level
 
-Like generate_assets.py it only needs CPython. Nothing is sampled: every sound is built from
-sines, wavetables, noise and a few filters, and every random source is seeded, so a re-run
-writes byte-identical files.
+Only needs CPython, same as generate_assets.py. No samples are used. Everything is built from
+sines, wavetables, noise and a few filters, and the random numbers are all seeded so a rerun
+writes the exact same files.
 
-Music is 16-bit stereo at 32 kHz and loops seamlessly under MediaPlayer.IsRepeating. Sound
-effects are 16-bit mono at 44.1 kHz and already balanced against each other, so the game can
-play them all at the same volume.
+Music is 16-bit stereo at 32 kHz and loops cleanly with MediaPlayer.IsRepeating. Sound effects
+are 16-bit mono at 44.1 kHz and already balanced against each other, so the game can play them
+all at the same volume.
 """
 
 import cmath
@@ -35,13 +34,13 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 MUSIC_RATE = 32000
 SFX_RATE = 44100
 
-# Loudness. Music is normalised to an RMS target and kept under the peak ceiling; sound
-# effects are normalised by peak, grouped by how big the moment is and how often it fires.
+# Loudness targets. Music gets normalised to an RMS level and kept under the peak ceiling.
+# Sound effects get normalised by peak, louder for big moments and quieter for ones that fire a lot.
 MUSIC_PEAK_DB = -1.0
 TITLE_RMS_DB = -22.0
 LOBBY_RMS_DB = -21.0
 ARENA_RMS_DB = -17.0
-LIMIT_KNEE = 0.5        # the music limiter only bends samples above this (linear)
+LIMIT_KNEE = 0.5        # the limiter only touches samples above this (linear)
 
 PEAK_BIG = -1.0         # slams, shots, hits, the two stingers
 PEAK_ITEM = -4.0        # items and most table sounds
@@ -112,10 +111,9 @@ def write_wav(rel, chans, rate):
 
 
 def seam_report(chans, rate):
-    """How the loop point compares with the rest. A click is a step much bigger than the steps
-    around it, so the jump from the last sample back to the first is measured against the
-    mean step in the 10 ms either side of it (and against the whole song's for reference).
-    Then the level of the 50 ms either side."""
+    """Prints how clean the loop point is. I compare the jump from the last sample back
+    to the first against the average step in the 10 ms around it (a click would be a lot bigger),
+    then print the level of the first and last 50 ms."""
     def mean_step(x):
         return sum(map(abs, map(sub, x[1:], x[:-1]))) / (len(x) - 1)
     k = int(0.01 * rate)
@@ -133,9 +131,9 @@ def seam_report(chans, rate):
 # --------------------------------------------------------------------------- #
 # Buffers, oscillators and envelopes
 # --------------------------------------------------------------------------- #
-# Everything is a plain list of floats: in CPython a list fed through map() or a comprehension
-# beats array('d') and explicit loops. Only finished song layers get parked in array('d'),
-# because a list costs four times the memory.
+# Buffers are plain lists of floats. When I timed it, map() and comprehensions over lists were
+# faster than array('d') or explicit loops. Finished song layers get stored as array('d') since
+# a list takes four times the memory.
 
 def silence(n):
     return [0.0] * max(0, n)
@@ -155,7 +153,7 @@ def norm(x, top=1.0):
 
 
 def mix(dst, src, at=0, gain=1.0):
-    """Adds src into dst starting at sample `at`; whatever falls off either end is dropped."""
+    """Adds src into dst starting at sample `at`. Anything past either end gets dropped."""
     if at < 0:
         src = src[-at:]
         at = 0
@@ -169,8 +167,8 @@ def mix(dst, src, at=0, gain=1.0):
 
 
 def mix_loop(dst, src, at, gain=1.0):
-    """Like mix(), but wraps around the end of dst. Tails that run past the loop point land on
-    the start, which is most of what makes the songs loop without a seam."""
+    """Same as mix() but wraps around the end of dst, so tails that run past the loop point
+    end up at the start. This is the main thing that keeps the songs looping cleanly."""
     size = len(dst)
     at %= size
     off = 0
@@ -200,10 +198,10 @@ def noise(n, rng):
 
 
 def sine(freq, n, rate, amp=1.0, tau=0.0):
-    """A sine from zero phase, dying away with time constant tau (s) if tau > 0.
+    """A sine starting at zero phase. If tau > 0 it decays with that time constant (seconds).
 
-    I rotate a complex phasor with accumulate() instead of calling sin() per sample. Same
-    numbers, roughly twice as fast."""
+    I rotate a complex phasor with accumulate() instead of calling sin() every sample. Same
+    result, about twice as fast."""
     if n <= 0:
         return []
     r = math.exp(-1.0 / (tau * rate)) if tau > 0 else 1.0
@@ -212,8 +210,8 @@ def sine(freq, n, rate, amp=1.0, tau=0.0):
 
 
 def glide(f_start, f_end, tau, n, rate, amp=1.0):
-    """A sine whose pitch slides from f_start toward f_end with time constant tau. Kicks,
-    thumps and swells. The phase is the closed-form integral, so no per-sample state."""
+    """A sine that slides from f_start toward f_end with time constant tau. I use it for kicks,
+    thumps and swells. The phase is worked out directly, so there's no running state."""
     a = TAU * f_end / rate
     b = TAU * (f_start - f_end) * tau
     k = 1.0 / (tau * rate)
@@ -238,8 +236,8 @@ def decay(n, tau, rate):
 
 
 def envelope(n, rate, attack=0.002, tau=0.0, gate=None, release=0.05):
-    """Raised-cosine attack, exponential decay (tau, 0 = hold), and if gate is given an
-    exponential release after it. It always ends on a short fade to exactly zero."""
+    """Raised-cosine attack, exponential decay (tau, 0 means hold), and an exponential release
+    after `gate` if one is given. Always ends with a short fade down to zero."""
     e = decay(n, tau, rate) if tau > 0 else [1.0] * n
     a = min(n, int(attack * rate))
     for i in range(a):
@@ -270,7 +268,7 @@ def lines(points, n, rate):
 
 
 def fade(x, rate, fin=0.0005, fout=0.005):
-    """Raised-cosine fade in and out, in place, so the first and last samples are true zero."""
+    """Raised-cosine fade in and out, in place, so the first and last samples are exactly zero."""
     n = len(x)
     a = min(n // 2, int(fin * rate))
     b = min(n // 2, int(fout * rate))
@@ -296,8 +294,8 @@ def saturate(x, drive):
 
 
 def modes(partials, n, rate, f0=1.0, amp=1.0):
-    """Sum of decaying sines, partials given as (ratio, gain, tau). It's how I ring every
-    struck thing here: music box tines, bells, glass, the metal tags, steel doors."""
+    """Sum of decaying sines, partials given as (ratio, gain, tau). I use this for anything
+    that gets struck: music box tines, bells, glass, the metal tags, steel doors."""
     out = silence(n)
     top = 0.45 * rate
     for ratio, g, tau in partials:
@@ -337,8 +335,8 @@ FIX_BITS = 20       # fixed-point fraction bits for the oscillator phase
 
 
 def osc(kind, freq, n, rate, amp=1.0, phase=0.0):
-    """Wavetable oscillator. The phase is a fixed-point integer counted by range(), so the
-    whole thing runs as a chain of C-level map()s with no Python per sample."""
+    """Wavetable oscillator. The phase is a fixed-point integer from range(), so the whole thing
+    runs as map() calls with no Python code per sample."""
     tab = table_for(kind, freq, rate)
     if amp != 1.0:
         tab = [v * amp for v in tab]
@@ -360,9 +358,9 @@ def osc_sweep(kind, f0, f1, n, rate, amp=1.0):
 
 
 def vibrato_time(n, rate, cents, vib_hz, delay_s):
-    """Sample times bent by a vibrato that fades in after delay_s, like a singer's. Reading an
-    oscillator at these times instead of 0, 1, 2... gives it the vibrato, and the three
-    voices of a lead can share one list."""
+    """Sample times with a vibrato in them that fades in after delay_s. Reading an
+    oscillator at these times instead of 0, 1, 2... gives it vibrato, and several voices can
+    share the same list."""
     if not cents or n <= 0:
         return list(range(n))
     w = TAU * vib_hz / rate
@@ -434,7 +432,7 @@ def biquad(x, kind, fc, q, rate):
 
 def svf(x, cutoff, q, rate, mode="lp", block=16):
     """Trapezoidal state-variable filter. cutoff is a number, or a function of the sample
-    index that I read every `block` samples (sweeps, breathing pads, filter envelopes)."""
+    index that I read every `block` samples (for sweeps and filter envelopes)."""
     n = len(x)
     out = silence(n)
     k = 1.0 / q
@@ -466,8 +464,9 @@ def preroll(rate, pre_s=1.0):
 
 
 def looped(fn, x, rate, pre_s=1.0):
-    """Runs a short-memory filter over a loop. I feed it the last second first, so its state
-    at sample 0 is what it would be coming round from the end (a full second pass, cheaper)."""
+    """Runs a filter with short memory over a loop. I feed it the last second first so its
+    state at sample 0 matches coming round from the end. Same result as a second full pass, just
+    cheaper."""
     pre = min(len(x), preroll(rate, pre_s))
     return fn(x[-pre:] + x)[pre:]
 
@@ -481,8 +480,8 @@ def reverb(send, rate, rt60, damp_hz, size=1.0, loop=False):
     """Feedback-delay-network reverb: three allpass diffusers into four damped delay lines
     mixed through a Hadamard matrix. Mono in, (left, right) wet out.
 
-    With loop=True I run the send through twice and keep the second pass, so the tail from
-    the end of the song is already ringing at sample 0 and the loop point is invisible."""
+    With loop=True I run the send through twice and keep the second pass, so the reverb tail from
+    the end of the song is already there at sample 0 and the loop doesn't jump."""
     lens = [int(rate * ms * size / 1000.0) | 1 for ms in REVERB_LINES_MS]
     aps = [int(rate * ms / 1000.0) | 1 for ms in REVERB_DIFFUSERS_MS]
     g0, g1, g2, g3 = [0.5 * 10.0 ** (-3.0 * n / (rt60 * rate)) for n in lens]
@@ -572,8 +571,8 @@ def pingpong(send, rate, delay, feedback, damp_hz):
 
 
 def limit(x, gain, knee, ceiling):
-    """Memoryless soft limiter: straight below the knee, tanh-bent above it, never past the
-    ceiling. No state, so it can't disturb the loop point."""
+    """Soft limiter with no memory: untouched below the knee, a tanh curve above it, never
+    past the ceiling. Since it has no state it can't mess up the loop point."""
     span = ceiling - knee
     th = math.tanh
     return [v if -knee <= v <= knee else
@@ -585,8 +584,8 @@ def limit(x, gain, knee, ceiling):
 # Shared instruments
 # --------------------------------------------------------------------------- #
 
-# (ratio, gain, tau). The 5.43 and 8.2 partials are the inharmonic tine modes that make it
-# a music box rather than a sine organ.
+# (ratio, gain, tau). The 5.43 and 8.21 partials are the out-of-tune tine modes. Without them
+# it just sounds like an organ.
 MUSIC_BOX = ((1.0, 1.0, 1.3), (2.0, 0.2, 0.5), (3.01, 0.05, 0.28), (5.43, 0.16, 0.11),
              (8.21, 0.07, 0.045), (11.9, 0.03, 0.022))
 MUSIC_BOX_LENGTH = 3.6
@@ -595,7 +594,7 @@ MUSIC_BOX_LENGTH = 3.6
 def music_box_note(freq, rate, rng):
     n = int(MUSIC_BOX_LENGTH * rate)
     out = modes(MUSIC_BOX, n, rate, freq)
-    # The pluck: a couple of milliseconds of bright noise where the pin lets go of the tine.
+    # The pluck: a couple of ms of bright noise when the pin lets go of the tine.
     m = int(0.003 * rate)
     click = shaped(highpass(noise(m, rng), 2500.0, rate), envelope(m, rate, 0.0003, 0.0007))
     mix(out, click, 0, 0.06)
@@ -618,8 +617,8 @@ def heartbeat(rate, rng, gap=0.27, pitch=1.0):
 
 
 def creak(dur, rate, rng, rates, resonances, q=28.0):
-    """Stick-slip friction: an impulse train whose rate wanders along `rates` (a list of
-    (position 0..1, pulses per second)), rung through a few narrow resonances."""
+    """Stick-slip friction: a train of clicks whose rate follows `rates` (a list of
+    (position 0..1, clicks per second)), run through a few narrow band-passes."""
     n = int(dur * rate)
     pulses = silence(n)
     t = 0.0
@@ -699,8 +698,8 @@ class Song:
                 label, db(rms(left, right) * g), db(peak(left, right) * g)))
 
     def bus(self, which):
-        """Sums the layers into one bus (1 left, 2 right, 3 reverb send). Adding them one at a
-        time was most of the run time; zip + sumprod does every layer in a single pass."""
+        """Sums the layers into one bus (1 left, 2 right, 3 reverb send). Adding them one
+        at a time was most of the run time. zip + sumprod does all of them in one pass."""
         picked = [(layer[0], layer[which]) for layer in self.layers if layer[which]]
         if not picked:
             return self.track()
@@ -710,7 +709,8 @@ class Song:
         return [sp(c, gains) for c in zip(*tracks)]
 
     def add_reverb(self, rt60, damp_hz, size, gain_db):
-        # The tail is dark anyway, so I run it at half rate: half the work, nothing audible lost.
+        # I run the reverb at half rate. The tail is dark anyway so you can't hear the difference,
+        # and it's half the work.
         rate = self.rate
         send = looped(lambda x: lowpass(biquad(x, "lp", 6000.0, 0.7, rate), 7000.0, rate),
                       self.bus(3), rate, 0.05)
@@ -768,7 +768,7 @@ def note_cache(render):
 STEEL = ((1.0, 1.0, 0.5), (1.47, 0.75, 0.4), (2.09, 0.55, 0.3), (2.83, 0.4, 0.22),
          (3.62, 0.3, 0.15), (4.71, 0.2, 0.1))
 PIANO_STRETCH = 0.0004      # how far a real string's upper partials run sharp
-VOWELS = {                  # (formant Hz, gain), roughly a low wordless choir
+VOWELS = {                  # (formant Hz, gain) per vowel, roughly a low choir
     "oo": ((320.0, 1.0), (800.0, 0.45), (2300.0, 0.15)),
     "oh": ((480.0, 1.0), (850.0, 0.55), (2500.0, 0.18)),
     "ah": ((700.0, 1.0), (1100.0, 0.6), (2550.0, 0.22)),
@@ -777,8 +777,8 @@ _BOW_HISS = {}
 
 
 def bow_hiss(n, rate, rng):
-    """Bow noise for one note: a slice cut from one long strip of band-passed noise, so I only
-    filter it once per rate."""
+    """Bow noise for one note. It's a slice of one long strip of band-passed noise, so I
+    only have to filter it once."""
     if rate not in _BOW_HISS:
         _BOW_HISS[rate] = norm(biquad(noise(40 * rate, random.Random(rate)), "bp", 2000.0, 0.7, rate))
     strip = _BOW_HISS[rate]
@@ -790,9 +790,9 @@ def bow_hiss(n, rate, rng):
 
 
 def bowed(freqs, dur, rate, rng, attack=1.0, release=1.5, vib_cents=10.0, bow=0.12, bright=1.0):
-    """A bowed section: each note is two saws a few cents apart, all read through one shared
-    vibrato, rolled off by the body, with bow hiss and uneven bow pressure on the same
-    envelope. dur is how long the bow stays on (s)."""
+    """Bowed strings: two saws a few cents apart per note, one vibrato shared by all of them,
+    low-passed for the body, plus bow hiss and slightly uneven bow pressure. dur is how long the
+    bow stays on (s)."""
     n = int((dur + 3.0 * release) * rate)
     times = vibrato_time(n, rate, vib_cents, rng.uniform(4.3, 5.2), min(attack, 0.8))
     x = silence(n)
@@ -807,8 +807,8 @@ def bowed(freqs, dur, rate, rng, attack=1.0, release=1.5, vib_cents=10.0, bow=0.
 
 
 def choir(freqs, dur, rate, rng, vowel="oo", attack=3.0, release=2.0, breath=0.35, glide_cents=0.0):
-    """A breathy wordless choir: two saws per voice plus breath noise, all through three vowel
-    formants. glide_cents bends the whole chord up across the note instead of a vibrato."""
+    """Choir pad: two saws per voice plus some breath noise, all through three vowel
+    formants. With glide_cents the whole chord bends up over the note and there's no vibrato."""
     n = int((dur + 3.0 * release) * rate)
     if glide_cents:
         k = math.log(2.0) * glide_cents / 1200.0 / n
@@ -828,15 +828,15 @@ def choir(freqs, dur, rate, rng, vowel="oo", attack=3.0, release=2.0, breath=0.3
 
 
 def felt_piano(freq, rate, rng, vel=0.6, length=4.5, prepared=0.0, detune=3.0):
-    """Felt piano: slightly stretched partials that fall away steeply, each with a quick and a
-    slow decay, a second string a few cents off so the note beats, and the dull knock of the
-    felt. `prepared` mixes in the clangy partials of a bolt wedged between the strings."""
+    """Felt piano: slightly stretched partials that drop off fast, each with a quick
+    and a slow decay, a second string a few cents off so the note beats, and a soft knock from the
+    hammer. `prepared` adds the clangy partials you get from a bolt stuck between the strings."""
     n = int(length * rate)
     slow = 2.4 * (262.0 / freq) ** 0.45
     parts, second = [], []
     for k in range(1, 6):
         r = k * math.sqrt(1.0 + PIANO_STRETCH * k * k)
-        g = vel ** (0.5 * (k - 1)) / k ** 1.7          # a softer touch loses the top first
+        g = vel ** (0.5 * (k - 1)) / k ** 1.7          # softer notes lose the high partials first
         tau = slow / (1.0 + 0.6 * (k - 1))
         parts += [(r, 0.6 * g, 0.15 * tau), (r, 0.4 * g, tau)]
         if k <= 2:
@@ -852,8 +852,8 @@ def felt_piano(freq, rate, rng, vel=0.6, length=4.5, prepared=0.0, detune=3.0):
 
 
 def reverse_swell(notes, dur, rate, rng):
-    """A piano chord played backwards into the next downbeat, with a breath of noise rising under
-    it. It ends on the chord's attack, so the last few ms are faded."""
+    """A piano chord played backwards into the next downbeat, with some noise
+    rising under it. It ends on the chord's attack, so I fade the last few ms."""
     n = int(dur * rate)
     x = silence(n)
     for m in notes:
@@ -865,8 +865,8 @@ def reverse_swell(notes, dur, rate, rng):
 
 
 def sub_impact(rate, rng, length=3.5):
-    """A sudden low impact: a sub sine dropping toward 23 Hz, pushed into a tanh, with a rumble
-    of low noise under it."""
+    """A low impact: a sub sine dropping toward 23 Hz through a tanh, with some low
+    noise rumble under it."""
     n = int(length * rate)
     x = saturate(shaped(glide(54.0, 23.0, 0.4, n, rate), envelope(n, rate, attack=0.003, tau=0.9)), 1.8)
     rumble = norm(lowpass(lowpass(noise(n, rng), 140.0, rate), 140.0, rate))
@@ -895,8 +895,8 @@ def heavy_kick(rate, rng):
 
 
 def clang(rate, rng, f0):
-    """Struck sheet steel for the backbeat: two plates' worth of inharmonic partials, a crack of
-    noise and a dull thud, all pushed into a tanh so it grinds."""
+    """Metal hit for the backbeat: partials for two steel plates, a noise crack and a low
+    thud, all through a tanh for some grit."""
     n = int(1.1 * rate)
     x = norm(modes([(r, g, t * 1.3) for r, g, t in STEEL], n, rate, f0))
     mix(x, norm(modes([(r, g, t * 0.8) for r, g, t in STEEL], n, rate, f0 * 1.37)), 0, 0.6)
@@ -907,8 +907,8 @@ def clang(rate, rng, f0):
 
 
 def stutter(src, rate, repeats, first_s, shrink):
-    """A skipping buffer: the head of a sound repeated, each repeat a bit shorter, then held and
-    crushed down to a few levels so it grinds."""
+    """Glitch stutter: the start of a sound repeated, each repeat a bit shorter, then
+    bit-crushed (sample-and-hold and only a few levels)."""
     out = []
     length = first_s
     for k in range(repeats):
@@ -924,7 +924,7 @@ def stutter(src, rate, repeats, first_s, shrink):
 
 
 def clock_tick(rate, rng, high):
-    """The box counting: a dry little escapement click, tick high and tock low."""
+    """Clock tick for the table music. Tick is higher, tock is lower."""
     n = int(0.05 * rate)
     f0 = 3200.0 if high else 2350.0
     x = modes(((1.0, 1.0, 0.006), (1.73, 0.5, 0.004), (2.9, 0.3, 0.003)), n, rate, f0)
@@ -935,24 +935,23 @@ def clock_tick(rate, rng, high):
 
 
 # --------------------------------------------------------------------------- #
-# it-is-watching.wav -- title theme
+# it-is-watching.wav: title theme
 # --------------------------------------------------------------------------- #
-# D minor at 52 BPM, 16 bars (about 74 s), and mostly empty on purpose. A broken music box
-# plays a few notes, then leaves long gaps. Under it: a bowed bass on D with a bow change
-# every four bars, slow string swells that rub a semitone against it, a breathy choir you
-# barely hear, a far-off heartbeat that skips twice, and two deep impacts out of nowhere.
+# D minor, 52 BPM, 16 bars (about 74 s). A detuned music box plays short phrases with long gaps
+# between them, over a bowed bass on D, slow string swells a semitone off the D, a quiet choir,
+# a heartbeat that skips twice and two sub impacts. I left it mostly empty on purpose.
 
-TITLE_BASS = (         # (first bar, bars, MIDI): root and fifth; the fifth sinks to Bb in 9-12
+TITLE_BASS = (         # (first bar, bars, MIDI): root and fifth, the fifth drops to Bb in 9-12
     (1, 4, (38, 45)),
     (5, 4, (38, 45)),
     (9, 4, (38, 46)),
     (13, 4, (38, 45)),
 )
-TITLE_SWELLS = (       # (bar, bars, MIDI, gain): each one rubs a semitone against the D
+TITLE_SWELLS = (       # (bar, bars, MIDI, gain), each one a semitone against the D
     (3, 2, (50, 51), 0.8),          # D3 + Eb3
     (7, 2, (49, 50), 0.7),          # C#3 under D3
     (11, 2, (44, 45), 0.8),         # Ab2 against A2, a tritone over the bass
-    (14, 3, (50, 51, 56), 1.0),     # D3, Eb3, Ab3: still coming as the loop turns over
+    (14, 3, (50, 51, 56), 1.0),     # D3, Eb3, Ab3, still going when the loop wraps
 )
 TITLE_CHOIR = (        # (first bar, bars, MIDI, vowel)
     (1, 8, (50, 53, 57), "oo"),
@@ -960,7 +959,7 @@ TITLE_CHOIR = (        # (first bar, bars, MIDI, vowel)
 )
 TITLE_MELODY = (       # (bar, beat, MIDI, velocity); bars 3-4, 7-8, 11-12 and 16 are left empty
     (1, 0.0, 81, 0.85), (1, 1.0, 77, 0.60), (1, 2.0, 76, 0.65), (1, 3.5, 74, 0.55),
-    (2, 1.0, 73, 0.60),                                      # C#, and it never resolves
+    (2, 1.0, 73, 0.60),                                      # C#, left unresolved
     (5, 0.0, 81, 0.80), (5, 1.0, 82, 0.65), (5, 2.5, 81, 0.55),
     (6, 0.0, 77, 0.60), (6, 2.0, 75, 0.70),                  # Eb, left hanging
     (9, 0.0, 86, 0.85), (9, 1.0, 81, 0.60), (9, 2.0, 77, 0.65), (9, 3.0, 76, 0.55),
@@ -970,9 +969,9 @@ TITLE_MELODY = (       # (bar, beat, MIDI, velocity); bars 3-4, 7-8, 11-12 and 1
     (15, 2.0, 77, 0.40),
 )
 TITLE_TINES = ((1, 62), (5, 62), (9, 58), (13, 63))
-TITLE_MISSED_BEATS = (8, 12)    # bars where the heart doesn't come
+TITLE_MISSED_BEATS = (8, 12)    # bars where the heartbeat skips
 TITLE_IMPACTS = ((9, 0.0), (13, 2.5))
-TITLE_DETUNE = -10.0            # cents; the whole box has sagged flat
+TITLE_DETUNE = -10.0            # cents, the whole music box is a bit flat
 
 
 def build_title():
@@ -980,7 +979,7 @@ def build_title():
     s = Song(TITLE_BPM, TITLE_BARS)
     R, L, H = s.rate, s.length, s.rate // 2
 
-    # Bowed bass and the swells share one string track. Each bass note starts a second early
+    # The bowed bass and the swells share one string track. Each bass note starts a second early
     # and rings a second over, so the bow changes overlap.
     strings = s.half_track()
     for first, bars, notes in TITLE_BASS:
@@ -994,21 +993,22 @@ def build_title():
         mix_loop(strings, note, s.half_at(bar), 0.6 * g)
     s.add_half(strings, -14.0, send=0.25, label="strings")
 
-    # D1 under everything, nudged to a whole number of cycles per loop, breathing twice a loop.
+    # A D1 sine under everything, nudged to a whole number of cycles per loop, with a slow level
+    # swell twice a loop.
     k = round(midi_hz(26) * L / R)
     w = TAU * 2 / L
     sub = [v * (0.7 + 0.3 * math.cos(w * i)) for i, v in enumerate(sine(k * R / L, L, R))]
     s.add(sub, -27.0, label="sub")
 
-    # The choir, barely there.
+    # The choir, kept very quiet.
     ch = s.half_track()
     for first, bars, notes, vowel in TITLE_CHOIR:
         c = choir([midi_hz(m) for m in notes], s.secs(4 * bars), H, rng, vowel, attack=4.0, release=1.5)
         mix_loop(ch, c, s.half_at(first) - 2 * H)
     s.add_half(ch, -23.0, pan=0.15, send=0.5, label="choir")
 
-    # Music box. Every tine has its own mistuning (seeded), and the whole thing is run
-    # through a wobbling delay afterwards for the wow and flutter of an old mechanism.
+    # Music box. Each tine gets its own small detune (seeded), then the whole track goes through
+    # wow() for some tape-style wobble.
     tine_cents = {}
     box = note_cache(lambda m: music_box_note(midi_hz(m, TITLE_DETUNE + tine_cents.setdefault(
         m, rng.uniform(-7.0, 7.0))), R, rng))
@@ -1021,7 +1021,8 @@ def build_title():
     mb = wow(mb, R, wow_cycles=40, wow_depth=0.0032, flutter_cycles=450, flutter_depth=0.0005)
     s.add(mb, -9.0, pan=-0.05, send=0.6, label="music box")
 
-    # The heartbeat is further off now: slower, lower, darker, mostly reverb. It skips twice.
+    # Heartbeat: slower, lower and darker than the SFX one, and mostly in the reverb so it sounds
+    # far away. It skips twice.
     beat_once = lowpass(lowpass(heartbeat(R, rng, gap=0.33, pitch=0.85), 220.0, R), 220.0, R)
     hb = s.track()
     for bar in range(1, TITLE_BARS + 1):
@@ -1029,7 +1030,7 @@ def build_title():
             mix_loop(hb, beat_once, s.at(bar, 2.0))
     s.add(hb, -12.0, send=0.35, label="heartbeat")
 
-    # Two impacts from nowhere, and something creaking in the building.
+    # Two sub impacts and one distant creak.
     fx = s.track()
     for bar, beat in TITLE_IMPACTS:
         mix_loop(fx, sub_impact(R, rng), s.at(bar, beat))
@@ -1071,36 +1072,34 @@ def hiss(n, rng):
 
 
 # --------------------------------------------------------------------------- #
-# holding.wav -- lobby theme
+# holding.wav: lobby theme
 # --------------------------------------------------------------------------- #
-# D minor at 58 BPM, 16 bars (about 66 s), two bars a chord:
-# Dm(add9) - Bbmaj7 - Gm(add9) - A7b9 - Dm(maj7) - Ebmaj7(#11) - Gm/D - A7b9.
-# A felt piano with a bolt in it plays the chords slowly and keeps knocking on one high A,
-# like someone waiting. Strings hold the chords underneath, a soft low pulse marks each bar
-# and the tube light hums. The A stops for bars 13-14 and the strings come up into the gap,
-# a reversed chord pulls into bars 9 and 1, and something creaks twice.
+# D minor, 58 BPM, 16 bars (about 66 s), two bars per chord: Dm(add9), Bbmaj7, Gm(add9), A7b9,
+# Dm(maj7), Ebmaj7(#11), Gm/D, A7b9. A detuned felt piano plays the chords slowly with one high
+# A repeating over them, with bowed strings, a soft low pulse each bar and the fluorescent hum
+# underneath. The A drops out for bars 13-14, and reversed piano chords lead into bars 9 and 1.
 
 LOBBY_CHORDS = (       # one per two bars: (bass MIDI, piano voicing, string voicing)
-    (38, (50, 57, 64, 65), (38, 45, 53)),    # Dm(add9), the E and F rubbing
+    (38, (50, 57, 64, 65), (38, 45, 53)),    # Dm(add9), with the E and F a semitone apart
     (34, (46, 53, 57, 62), (34, 41, 50)),    # Bbmaj7
     (31, (43, 50, 57, 58), (31, 38, 46)),    # Gm(add9)
     (33, (45, 52, 55, 58), (33, 40, 49)),    # A7b9
     (38, (50, 53, 57, 61), (38, 45, 53)),    # Dm(maj7)
     (39, (51, 55, 62, 69), (39, 46, 55)),    # Ebmaj7(#11), the Phrygian chord
     (38, (50, 55, 58, 62), (38, 43, 50)),    # Gm over D
-    (33, (45, 55, 61, 70), (33, 40, 49)),    # A7b9 again, home is next
+    (33, (45, 55, 61, 70), (33, 40, 49)),    # A7b9 again, back to Dm next
 )
 LOBBY_OSTINATO = ((0.0, 0.55), (0.75, 0.35), (2.0, 0.5), (2.75, 0.3))   # (beat, velocity), every bar
 LOBBY_OSTINATO_NOTE = 81        # A5
-LOBBY_SIGHS = (10, 12)          # bars whose last knock slips up to Bb
-LOBBY_GAP = (13, 14)            # bars where it stops
+LOBBY_SIGHS = (10, 12)          # bars where the last note goes up to Bb
+LOBBY_GAP = (13, 14)            # bars where the A drops out
 LOBBY_CREAKS = ((6, 1.0, -0.7), (12, 2.5, 0.6))
 LOBBY_FLICKERS = ((5, 2.3), (11, 0.7))
 
 
 def fluorescent(s, rng, flickers):
-    """The tube light: 60 Hz and its family with a buzzy 120, nudged so a whole number of
-    cycles fits in the loop, plus a few flickers with a zap of noise each. Returns (hum, zaps)."""
+    """Fluorescent light hum: 60 Hz harmonics with a buzzy 120, nudged so a whole number
+    of cycles fits in the loop, plus a few flickers with a click of noise each. Returns (hum, zaps)."""
     R, L = s.rate, s.length
     f = round(60.0 * L / R) * R / L
     hum = silence(L)
@@ -1132,8 +1131,8 @@ def build_holding():
     piano = note_cache(lambda m, v: felt_piano(midi_hz(m, cents.setdefault(m, rng.uniform(-6.0, 6.0))),
                                                H, rng, v, 5.0, prepared=0.12))
 
-    # Piano: each chord rolled slowly up from the bass, a quieter touch on its top two notes
-    # in the second bar, and the A knocking through all of it.
+    # Piano: each chord rolled up from the bass, its top two notes again (quieter) in the second
+    # bar, and the repeating A over all of it.
     keys = s.half_track()
     for i, (bass, voicing, _) in enumerate(LOBBY_CHORDS):
         first = 1 + 2 * i
@@ -1152,7 +1151,7 @@ def build_holding():
             mix_loop(keys, piano(m, v), s.half_at(bar, beat) + int(rng.gauss(0.0, 0.006) * H), v * back)
     s.add_half(keys, -7.0, pan=-0.1, send=0.35, label="piano")
 
-    # Strings under each chord, louder into the gap where the A stops.
+    # Strings under each chord, a bit louder in bars 13-14 where the A drops out.
     strings = s.half_track()
     for i, (_, _, voicing) in enumerate(LOBBY_CHORDS):
         first = 1 + 2 * i
@@ -1169,7 +1168,7 @@ def build_holding():
         mix_loop(pl, pulse, s.at(bar), 1.0 if bar % 2 else 0.55)
     s.add(pl, -15.0, label="pulse")
 
-    # Reversed chords pulling into bars 9 and 1, and two creaks somewhere in the building.
+    # Reversed chords leading into bars 9 and 1, and two distant creaks.
     fl, fr = s.track(), s.track()
     for bar in (9, 1):
         voicing = LOBBY_CHORDS[(bar - 1) // 2][1]
@@ -1194,17 +1193,13 @@ def build_holding():
 
 
 # --------------------------------------------------------------------------- #
-# place-your-hand.wav -- table theme
+# place-your-hand.wav: table theme
 # --------------------------------------------------------------------------- #
-# D Phrygian at 92 BPM in half time, 24 bars (about 63 s). Heavier rather than faster.
-#  1-8   distorted sub kick, steel clanging on the backbeat, the box's clock, low strings
-#        sawing a tritone figure in eighths, sub swells into every fourth bar, glitches
-#  9-12  the same, with a choir cluster and two high strings a semitone apart
-#  13-18 breakdown: the heavy parts drop out for a detuned prepared piano over a held tritone,
-#        the clock still counting
-#  19-22 build: the kick comes back as a pulse, then the strings, while a choir cluster rises a
-#        semitone and a noise riser climbs under it
-#  23-24 eighth-note kicks, then a skipping-buffer roll into the loop point, so bar 1 lands heavy
+# D Phrygian, 92 BPM in half time, 24 bars (about 63 s). Bars 1-12 are the main groove: distorted
+# sub kick, metal clang on the backbeat, clock ticks, low tritone strings, sub swells and glitches
+# (plus a choir cluster in 9-12). Bars 13-18 drop down to a detuned prepared piano over a held
+# tritone, then 19-24 build back up with the kick, a rising choir and a noise riser into a
+# stutter roll at the loop point.
 
 ARENA_OSTINATO = (     # low strings in eighths over two bars: D, the tritone Ab, the Phrygian Eb
     (38, 38, 44, 38, 38, 39, 38, 44),
@@ -1235,7 +1230,7 @@ def arena_kicks(bar):
         return tuple((b, 0.75) for b in range(4)) + ((3.5, 0.5),)
     if bar == 23:
         return tuple((0.5 * b, 0.8) for b in range(8))
-    return ((0.0, 0.9), (0.5, 0.85))      # bar 24: two, then the roll takes over
+    return ((0.0, 0.9), (0.5, 0.85))      # bar 24: two kicks, then the stutter roll
 
 
 def build_arena():
@@ -1261,7 +1256,7 @@ def build_arena():
         mix_loop(reduction, duck_shape, p, vel)
     duck = [max(0.2, 1.0 - 0.7 * v) for v in reduction]
 
-    # Steel on the backbeat (beat 3 of the half-time bar), with a ghost before some phrase ends.
+    # Clang on the backbeat (beat 3 in half time), plus a quiet one before some phrase ends.
     clangs = [clang(R, rng, rng.uniform(170.0, 210.0)) for _ in range(3)]
     cl = s.track()
     for bar in range(1, ARENA_BARS + 1):
@@ -1271,7 +1266,7 @@ def build_arena():
             mix_loop(cl, rng.choice(clangs), s.at(bar, 3.5), 0.35)
     s.add(cl, -5.0, pan=0.1, send=0.3, label="clang")
 
-    # The clock never stops.
+    # Clock ticks in every bar, breakdown included.
     tick, tock = clock_tick(R, rng, True), clock_tick(R, rng, False)
     clock = s.track()
     for bar in range(1, ARENA_BARS + 1):
@@ -1280,8 +1275,8 @@ def build_arena():
             mix_loop(clock, tick if on_beat else tock, s.at(bar, e * 0.5), 1.0 if on_beat else 0.75)
     s.add(clock, -14.0, pan=-0.3, send=0.15, label="clock")
 
-    # Strings: the tritone ostinato (ducked), the held tritone under the breakdown and the
-    # high semitone rub in 9-12, all in one half-rate track.
+    # Strings: the tritone ostinato (ducked), the held tritone under the breakdown and the two
+    # high notes a semitone apart in 9-12, all in one half-rate track.
     marcato = note_cache(lambda m, variant: bowed([midi_hz(m)], s.secs(0.42), H, rng, attack=0.012,
                                                   release=0.07, vib_cents=0.0, bow=0.35, bright=2.2))
     ost = s.half_track()
@@ -1323,7 +1318,7 @@ def build_arena():
     el, er = pingpong(keys, H, 3 * s.beat // 8, 0.4, 2500.0)
     s.add_half(el, -14.0, send=0.3, label="piano echo", right=er)
 
-    # Glitches at the phrase ends, and the roll that skips its way into the loop point.
+    # Glitch stutters at the phrase ends, and the roll that ends right at the loop point.
     gl = s.track()
     for bar, beat, reps, g in ARENA_STUTTERS:
         mix_loop(gl, stutter(clangs[0], R, reps, 0.09, 0.85), s.at(bar, beat), g)
@@ -1384,8 +1379,8 @@ def thump(f0, f1, dur, tau, attack=0.001, sweep_tau=0.03):
 
 
 def room(x, rt60, damp_hz, wet, size=0.7, tail=None):
-    """Puts a dry effect in a space. The wet signal is peak-matched to the dry, so `wet` reads
-    as how loud the tail is next to the hit."""
+    """Adds reverb to a dry effect. The wet signal is scaled to the dry peak, so `wet` is how
+    loud the tail is compared to the hit."""
     x = x + silence(sec(rt60 if tail is None else tail))
     wl, wr = reverb(x, R, rt60, damp_hz, size)
     w = norm(list(map(add, wl, wr)), max(map(abs, x)))
@@ -1430,7 +1425,7 @@ def sfx_menu_move(rng):
 
 
 def sfx_menu_confirm(rng):
-    """A deep thunk and a small ember whoosh off the back of it."""
+    """A deep thunk with a small ember whoosh after it."""
     x = silence(sec(0.75))
     place(x, thump(150.0, 62.0, 0.6, 0.12, 0.001, 0.05), 0, 1.0)
     place(x, strike(((1.0, 1.0, 0.05), (2.4, 0.4, 0.03)), 260.0, 0.3, rng, click=0.0), 0, 0.35)
@@ -1510,7 +1505,7 @@ def sfx_footstep(rng):
 
 
 def sfx_door_locked(rng):
-    """The handle rattles against the latch, two clicks, and the door doesn't give."""
+    """Handle rattling, two latch clicks, then a thud (the door doesn't open)."""
     x = silence(sec(1.0))
     for t, g in ((0.0, 1.0), (0.07, 0.6), (0.115, 0.8), (0.19, 0.5), (0.24, 0.7)):
         place(x, strike(STEEL, rng.uniform(1700.0, 2100.0), 0.2, rng, decay_scale=0.09, click=0.5), t, 0.5 * g)
@@ -1538,7 +1533,7 @@ def sfx_door_open(rng):
 
 
 def sfx_enter_arena(rng):
-    """The steel door slams behind you: boom, impact, the door ringing, a sub drop, a long tail."""
+    """Steel door slam: boom, impact, the door ringing, a sub drop and a long reverb tail."""
     x = silence(sec(3.0))
     place(x, saturate(thump(75.0, 32.0, 2.4, 0.6, 0.001, 0.25), 2.0), 0, 1.0)
     place(x, burst(0.4, 0.05, rng, "lp", 1800.0), 0, 0.8)
@@ -1553,7 +1548,7 @@ def sfx_enter_arena(rng):
 
 
 def sfx_pockets_full(rng):
-    """A dull double knock, the second lower. 'No.'"""
+    """A dull double knock, the second one lower (like a 'no')."""
     x = silence(sec(0.35))
     for t, f, g in ((0.0, 210.0, 1.0), (0.11, 175.0, 0.85)):
         place(x, strike(((1.0, 1.0, 0.05), (2.3, 0.35, 0.03), (3.9, 0.12, 0.015)), f, 0.2, rng, click=0.0), t, g)
@@ -1567,7 +1562,7 @@ def sfx_pockets_full(rng):
 # --------------------------------------------------------------------------- #
 
 def sfx_box_open(rng):
-    """The box's jaws grinding apart, stone on stone, with a low hum coming up out of it."""
+    """Stone grinding as the box's jaws open, with a low hum under it."""
     n = sec(1.7)
     raw = noise(n, rng)
     grind = list(map(add, biquad(raw, "bp", 450.0, 0.9, R), scale(biquad(raw, "bp", 1100.0, 1.5, R), 0.6)))
@@ -1591,7 +1586,7 @@ def sfx_box_open(rng):
 
 
 def sfx_hand_in(rng):
-    """A whoosh pulled in backwards, then a dark wet thump: the box has your hand."""
+    """A reversed whoosh into a low wet thump, for the box taking the hand."""
     x = silence(sec(1.2))
     n = sec(0.5)
     w = svf(noise(n, rng), lambda i: 250.0 * (1600.0 / 250.0) ** (i / n), 2.0, R, "bp")
@@ -1621,7 +1616,7 @@ def sfx_payout(rng):
 
 
 def sfx_catch(rng):
-    """Palm closing on the tag: a soft slap and a clink the hand cuts short."""
+    """Catching the tag: a soft slap and a short clink (the hand mutes it)."""
     x = silence(sec(0.35))
     place(x, burst(0.06, 0.012, rng, "lp", 2200.0), 0, 0.9)
     place(x, thump(180.0, 120.0, 0.1, 0.025), 0, 0.6)
@@ -1630,7 +1625,7 @@ def sfx_catch(rng):
 
 
 def sfx_drop(rng):
-    """The tag falls away: bounces that get closer, quieter and darker until there's nothing."""
+    """The tag falling away: bounces that get closer together, quieter and darker."""
     x = silence(sec(1.2))
     times = (0.0, 0.30, 0.52, 0.68, 0.79, 0.87, 0.925)
     for k, t in enumerate(times):
@@ -1650,7 +1645,7 @@ def sfx_check_good(rng):
 
 
 def sfx_check_bad(rng):
-    """A dull buzz sinking a few semitones, with a second voice just off it so it grinds."""
+    """A dull buzz dropping a few semitones, with a second slightly detuned voice so it sounds rough."""
     n = sec(0.45)
     x = list(map(add, osc_sweep("saw", 150.0, 100.0, n, R), osc_sweep("saw", 159.0, 105.0, n, R, 0.7)))
     x = lowpass(lowpass(x, 900.0, R), 900.0, R)
@@ -1659,7 +1654,7 @@ def sfx_check_bad(rng):
 
 
 def sfx_hit(rng):
-    """The opponent loses a life: punch, snap, and a crunch with the bits knocked out of it."""
+    """The opponent loses a life: punch, snap and a bit-crushed crunch."""
     x = silence(sec(0.6))
     place(x, thump(140.0, 52.0, 0.5, 0.12, 0.001, 0.03), 0, 1.0)
     place(x, burst(0.06, 0.02, rng, "bp", 2500.0, 0.7), 0, 0.6)
@@ -1675,7 +1670,7 @@ def sfx_hit(rng):
 
 
 def sfx_damage(rng):
-    """You lose a life: a heavy distorted low hit, your heart, and a thin ring that fades."""
+    """The player loses a life: a heavy distorted low hit, a heartbeat and a high ring that fades out."""
     x = silence(sec(2.4))
     place(x, saturate(thump(110.0, 34.0, 0.9, 0.3, 0.001, 0.06), 3.0), 0, 1.0)
     place(x, burst(0.2, 0.04, rng, "lp", 1200.0), 0, 0.6)
@@ -1701,7 +1696,7 @@ def sfx_heal(rng):
 
 
 def sfx_guard(rng):
-    """A veil catching something: a whoosh runs into it and it shimmers like thin glass."""
+    """Guard: a short whoosh, a soft hit, then a glassy shimmer."""
     x = silence(sec(1.3))
     n = sec(0.12)
     w = svf(noise(n, rng), lambda i: 1500.0 * 2.0 ** (i / n), 1.5, R, "bp")
@@ -1718,7 +1713,7 @@ def sfx_guard(rng):
 
 
 def sfx_win(rng):
-    """Stinger: a minor music-box phrase that turns to D major as a swell comes up under it."""
+    """Win stinger: a D minor music box phrase that resolves to D major over a swelling pad."""
     x = silence(sec(3.9))
     phrase = ((0.0, 74), (0.18, 77), (0.36, 81), (0.54, 79), (0.72, 77), (0.90, 76))
     for t, m in phrase:
@@ -1745,7 +1740,7 @@ def sfx_lose(rng):
     place(x, burst(0.4, 0.06, rng, "lp", 1200.0), 0, 0.6)
     n = sec(3.6)
     cl = silence(n)
-    for m in (50, 51, 56, 57):              # D, Eb, Ab, A: everything wrong at once
+    for m in (50, 51, 56, 57):              # D, Eb, Ab, A, all clashing
         f = midi_hz(m)
         mix(cl, osc_sweep("saw", f, f * 2 ** (-7 / 12), n, R, 0.25))
     cl = svf(cl, lambda i: 1200.0 * (400.0 / 1200.0) ** (i / n), 0.9, R)
@@ -1763,7 +1758,7 @@ def sfx_lose(rng):
 # --------------------------------------------------------------------------- #
 
 def sfx_cinder(rng):
-    """Ash crumbling, and the soft crackle of an ember going out."""
+    """Ash crumbling and a soft ember crackle."""
     n = sec(1.0)
     x = silence(n)
     for _ in range(140):
@@ -1780,7 +1775,7 @@ def sfx_cinder(rng):
 
 
 def sfx_spent_shell(rng):
-    """A brass casing bouncing on concrete, the bounces closing up."""
+    """A brass casing bouncing on concrete, the bounces getting closer together."""
     x = silence(sec(1.1))
     for t, g in ((0.0, 1.0), (0.21, 0.55), (0.36, 0.32), (0.46, 0.18), (0.52, 0.1)):
         place(x, strike(BRASS, 3150.0 * rng.uniform(0.98, 1.02), 0.6, rng, decay_scale=0.5, click=0.5,
@@ -1791,7 +1786,7 @@ def sfx_spent_shell(rng):
 
 
 def sfx_revolver(rng):
-    """Hammer back, the cylinder clicks round, then the shot in a small concrete room."""
+    """Hammer and cylinder clicks, then the shot with a short room reverb."""
     x = silence(sec(1.5))
     place(x, strike(STEEL, 2200.0, 0.1, rng, decay_scale=0.06, click=0.8, click_hp=3000.0), 0, 0.3)
     place(x, burst(0.02, 0.006, rng, "bp", 4000.0, 1.0), 0.01, 0.08)
@@ -1805,7 +1800,7 @@ def sfx_revolver(rng):
 
 
 def sfx_pact(rng):
-    """A low tritone swelling up, and two heartbeats inside it."""
+    """A low tritone swell with two heartbeats in it."""
     n = sec(2.4)
     x = silence(n)
     for m, g in ((38, 1.0), (44, 0.8), (50, 0.5)):    # D2, Ab2, D3
@@ -1821,7 +1816,7 @@ def sfx_pact(rng):
 
 
 def sfx_wager(rng):
-    """Coin flip: the thumb's ping, the wobble as it spins, the landing and a little settle."""
+    """Coin flip: the flick, the spinning wobble, the landing and a few small bounces."""
     x = silence(sec(1.2))
     place(x, strike(COIN, 2400.0, 0.1, rng, decay_scale=0.15, click=0.5, click_hp=3000.0), 0, 0.6)
     n = sec(0.55)
@@ -1837,8 +1832,8 @@ def sfx_wager(rng):
 
 
 def riffle(x, start, count, first_gap, last_gap, rng, gain=1.0):
-    """Card edges flicking past a thumb: `count` papery ticks whose spacing slides from
-    first_gap to last_gap. Returns when the last one landed."""
+    """Card riffle: `count` short paper ticks, with the gap between them going from first_gap
+    to last_gap. Returns the time of the last one."""
     t = start
     for k in range(count):
         u = k / max(1, count - 1)
@@ -1849,7 +1844,7 @@ def riffle(x, start, count, first_gap, last_gap, rng, gain=1.0):
 
 
 def sfx_high_card(rng):
-    """Card riffle, accelerating, then the deck snaps square."""
+    """Card riffle that speeds up, then the deck snapping together."""
     x = silence(sec(0.75))
     end = riffle(x, 0.0, 25, 0.032, 0.009, rng)
     n = sec(end)
@@ -1860,7 +1855,7 @@ def sfx_high_card(rng):
 
 
 def sfx_tourniquet(rng):
-    """Cloth pulled tight: a rising swish and a creak as the knot bites."""
+    """Cloth pulled tight: a rising swish and a creak at the end."""
     x = silence(sec(0.8))
     n = sec(0.36)
     sw = svf(noise(n, rng), lambda i: 500.0 * (2600.0 / 500.0) ** (i / n), 1.4, R, "bp")
@@ -1873,7 +1868,7 @@ def sfx_tourniquet(rng):
 
 
 def sfx_ash_veil(rng):
-    """A soft whoosh of ash, a breath behind it, a few sparks catching the light."""
+    """A soft whoosh, a breathy tail and a few faint high pings."""
     n = sec(1.2)
     w = svf(noise(n, rng), lambda i: 400.0 + 1800.0 * math.sin(math.pi * min(1.0, i / n)), 0.9, R)
     x = shaped(norm(w), lines(((0, 0), (0.25, 1.0), (0.6, 0.35), (1.2, 0)), n, R))
@@ -1887,7 +1882,7 @@ def sfx_ash_veil(rng):
 
 
 def sfx_mirror(rng):
-    """Glass shimmer: a bright ting and detuned high pairs beating against each other."""
+    """Glass shimmer: a bright ting plus pairs of slightly detuned high partials so they beat."""
     x = silence(sec(1.6))
     place(x, strike(GLASS, 2200.0, 1.2, rng, click=0.2, click_hp=5000.0), 0, 0.7)
     n = sec(1.5)
@@ -1949,7 +1944,7 @@ def sfx_marked_deck(rng):
 
 
 def sfx_confession(rng):
-    """A whisper with no words, the vowel sinking from 'ah' to 'oh', over one low note."""
+    """Whispered breath through vowel formants that slide from 'ah' to 'oh', over one low note."""
     n = sec(2.0)
     raw = noise(n, rng)
     x = silence(n)
@@ -2108,7 +2103,7 @@ SFX = {   # name: (folder, peak dBFS, builder)
 
 def build_sfx(name):
     folder, peak_db, builder = SFX[name]
-    # crc32 rather than hash(): str hashes change every run, and these seeds must not.
+    # crc32 instead of hash(), because str hashes change every run and these seeds can't.
     rng = random.Random(zlib.crc32(name.encode()))
     finish_sfx(folder + "/" + name + ".wav", builder(rng), peak_db)
 

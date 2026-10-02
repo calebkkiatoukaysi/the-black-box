@@ -11,14 +11,14 @@ using TheBlackBox.StateManagement;
 namespace TheBlackBox;
 
 /// <summary>
-/// The table, which is the Black Box arena: one run being played, from the first line of the
-/// discussion to the verdict.
+/// The table (the Black Box arena). Plays one run from the first line of the discussion to the
+/// verdict.
 /// </summary>
 /// <remarks>
 /// The rules are in RoundEngine; this is what to draw and when. It is split by phase: the
 /// discussion, the hand and the payout, and the player's turn each have their own file, and
-/// so does the proof schedule. The box is the one BoxScene owns, so the table borrows it, moves
-/// it onto the table and up into the close-up, and the title gets it back afterwards.
+/// so does the proof schedule. The box belongs to BoxScene, so the table borrows it, moves it
+/// onto the table and into the close-up, and the title puts it back after.
 /// </remarks>
 public partial class TableScreen : GameScreen
 {
@@ -49,7 +49,7 @@ public partial class TableScreen : GameScreen
     private const float ButtonY = 852f;
     private const float PocketsY = 722f;
 
-    /// <summary>How long the room takes to come up out of the dark, and to go back into it.</summary>
+    /// <summary>How long the table takes to fade in and out.</summary>
     private static readonly TimeSpan FadeInTime = TimeSpan.FromSeconds(0.8);
     private static readonly TimeSpan FadeOutTime = TimeSpan.FromSeconds(0.6);
 
@@ -69,7 +69,7 @@ public partial class TableScreen : GameScreen
     private static readonly Point DecideSize = new(240, 84);
     private static readonly Point ContinueSize = new(380, 84);
 
-    /// <summary>The keys that bring up the pause menu.</summary>
+    /// <summary>The keys that open the pause menu.</summary>
     private readonly InputAction _pause = new(
         new[] { Buttons.Start, Buttons.Back },
         new[] { Keys.Escape }, true);
@@ -101,11 +101,11 @@ public partial class TableScreen : GameScreen
     /// <summary>What the box deals from. Seeded by the clock like any other run.</summary>
     private readonly Random _random = new();
 
-    /// <summary>The run on the table, and the slot it goes back into.</summary>
+    /// <summary>The run being played and the slot it saves to.</summary>
     private readonly RunSession _session;
     private readonly SaveData _run;
 
-    /// <summary>The box and the ash around it, borrowed from the game.</summary>
+    /// <summary>The box and the ash, borrowed from the game.</summary>
     private BoxScene _scene;
     private BlackBoxSprite _box;
 
@@ -118,14 +118,14 @@ public partial class TableScreen : GameScreen
     /// <summary>Which part of the round the table is in.</summary>
     private RoundPhase _phase = RoundPhase.Discussion;
 
-    /// <summary>Whether the results have been put up over the table. Once per run.</summary>
+    /// <summary>Whether the results screen is already up. Only happens once per run.</summary>
     private bool _verdictShown;
 
-    /// <summary>Whether the table had focus last frame. See <see cref="Update"/>.</summary>
+    /// <summary>Whether the table had focus last frame. Update uses it.</summary>
     private bool _wasActive;
 
     /// <summary>Builds the table for a run.</summary>
-    /// <param name="session">The run, and the slot it goes back into.</param>
+    /// <param name="session">The run and the slot it saves to.</param>
     public TableScreen(RunSession session)
     {
         _session = session;
@@ -162,7 +162,7 @@ public partial class TableScreen : GameScreen
         _wheel.Chosen += Answer;
     }
 
-    /// <summary>Loads everything on the table, borrows the box, and sits the player down.</summary>
+    /// <summary>Loads everything for the table, borrows the box, and sets up the round.</summary>
     public override void Activate()
     {
         _content ??= new ContentManager(ScreenManager.Game.Services, "Content");
@@ -224,7 +224,7 @@ public partial class TableScreen : GameScreen
 
         _opponentLivesShown = _run.OpponentLives;
 
-        // Already over (a run saved on the verdict): Update puts the results up on the first frame.
+        // If the run was saved on the verdict it's already over, so Update shows the results on the first frame.
         if (RoundEngine.IsOver(_run))
         {
             _phase = RoundPhase.Over;
@@ -241,8 +241,8 @@ public partial class TableScreen : GameScreen
         StartDiscussion();
     }
 
-    /// <summary>Closes out a finished run and writes it back: next chapter if they got up, the same table if not.</summary>
-    /// <remarks>The results screen calls this. A failed write leaves the run as it is in memory, so pressing again just tries the write again.</remarks>
+    /// <summary>Finishes the run and saves it: next chapter if they won, the same table again if not.</summary>
+    /// <remarks>The results screen calls this. If the save fails the run stays the same in memory, so pressing again just tries again.</remarks>
     /// <returns>Why the save failed, or null.</returns>
     internal string FinishRun()
     {
@@ -255,7 +255,7 @@ public partial class TableScreen : GameScreen
         return _session.Save() ? null : _session.LastError;
     }
 
-    /// <summary>Writes the run back as it stands, mid-round or not, for the pause menu's way out.</summary>
+    /// <summary>Saves the run as it is, mid round or not. The pause menu calls this.</summary>
     /// <returns>Why the save failed, or null.</returns>
     private string SaveAndLeave() => _session.Save() ? null : _session.LastError;
 
@@ -280,7 +280,7 @@ public partial class TableScreen : GameScreen
         LeaveCloseUp();
     }
 
-    /// <summary>Brings up the pause menu.</summary>
+    /// <summary>Opens the pause menu.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="input">The input this frame.</param>
     public override void HandleInput(GameTime gameTime, InputState input)
@@ -289,8 +289,8 @@ public partial class TableScreen : GameScreen
             ScreenManager.AddScreen(new PauseMenuScreen(SaveAndLeave));
     }
 
-    /// <summary>Runs whichever part of the round the table is in, unless something is over it.</summary>
-    /// <remarks>Nothing moves while paused, the discussion clock included. Coming back resets the plates so the click that closed the menu cannot land on the table.</remarks>
+    /// <summary>Runs whatever part of the round the table is in, unless another screen is on top.</summary>
+    /// <remarks>Nothing moves while paused, including the discussion timer. When the menu closes the plates get reset so the same click doesn't also hit the table.</remarks>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="otherScreenHasFocus">Whether a screen above has the input.</param>
     /// <param name="coveredByOtherScreen">Whether a non-popup screen is on top.</param>
@@ -360,7 +360,7 @@ public partial class TableScreen : GameScreen
         }
     }
 
-    /// <summary>The run is over: the song stops, the verdict is heard, and the results come down over the table.</summary>
+    /// <summary>The run is over, so stop the music, play the verdict, and show the results.</summary>
     private void ShowVerdict()
     {
         _verdictShown = true;
@@ -372,37 +372,37 @@ public partial class TableScreen : GameScreen
         ScreenManager.AddScreen(new ResultsScreen(_session, won, FinishRun));
     }
 
-    /// <summary>Draws the table in the five batches it needs, and fades it with the transition.</summary>
+    /// <summary>Draws the table in five batches and fades it with the transition.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     public override void Draw(GameTime gameTime)
     {
         SpriteBatch spriteBatch = ScreenManager.SpriteBatch;
 
-        // 1. Everything the eye light falls on: the room (or, in the close-up, the sky) and the box. Point sampling keeps the pixel art crisp.
+        // 1. The room (or the background in the close-up) and the box. Point sampling keeps the pixel art crisp.
         spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
         if (_closeUp) _scene.DrawSky(gameTime, spriteBatch);
         else DrawScene(spriteBatch);
         _box.DrawBody(gameTime, spriteBatch);
         spriteBatch.End();
 
-        // 2. The eye glow, additive so the light spills onto the rim. Linear sampling so it stays soft.
+        // 2. The eye glow. Additive so it lights up the rim, and linear sampling so it stays soft.
         spriteBatch.Begin(SpriteSortMode.BackToFront, BoxScene.PremultipliedAdditive, SamplerState.LinearClamp);
         _box.DrawEyeGlow(gameTime, spriteBatch);
         spriteBatch.End();
 
-        // 3. The eyes over the glow, the ash falling past in front of everything, and the hands over that.
+        // 3. The eyes on top of the glow, then the ash, then the hands on top of that.
         spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
         _box.DrawEyes(gameTime, spriteBatch);
         _scene.DrawAsh(gameTime, spriteBatch);
         DrawFront(gameTime, spriteBatch);
         spriteBatch.End();
 
-        // 4. Text, sampled linearly so the font stays smooth.
+        // 4. Text, with linear sampling so the font stays smooth.
         spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.LinearClamp);
         DrawText(spriteBatch);
         spriteBatch.End();
 
-        // 5. The plates. Point sampling because they are pixel art; the labels are 1:1 so they are fine under it.
+        // 5. The plates. Point sampling since they're pixel art. The labels are drawn 1:1 so they look fine too.
         spriteBatch.Begin(SpriteSortMode.BackToFront, BlendState.AlphaBlend, SamplerState.PointClamp);
         DrawPlates(gameTime, spriteBatch);
         spriteBatch.End();
@@ -439,7 +439,7 @@ public partial class TableScreen : GameScreen
         _check?.Draw(gameTime, spriteBatch);
     }
 
-    /// <summary>The bookkeeping and the plate. The text batch, sampled smooth.</summary>
+    /// <summary>The bookkeeping text and its plate. Goes in the text batch.</summary>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     private void DrawText(SpriteBatch spriteBatch)
     {

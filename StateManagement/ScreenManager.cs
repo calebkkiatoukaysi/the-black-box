@@ -9,8 +9,7 @@ using Microsoft.Xna.Framework.Graphics;
 namespace TheBlackBox.StateManagement;
 
 /// <summary>
-/// A component that manages one or more GameScreen instances. It keeps a stack of screens,
-/// calls their Update and Draw when appropriate, and routes input to the topmost one.
+/// Keeps the stack of screens, updates and draws them, and gives the input to the top one.
 /// </summary>
 public class ScreenManager : DrawableGameComponent
 {
@@ -24,28 +23,28 @@ public class ScreenManager : DrawableGameComponent
     /// <summary>A SpriteBatch shared by every screen.</summary>
     public SpriteBatch SpriteBatch { get; private set; }
 
-    /// <summary>One white pixel, stretched for fades and veils.</summary>
+    /// <summary>One white pixel, stretched out for fades and veils.</summary>
     public Texture2D BlankTexture { get; private set; }
 
-    /// <summary>Whether the top screen keeps the input while the window is behind something else.</summary>
-    /// <remarks>Off when playing, so a game in the background ignores the keys. The proof run turns it on: it plays itself, often behind whatever else is open.</remarks>
+    /// <summary>Whether the top screen still gets input when the window isn't in front.</summary>
+    /// <remarks>Off when you play. The proof run turns it on since it plays itself, usually with the window behind everything else.</remarks>
     public bool IgnoreWindowFocus { get; set; }
 
     /// <summary>Constructs a new ScreenManager.</summary>
     /// <param name="game">The game this ScreenManager belongs to.</param>
     public ScreenManager(Game game) : base(game) { }
 
-    /// <summary>Initializes the ScreenManager, and starts listening for typed characters.</summary>
+    /// <summary>Initializes the ScreenManager and starts listening for typed characters.</summary>
     public override void Initialize()
     {
         base.Initialize();
         _isInitialized = true;
 
-        // Characters come from the window, so the name field never has to deal with layouts or shift.
+        // Typed characters come from the window, so the name field doesn't have to deal with shift or keyboard layouts.
         Game.Window.TextInput += (_, e) => TopScreenWithFocus()?.HandleTextInput(e.Character);
     }
 
-    /// <summary>Loads the shared batch and pixel, and tells every screen already added to load.</summary>
+    /// <summary>Loads the shared batch and pixel, then has every screen that's already added load too.</summary>
     protected override void LoadContent()
     {
         SpriteBatch = new SpriteBatch(GraphicsDevice);
@@ -64,13 +63,13 @@ public class ScreenManager : DrawableGameComponent
             screen.Unload();
     }
 
-    /// <summary>Updates every screen, and lets the topmost active one handle input.</summary>
-    /// <param name="gameTime">The frame's timing.</param>
+    /// <summary>Updates every screen and lets the top active one handle input.</summary>
+    /// <param name="gameTime">The game time.</param>
     public override void Update(GameTime gameTime)
     {
         _input.Update();
 
-        // Copy the list, so a screen that adds or removes another while updating does not upset the loop.
+        // Copy the list first, since a screen can add or remove screens while it updates.
         _tmpScreensList.Clear();
         _tmpScreensList.AddRange(_screens);
 
@@ -99,8 +98,8 @@ public class ScreenManager : DrawableGameComponent
         }
     }
 
-    /// <summary>Draws every screen that is not hidden, bottom of the stack first.</summary>
-    /// <param name="gameTime">The frame's timing.</param>
+    /// <summary>Draws every screen that isn't hidden, bottom of the stack first.</summary>
+    /// <param name="gameTime">The game time.</param>
     public override void Draw(GameTime gameTime)
     {
         foreach (GameScreen screen in _screens)
@@ -118,13 +117,13 @@ public class ScreenManager : DrawableGameComponent
         screen.ScreenManager = this;
         screen.IsExiting = false;
 
-        // If there is a graphics device yet, the screen can load now.
+        // If the graphics device is ready the screen can load right away.
         if (_isInitialized) screen.Activate();
 
         _screens.Add(screen);
     }
 
-    /// <summary>Takes a screen off the stack straight away. Normally a screen calls ExitScreen instead, to transition off first.</summary>
+    /// <summary>Takes a screen off the stack right away. Screens usually call ExitScreen instead so they fade out first.</summary>
     /// <param name="screen">The screen to remove.</param>
     public void RemoveScreen(GameScreen screen)
     {
@@ -139,10 +138,10 @@ public class ScreenManager : DrawableGameComponent
     }
 
     /// <summary>Every screen on the stack, bottom first.</summary>
-    /// <returns>A copy, so it is safe to exit screens while walking it.</returns>
+    /// <returns>A copy, so it's safe to exit screens while looping over it.</returns>
     public GameScreen[] GetScreens() => _screens.ToArray();
 
-    /// <summary>Draws a black quad over the whole screen. Used for fades and for dimming what is behind a popup.</summary>
+    /// <summary>Draws black over the whole screen. Used for the fades.</summary>
     /// <param name="alpha">How black, from 0 to 1.</param>
     public void FadeBackBufferToBlack(float alpha)
     {
@@ -153,7 +152,7 @@ public class ScreenManager : DrawableGameComponent
         SpriteBatch.End();
     }
 
-    /// <summary>The screen typed characters go to: the topmost one that is on and not leaving.</summary>
+    /// <summary>Which screen gets typed characters: the top one that's on and not leaving.</summary>
     private GameScreen TopScreenWithFocus()
     {
         for (int i = _screens.Count - 1; i >= 0; i--)

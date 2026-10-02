@@ -10,9 +10,9 @@ namespace TheBlackBox.StateManagement;
 /// The keyboard, mouse and gamepads, this frame and last, so a screen can tell a press from a hold.
 /// </summary>
 /// <remarks>
-/// Same as the advanced input tutorial's InputState, except the ScreenManager updates it (like
-/// the textbook's version) instead of it being its own component, and it keeps the mouse too,
-/// because the menus here can be clicked.
+/// Pretty much the advanced input tutorial's InputState. The differences: the ScreenManager
+/// updates it (like in the textbook) instead of it being a component, and I added the mouse
+/// since the menus can be clicked.
 /// </remarks>
 public class InputState : IInputState
 {
@@ -32,7 +32,7 @@ public class InputState : IInputState
     private KeyboardState _priorKeyboardState;
     private MouseState _priorMouseState;
 
-    /// <summary>Whether the first frame has been read, so the prior frame is a real one.</summary>
+    /// <summary>Whether the first frame has been read yet.</summary>
     private bool _sampled;
 
     /// <summary>Reads every device and keeps the last frame for comparison.</summary>
@@ -50,7 +50,7 @@ public class InputState : IInputState
         _priorMouseState = CurrentMouseState;
         CurrentMouseState = Mouse.GetState();
 
-        // A key held down while the game starts should not count as pressed on the first frame.
+        // A key that's already held when the game starts shouldn't count as a new press.
         if (!_sampled)
         {
             _sampled = true;
@@ -98,7 +98,7 @@ public class InputState : IInputState
                IsNewButtonPress(button, PlayerIndex.Four, out playerIndex);
     }
 
-    /// <summary>Whether the mouse moved since last frame. Menus only follow the mouse when it does.</summary>
+    /// <summary>Whether the mouse moved since last frame. The menus only follow the mouse when it does.</summary>
     public bool MouseMoved =>
         CurrentMouseState.X != _priorMouseState.X || CurrentMouseState.Y != _priorMouseState.Y;
 

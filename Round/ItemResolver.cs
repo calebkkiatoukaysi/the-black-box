@@ -13,21 +13,21 @@ namespace TheBlackBox;
 /// </remarks>
 public static class ItemResolver
 {
-    // How the lines the table listens for begin. The screen plays a sound when one is read out,
-    // so the wording lives here once instead of being copied into the screen.
+    // The start of the lines the table listens for. The screen plays a sound when one shows up,
+    // so the wording only lives here instead of being copied into the screen.
 
-    /// <summary>Between who used an item and its name, in the first line of every use.</summary>
+    /// <summary>Goes between who used an item and the item name, in the first line of every use.</summary>
     public const string UsedWord = " USED ";
 
-    /// <summary>A life coming off the player, and off the opponent.</summary>
+    /// <summary>The player losing a life, and the opponent losing a life.</summary>
     public const string CostsYou = "IT COSTS YOU A LIFE.";
     public const string CostsThem = "IT COSTS THEM A LIFE.";
 
-    /// <summary>A life given back to the player, and to the opponent.</summary>
+    /// <summary>The player getting a life back, and the opponent getting one back.</summary>
     public const string GivesYou = "IT GIVES YOU A LIFE BACK.";
     public const string GivesThem = "IT GIVES THEM A LIFE BACK.";
 
-    /// <summary>A guard spending itself: the veil soaking a hit, or the mirror throwing it back.</summary>
+    /// <summary>A guard getting used up: the veil blocking a hit, or the mirror sending it back.</summary>
     public const string VeilTakes = "THE VEIL TAKES IT";
     public const string MirrorSends = "THE MIRROR SENDS IT BACK.";
 

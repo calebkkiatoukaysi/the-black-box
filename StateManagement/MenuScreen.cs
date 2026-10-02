@@ -11,11 +11,11 @@ using TheBlackBox.Audio;
 namespace TheBlackBox.StateManagement;
 
 /// <summary>
-/// A screen with a list of entries that can be walked with the keyboard or a pad, or clicked.
+/// A screen with a list of entries you can move through with the keyboard or a pad, or click.
 /// </summary>
 /// <remarks>
-/// Up and down always move. Left and right move too (the title's entries are in a row), unless
-/// the entry is adjustable, in which case they change it. That is how the volume sliders work.
+/// Up and down always move. Left and right move too since the title's entries are in a row,
+/// unless the entry is adjustable, then they change it instead (that's how the volume sliders work).
 /// </remarks>
 public abstract class MenuScreen : GameScreen
 {
@@ -41,16 +41,16 @@ public abstract class MenuScreen : GameScreen
         new[] { Buttons.B, Buttons.Back },
         new[] { Keys.Escape }, true);
 
-    /// <summary>Whether the menu had focus last frame. Coming back to it resets the plates so a stale click cannot land.</summary>
+    /// <summary>Whether the menu had focus last frame. When it gets focus back the plates get reset so an old click can't land.</summary>
     private bool _wasActive;
 
     /// <summary>This screen's own content, unloaded with it.</summary>
     protected ContentManager Content { get; private set; }
 
-    /// <summary>The sounds. Fetched from the game's services when the screen comes on.</summary>
+    /// <summary>The sounds. Grabbed from the game's services when the screen comes on.</summary>
     protected AudioManager Audio { get; private set; }
 
-    /// <summary>The entries, in the order the keyboard walks them.</summary>
+    /// <summary>The entries, in the order the keyboard goes through them.</summary>
     protected IList<MenuEntry> MenuEntries => _menuEntries;
 
     /// <summary>The entry the keyboard is on.</summary>
@@ -60,7 +60,7 @@ public abstract class MenuScreen : GameScreen
         set => _selectedEntry = MathHelper.Clamp(value, 0, _menuEntries.Count - 1);
     }
 
-    /// <summary>Makes the content manager, fetches the sounds, and loads every entry. Lay out after calling this.</summary>
+    /// <summary>Makes the content manager, grabs the sounds and loads every entry. Lay the menu out after this.</summary>
     public override void Activate()
     {
         Content ??= new ContentManager(ScreenManager.Game.Services, "Content");
@@ -70,7 +70,7 @@ public abstract class MenuScreen : GameScreen
         {
             entry.LoadContent(Content);
 
-            // Adjustable entries are changed with left and right, not pressed, so they stay quiet on Enter.
+            // Adjustable entries get changed with left and right, so they don't make the confirm sound on Enter.
             entry.Plate.Clicked += () =>
             {
                 if (!entry.IsAdjustable) Audio?.Play(Sfx.MenuConfirm);
@@ -88,8 +88,8 @@ public abstract class MenuScreen : GameScreen
     {
         if (_menuEntries.Count == 0) return;
 
-        // The mouse picks whatever it is over, but only on frames it moved, so a mouse resting on
-        // a plate does not fight the keyboard.
+        // The mouse picks whatever it's over, but only on frames it actually moved. Otherwise a mouse
+        // sitting on a plate fights the keyboard.
         if (input.MouseMoved)
         {
             for (int i = 0; i < _menuEntries.Count; i++)
@@ -119,7 +119,7 @@ public abstract class MenuScreen : GameScreen
         }
         else if (_menuSelect.Occurred(input))
         {
-            // Through the plate, so it sinks like it was clicked, and Clicked selects it.
+            // Goes through the plate so it sinks like it was clicked.
             if (selected.Plate.Enabled) selected.Plate.Activate();
         }
         else if (_menuCancel.Occurred(input))
@@ -152,7 +152,7 @@ public abstract class MenuScreen : GameScreen
             _menuEntries[i].Update(i == _selectedEntry, gameTime);
     }
 
-    /// <summary>Draws the entries. A screen draws whatever is behind them first, then calls this.</summary>
+    /// <summary>Draws the entries. Screens draw their own stuff first and then call this.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     public override void Draw(GameTime gameTime)
     {
@@ -163,7 +163,7 @@ public abstract class MenuScreen : GameScreen
         spriteBatch.End();
     }
 
-    /// <summary>What Escape does. Leaves the menu, unless a screen says otherwise.</summary>
+    /// <summary>What Escape does. Leaves the menu unless a screen overrides it.</summary>
     protected virtual void OnCancel()
     {
         Audio?.Play(Sfx.MenuBack);
@@ -202,7 +202,7 @@ public abstract class MenuScreen : GameScreen
         }
     }
 
-    /// <summary>Moves the selection along, wrapping, and skipping anything that cannot be picked.</summary>
+    /// <summary>Moves the selection, wrapping around and skipping anything that can't be picked.</summary>
     /// <param name="step">-1 or 1.</param>
     private void Move(int step)
     {

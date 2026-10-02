@@ -1,21 +1,20 @@
 """
-Walking sprites for The Black Box: the two people the player can be, and Serenity as she
-stands around the lobby.
+Walking sprites for The Black Box: the two characters the player can pick, and Serenity for the
+lobby.
 
     python tools/generate_characters.py
 
-Every figure is 32x48, seen from slightly above, in four directions (down, left, right, up),
-with an idle frame and a four-frame walk: five columns, the same five Serenity's table sheet
-has. The player's sheets also come in three versions stacked under each other (nothing, a
-scarf, a cap), so a sheet is 5 x 12 frames.
+Every frame is 32x48 and there are four directions (down, left, right, up), each with an idle
+frame and four walk frames, so five columns like Serenity's table sheet. The player sheets have
+three versions stacked (no accessory, scarf, cap), so they're 5 x 12 frames.
 
-The player's two sheets are painted in key colours: the first row of each ramp in
-character-palettes.png. The game swaps those keys for whichever ramps were picked on the
-customization screen, so hair, outfit and accent can be any of the presets without a sheet
-per combination. Serenity is not drawn here: she is cut from the character sheet I made of her
-(tools/source/serenity-sheet.png), in her own colours, and never swapped.
+The player sheets are drawn in key colours (the first row of each ramp in
+character-palettes.png), and the game swaps those for whatever the player picked on the
+customization screen. That way I don't need a sheet for every combination. Serenity isn't drawn
+here. She's cut out of the sheet I made of her (tools/source/serenity-sheet.png) and keeps her
+own colours.
 
-Like generate_assets.py it only needs CPython. It borrows that script's PNG writer and shape
+Only needs CPython, same as generate_assets.py, and it reuses that script's PNG code and shape
 functions.
 """
 
@@ -32,14 +31,15 @@ COLUMNS = 5            # idle, then four walk frames
 DIRECTIONS = ("down", "left", "right", "up")
 ACCESSORIES = ("none", "scarf", "cap")
 
-#: Subsamples per pixel side when deciding what covers a pixel.
+#: I sample each pixel SS x SS times to decide which part covers it.
 SS = 3
 
-#: Where the light comes from: up, left and toward the viewer, the same corner as the lamp on the table.
+#: Light direction: up, left and toward the viewer, the same side as the lamp on the table.
 LIGHT = (-0.50, -0.75, 0.90)
 _LN = math.sqrt(sum(c * c for c in LIGHT))
 LIGHT = tuple(c / _LN for c in LIGHT)
-#: What a flat surface facing the viewer gets, so flat lands on the middle of a ramp.
+#: The light a flat surface facing the viewer gets. Shading is measured from this, so flat
+#: areas land in the middle of a ramp.
 NDL_FLAT = LIGHT[2]
 
 #: How far the edge of a shape bends away from the viewer. Bigger is rounder.
@@ -47,8 +47,8 @@ EDGE_TILT = 0.85
 
 
 # --------------------------------------------------------------------------- #
-# Ramps. Dark to light. The first preset of hair, outfit and accent is the key the player's
-# sheets are painted in, so those three rows must never be used for anything else.
+# Ramps, dark to light. The first hair, outfit and accent presets are the keys the player
+# sheets are drawn in, so those rows can't be used for anything else.
 # --------------------------------------------------------------------------- #
 
 HAIR_PRESETS = (
@@ -88,8 +88,8 @@ LIP = (124, 74, 70)
 
 
 # --------------------------------------------------------------------------- #
-# Shapes. Each part is a signed distance (positive inside, in art pixels), a material, and a
-# bounding box so the rasteriser can skip it for pixels it cannot touch.
+# Shapes. Each part is a signed distance (positive inside, in art pixels), a material and a
+# bounding box, so the rasteriser can skip it for pixels it can't touch.
 # --------------------------------------------------------------------------- #
 
 class Part:
@@ -162,7 +162,8 @@ def mirrored(points):
 
 
 def flip_part(part):
-    """Mirrors a part across the middle of the frame. Right-facing frames are the left-facing ones flipped this way, lit the same."""
+    """Mirrors a part across the middle of the frame. The right-facing frames are just the
+    left-facing ones flipped, with the light left the same."""
     inner = part.sdf
     x0, y0, x1, y1 = part.bbox
     part.sdf = lambda x, y: inner(FRAME_W - x, y)
@@ -238,7 +239,7 @@ def figure(spec, direction, column, accessory):
     foot = 44.4
 
     if side:
-        # ---- facing left; flipped for right at the end ----
+        # Facing left. Right is the same frame flipped at the end.
         # The far arm, behind the body, swinging the other way.
         hand_far = (16.4 + swing * 2.4, 30.8 + b)
         parts.append(capsule(16.8, 21.6 + b, hand_far[0], hand_far[1] - 1.0, 3.0, "outfit",
@@ -294,7 +295,7 @@ def figure(spec, direction, column, accessory):
             details = [(FRAME_W - 1 - x, y, what) for x, y, what in details]
         return parts, details
 
-    # ---- facing the viewer, or facing away ----
+    # Facing the viewer or facing away.
     # Arms swing toward or away from the viewer, which is mostly up and down the screen.
     def arm(x_shoulder, x_hand, swing_dir, outer):
         drop = swing_dir * 1.0
@@ -452,7 +453,7 @@ def render_frame(parts, details, ramps):
             shade = 0.55 + 1.1 * (ndl - NDL_FLAT) + p.tone
             k = int(math.floor(shade * n))
             if p.texture == "strands" and 0 < k < n - 1:
-                # Hair falls in strands: a few darker and lighter streaks down it.
+                # A few darker and lighter streaks so the hair looks like strands.
                 if (px * 7 + (py // 4) * 3) % 5 == 0:
                     k -= 1
                 elif (px * 3 + py // 6) % 7 == 0:
@@ -533,13 +534,11 @@ FIGURES = (
 
 
 # --------------------------------------------------------------------------- #
-# serenity-walker.png -- Serenity in the lobby, cut from her character sheet
+# serenity-walker.png: Serenity in the lobby
 #
-# tools/source/serenity-sheet.png is the sheet I made of her: idle, walk, run, interact and
-# hurt rows, every figure on the same flat dark backdrop. The lobby wants her standing and her
-# four walking frames each way, so those are cut out, keyed off the backdrop, and sampled down
-# into the same 32x48 frames as the conscripts, feet on the same row. The sheet only has her
-# walking to the right, so walking left is those frames mirrored.
+# Cut from the sheet I made of her (tools/source/serenity-sheet.png). I take her idle and walk
+# frames, key out the backdrop and scale them down to the same 32x48 frames as the conscripts,
+# feet on the same row. The sheet only has her walking right, so left is those frames mirrored.
 # --------------------------------------------------------------------------- #
 
 SERENITY_SOURCE = os.path.join(ROOT, "tools", "source", "serenity-sheet.png")
@@ -562,7 +561,7 @@ SERENITY_WALK = dict(down=(0, 1, 2, 3), right=(11, 12, 13, 14), up=(7, 8, 9, 10)
 #: The backdrop is a flat, neutral dark grey. Anything warmer, brighter or darker is her.
 SERENITY_BG_LO, SERENITY_BG_HI, SERENITY_BG_TINT = 13, 21, 2
 
-#: Narrower than this many sheet pixels is a speck on the backdrop, not a figure.
+#: Anything narrower than this (in sheet pixels) is a speck on the backdrop and gets skipped.
 SERENITY_MIN_WIDTH = 8
 
 #: How much of a cell has to be her for the cell to be, and how far down a figure counts as

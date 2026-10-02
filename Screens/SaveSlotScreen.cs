@@ -9,11 +9,11 @@ using TheBlackBox.StateManagement;
 namespace TheBlackBox.Screens;
 
 /// <summary>
-/// The save form, as a popup over the title. Picks a slot and sends the run where it belongs.
+/// The save form as a popup over the title. You pick a slot and it sends the run where it needs to go.
 /// </summary>
 /// <remarks>
-/// A slot nobody has named goes to the customization screen first. A named one goes to the
-/// lobby, or straight back to the table if it was left mid-round (see RunSession.IsAtTable).
+/// A slot with no name goes to the customization screen first. A named one goes to the lobby, or
+/// straight back to the table if you left in the middle of a round (see RunSession.IsAtTable).
 /// </remarks>
 public class SaveSlotScreen : GameScreen
 {
@@ -31,7 +31,7 @@ public class SaveSlotScreen : GameScreen
     private ContentManager _content;
     private AudioManager _audio;
 
-    /// <summary>Wires the form's two outcomes.</summary>
+    /// <summary>Hooks up what happens when a slot is picked or the form is closed.</summary>
     public SaveSlotScreen()
     {
         IsPopup = true;
@@ -46,7 +46,7 @@ public class SaveSlotScreen : GameScreen
         };
     }
 
-    /// <summary>Loads the form and opens it on what is on disk now.</summary>
+    /// <summary>Loads the form and opens it with whatever is on disk right now.</summary>
     public override void Activate()
     {
         _content ??= new ContentManager(ScreenManager.Game.Services, "Content");
@@ -59,7 +59,7 @@ public class SaveSlotScreen : GameScreen
     /// <summary>Unloads the form.</summary>
     public override void Unload() => _content?.Unload();
 
-    /// <summary>Walks the form with the keyboard, follows the mouse, and backs out on Escape.</summary>
+    /// <summary>Moves around the form with the keyboard, follows the mouse, and backs out on Escape.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="input">The input this frame.</param>
     public override void HandleInput(GameTime gameTime, InputState input)
@@ -106,7 +106,7 @@ public class SaveSlotScreen : GameScreen
         spriteBatch.End();
     }
 
-    /// <summary>Sends the chosen run on: to be dressed and named, or on to wherever it was left.</summary>
+    /// <summary>Sends the picked run to customization if it's new, or to wherever it was left.</summary>
     /// <param name="slot">The slot.</param>
     /// <param name="run">The run in it.</param>
     private void Begin(int slot, SaveData run)

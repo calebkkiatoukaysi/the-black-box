@@ -8,9 +8,9 @@ namespace TheBlackBox;
 /// The roster, in chapter order. A chapter past the end gets the last one so a run never falls off the table.
 /// </summary>
 /// <remarks>
-/// Serenity is the only one for now, so every chapter seats her. Looked up by id too, because the
-/// save stores the id, and an unknown id (an older save's stand-in opponent, say) falls back to
-/// the first rather than throwing.
+/// Serenity is the only one for now, so she's every chapter. You can also look one up by id since
+/// that's what the save stores. An unknown id (like the old placeholder opponent in older saves)
+/// just falls back to the first one instead of throwing.
 /// </remarks>
 public static class Opponents
 {

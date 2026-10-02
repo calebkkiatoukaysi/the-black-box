@@ -1,13 +1,12 @@
 """
-Procedural art generator for The Black Box.
-
-Every PNG in Content/ comes out of this script. Run it from the repo root:
+Art generator for The Black Box. It makes most of the PNGs in Content/ (the lobby and the walking
+characters have their own scripts). Run it from the repo root:
 
     python tools/generate_assets.py
 
-It only needs CPython: the PNG encoder and decoder are in here. Everything is drawn
-from scratch except Serenity and the player's hand, which are cut from pictures in
-tools/source/ (opponent-second-portrait.png and hand.png).
+Only needs CPython since the PNG encoder and decoder are in here. Everything is drawn in code
+except Serenity and the player's hand, which are cut from my pictures in tools/source/
+(opponent-second-portrait.png and hand.png).
 """
 
 import math
@@ -82,7 +81,7 @@ def write_png(path, img):
 
 
 def read_png(path):
-    """Decodes an 8-bit non-interlaced PNG into rows of [r, g, b, a]. The mirror of write_png."""
+    """Reads an 8-bit, non-interlaced PNG into rows of [r, g, b, a]. The opposite of write_png."""
     data = open(path, "rb").read()
     assert data[:8] == b"\x89PNG\r\n\x1a\n", path
     pos, idat, plte, trns = 8, b"", None, None
@@ -1953,31 +1952,28 @@ def build_hearts():
 
 
 # --------------------------------------------------------------------------- #
-# hand-sheet.png -- the player's own arm, 5 frames, curled hand to open hand
+# hand-sheet.png: the player's arm, 5 frames from curled hand to open hand
 #
-# Cut from tools/source/hand.png, the picture of the arm I made for it: five hands in a row,
-# open to curled, forearm up from the bottom-right. The picture is pixel art that was blown up
-# about 5.4 times and smoothed on the way, so it is sampled back down to its own pixels: each
-# art pixel is the median of the middle of its cell, which keeps the smoothing between cells
-# out. The background is keyed off its alpha, stray marks are dropped, and the frames are laid
-# curled first, which is the order the reach plays them in. Every frame is lined up by where
-# its forearm leaves the bottom of the picture, so the elbow stays put while the hand opens.
+# Cut from tools/source/hand.png, the arm picture I made for it (five hands in a row). It was
+# scaled up about 5.4x and smoothed, so I sample it back down using the median of the middle of
+# each cell, then key out the background and drop stray marks. Frames go curled first (the order
+# the reach plays them) and line up where the forearm leaves the bottom, so the elbow stays put.
 # --------------------------------------------------------------------------- #
 
 HAND_SOURCE = os.path.join(ROOT, "tools", "source", "hand.png")
 
-#: Picture pixels per art pixel, and where the grid starts, measured off the edges in the picture.
+#: Picture pixels per art pixel, and where the grid starts. I measured these off the picture.
 HAND_PITCH_X, HAND_PITCH_Y = 5.46, 5.32
 HAND_PHASE_X, HAND_PHASE_Y = 0.0, 3.99
 
-#: How much of a cell has to be arm for the cell to be, and the share of the cell's middle the colour is taken from.
+#: How much of a cell has to be arm to count, and how much of the cell's middle the colour comes from.
 HAND_KEEP = 0.5
 HAND_CORE = 0.6
 
-#: Anything opaque smaller than this many art pixels is a stray mark, not an arm.
+#: Opaque blobs smaller than this (in art pixels) are stray marks and get dropped.
 HAND_SPECK = 40
 
-#: Frames in the sheet, and the room left round the arms in a frame.
+#: Frames in the sheet, and the padding around the arm in each frame.
 HAND_FRAMES = 5
 HAND_PAD = 2
 
@@ -2055,7 +2051,7 @@ def build_hand_sheet():
         xs = [x for x, y in blob if y == bottom]
         anchors.append(((min(xs) + max(xs)) // 2, bottom))
 
-    # The frame is the smallest box every arm fits in once their anchors are on top of each other.
+    # Frame size: the smallest box every arm fits in once their anchors line up.
     left = min(min(x for x, _ in b) - ax for b, (ax, _) in zip(arms, anchors)) - HAND_PAD
     right = max(max(x for x, _ in b) - ax for b, (ax, _) in zip(arms, anchors)) + HAND_PAD
     top = min(min(y for _, y in b) - ay for b, (_, ay) in zip(arms, anchors)) - HAND_PAD
@@ -2066,8 +2062,8 @@ def build_hand_sheet():
         for x, y in blob:
             img[y - ay - top][f * fw + x - ax - left] = list(art[y][x])
 
-    # The numbers the two hand sprites are written against. HandSprite anchors by the open
-    # frame's leading fingertip (its leftmost pixel); CatchHandSprite also wants its palm.
+    # Prints the numbers HandSprite and CatchHandSprite use. HandSprite anchors on the open frame's
+    # fingertip (its leftmost pixel) and CatchHandSprite also needs the palm.
     open_blob, (oax, oay) = arms[-1], anchors[-1]
     tip_x = min(x for x, _ in open_blob)
     tip_y = sorted(y for x, y in open_blob if x == tip_x)[0]

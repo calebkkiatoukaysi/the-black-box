@@ -5,13 +5,12 @@ using Microsoft.Xna.Framework.Graphics;
 namespace TheBlackBox;
 
 /// <summary>
-/// The box, the ash it pulls in, and the dead sky behind it. One of each for the whole game.
+/// The box, the ash getting pulled into it, and the ash drifting in the background. There's only one of these for the whole game.
 /// </summary>
 /// <remarks>
-/// This used to live in BlackBoxGame. Now that the screens are separate classes, it is a
-/// component on its own so it keeps running whatever screen is up (the box never stops
-/// looking around), and a service so the title and the table share the same box. Each screen
-/// moves it where it wants it and draws the parts it needs.
+/// This used to be in BlackBoxGame. Now that the screens are their own classes, I made it a
+/// component so it keeps running no matter what screen is up, and a service so the title and the
+/// table share the same box. Each screen moves it where it needs it and draws what it needs.
 /// </remarks>
 public class BoxScene : GameComponent
 {
@@ -43,7 +42,7 @@ public class BoxScene : GameComponent
     /// <summary>The box itself.</summary>
     public BlackBoxSprite Box { get; }
 
-    /// <summary>Builds the box, the two layers of sky and the loose ash.</summary>
+    /// <summary>Builds the box, the two background ash layers and the loose ash.</summary>
     /// <param name="game">The game it belongs to.</param>
     public BoxScene(Game game) : base(game)
     {
@@ -62,7 +61,7 @@ public class BoxScene : GameComponent
             _ashes[i] = new AshSprite { Center = Box.Position };
     }
 
-    /// <summary>Loads the sky, the box and the ash.</summary>
+    /// <summary>Loads the background, the box and the ash.</summary>
     /// <param name="content">The content manager to load with.</param>
     public void LoadContent(ContentManager content)
     {
@@ -71,21 +70,21 @@ public class BoxScene : GameComponent
         foreach (AshSprite mote in _ashes) mote.LoadContent(content);
     }
 
-    /// <summary>Puts the box back where the title screen has it: the whole picture, in the middle.</summary>
+    /// <summary>Puts the box back where the title screen has it, big and in the middle.</summary>
     public void PlaceOnTitle()
     {
         Box.Position = new Vector2(BlackBoxGame.ScreenWidth / 2f, TitleBoxY);
         Box.Scale = BlackBoxSprite.DrawScale;
     }
 
-    /// <summary>Runs the sky, the box and the ash, every frame, whatever screen is up.</summary>
+    /// <summary>Updates the background, the box and the ash every frame, whatever screen is up.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     public override void Update(GameTime gameTime)
     {
         foreach (AshDriftSprite layer in _ashDrift) layer.Update(gameTime);
         Box.Update(gameTime, Game.GraphicsDevice.Viewport);
 
-        // The ash follows the box wherever a screen has put it.
+        // The ash follows the box wherever a screen moved it.
         foreach (AshSprite mote in _ashes)
         {
             mote.Center = Box.Position;
@@ -95,7 +94,7 @@ public class BoxScene : GameComponent
         base.Update(gameTime);
     }
 
-    /// <summary>Draws the two layers of drifting ash behind everything. The point-sampled batch.</summary>
+    /// <summary>Draws the two background ash layers. Goes in the point sampled batch.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void DrawSky(GameTime gameTime, SpriteBatch spriteBatch)
@@ -104,7 +103,7 @@ public class BoxScene : GameComponent
             layer.Draw(gameTime, spriteBatch, Game.GraphicsDevice.Viewport);
     }
 
-    /// <summary>Draws the loose ash spiralling into the mouth, in front of everything.</summary>
+    /// <summary>Draws the loose ash spiralling into the box, in front of everything.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="spriteBatch">The SpriteBatch to render with.</param>
     public void DrawAsh(GameTime gameTime, SpriteBatch spriteBatch)

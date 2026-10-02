@@ -7,7 +7,7 @@ using Microsoft.Xna.Framework.Input;
 namespace TheBlackBox.StateManagement;
 
 /// <summary>
-/// The questions an InputAction asks about the keyboard and gamepads. Same interface as the advanced input tutorial.
+/// What an InputAction needs to ask about the keyboard and gamepads. Same interface as the advanced input tutorial.
 /// </summary>
 public interface IInputState
 {

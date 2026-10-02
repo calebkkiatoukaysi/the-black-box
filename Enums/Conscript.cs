@@ -1,14 +1,14 @@
 namespace TheBlackBox;
 
 /// <summary>
-/// The two people the player can be. Each has their own walking sheet, conscript-first and conscript-second.
+/// The two characters the player can pick. Each has their own walking sheet (conscript-first and conscript-second).
 /// </summary>
-/// <remarks>Saves store the name, so reordering is safe and renaming is not.</remarks>
+/// <remarks>Saves store the name, so reordering these is fine but renaming them isn't.</remarks>
 public enum Conscript
 {
-    /// <summary>Short hair, a work jacket over a shirt.</summary>
+    /// <summary>Short hair, work jacket over a shirt.</summary>
     First,
 
-    /// <summary>Hair tied back, a long belted coat.</summary>
+    /// <summary>Hair tied back, long coat with a belt.</summary>
     Second,
 }

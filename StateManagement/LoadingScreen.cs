@@ -9,16 +9,16 @@ using Microsoft.Xna.Framework.Graphics;
 namespace TheBlackBox.StateManagement;
 
 /// <summary>
-/// Goes between two sets of screens. Everything on the stack is told to leave, and once they
-/// have all transitioned off, the next screens are added.
+/// Goes between two sets of screens. Every screen on the stack leaves, and once they've all
+/// transitioned off the next screens get added.
 /// </summary>
 /// <remarks>
-/// Same as the sample, except the "Loading..." line is optional text of my own, so a big move
-/// (going through the door into the box's room) can say something on the black in between.
+/// Same as the sample except the "Loading..." text is optional and my own, so going through the
+/// door can put a line on the black screen in between.
 /// </remarks>
 public class LoadingScreen : GameScreen
 {
-    /// <summary>How long the line takes to come up on the black, and how long it is held before the next screens come in.</summary>
+    /// <summary>How long the line takes to fade in, and how long it stays up before the next screens come in.</summary>
     private const float LineFadeSeconds = 0.6f;
     private const float LineHoldSeconds = 1.4f;
 
@@ -38,9 +38,9 @@ public class LoadingScreen : GameScreen
         _screensToLoad = screensToLoad;
     }
 
-    /// <summary>Exits every screen on the stack and loads the given ones once they have gone.</summary>
+    /// <summary>Exits every screen on the stack and loads the new ones once they're gone.</summary>
     /// <param name="screenManager">The manager.</param>
-    /// <param name="line">A line to show on the black in between, or null for none.</param>
+    /// <param name="line">A line to show in between, or null for none.</param>
     /// <param name="screensToLoad">The screens to add, bottom first.</param>
     public static void Load(ScreenManager screenManager, string line, params GameScreen[] screensToLoad)
     {
@@ -62,7 +62,7 @@ public class LoadingScreen : GameScreen
     /// <summary>Unloads the font.</summary>
     public override void Unload() => _content?.Unload();
 
-    /// <summary>Once everything else has gone (and the line has been read), swaps in the next screens.</summary>
+    /// <summary>Once everything else is gone (and the line has been up long enough) it swaps in the next screens.</summary>
     /// <param name="gameTime">The frame's timing.</param>
     /// <param name="otherScreenHasFocus">Whether a screen above has the input.</param>
     /// <param name="coveredByOtherScreen">Whether a non-popup screen is on top.</param>
@@ -85,12 +85,12 @@ public class LoadingScreen : GameScreen
             if (screen is not null) ScreenManager.AddScreen(screen);
         }
 
-        // Loading can take a moment, and the fixed timestep would try to catch it up in a burst. Tell it not to.
+        // Loading can take a second and the fixed timestep would try to catch up all at once, so tell it not to.
         ScreenManager.Game.ResetElapsedTime();
     }
 
-    /// <summary>Notices when it is the only screen left, and draws the line if it has one.</summary>
-    /// <remarks>Checked in Draw, like the sample, so the last frame of the old screens' fade has been seen first.</remarks>
+    /// <summary>Checks if it's the only screen left, and draws the line if there is one.</summary>
+    /// <remarks>Checked in Draw like the sample does, so the last frame of the old screens' fade gets drawn first.</remarks>
     /// <param name="gameTime">The frame's timing.</param>
     public override void Draw(GameTime gameTime)
     {

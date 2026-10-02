@@ -136,10 +136,10 @@ public class ButtonSprite
     /// <summary>Whether the button responds to the cursor at all.</summary>
     public bool Enabled = true;
 
-    /// <summary>Whether the keyboard has picked this button. It lights the same as a hover.</summary>
+    /// <summary>Whether the keyboard is on this button. It lights up the same as a hover.</summary>
     public bool Focused;
 
-    /// <summary>How much of the button shows, 0 to 1. Screens fade it with their transition.</summary>
+    /// <summary>How visible the button is, 0 to 1. Screens fade it with their transition.</summary>
     public float Opacity = 1f;
 
     /// <summary>Raised the moment a press that started on this button is released on it.</summary>
@@ -204,7 +204,7 @@ public class ButtonSprite
         _hasMouseSample = false;
     }
 
-    /// <summary>Presses the button from the keyboard: the plate sinks and comes back up, and it counts as a click.</summary>
+    /// <summary>Presses the button from the keyboard. The plate sinks and pops back up, same as a click.</summary>
     public void Activate()
     {
         if (!Enabled) return;
@@ -383,7 +383,7 @@ public class ButtonSprite
     /// <param name="y">Top of the line, in screen pixels.</param>
     /// <param name="color">Colour of the text.</param>
     /// <param name="scale">How far the line is shrunk to fit. 1 is full size.</param>
-    /// <param name="opacity">How much of it shows. See <see cref="Opacity"/>.</param>
+    /// <param name="opacity">How visible it is, 0 to 1.</param>
     private static void DrawLine(SpriteBatch spriteBatch, SpriteFont font, string text, Rectangle plate, float y, Color color,
         float scale, float opacity)
     {

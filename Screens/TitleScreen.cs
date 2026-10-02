@@ -6,9 +6,9 @@ using TheBlackBox.StateManagement;
 namespace TheBlackBox.Screens;
 
 /// <summary>
-/// The title, with START GAME, OPTIONS and EXIT under the box. The sample's MainMenuScreen.
+/// The title, with START GAME, OPTIONS and EXIT under the box. This is the sample's MainMenuScreen.
 /// </summary>
-/// <remarks>Escape on the title closes the game, same as before the screens were split up.</remarks>
+/// <remarks>Escape on the title still closes the game, same as before I split the screens up.</remarks>
 public class TitleScreen : MenuScreen
 {
     private const string Title = "The Black Box";
@@ -20,11 +20,11 @@ public class TitleScreen : MenuScreen
     private const float TitleY = 56f;
     private const float HintY = 856f;
 
-    /// <summary>Centre line of the row of buttons, clear of the bottom of the box, and the gap between them.</summary>
+    /// <summary>Where the row of buttons sits (just under the box) and the gap between them.</summary>
     private const float ButtonRowY = 806f;
     private const float ButtonGap = 36f;
 
-    /// <summary>How long the title takes to come and go.</summary>
+    /// <summary>How long the title takes to fade in and out.</summary>
     private static readonly TimeSpan FadeTime = TimeSpan.FromSeconds(0.5);
 
     // The title gets a tight deep red shadow instead of black. The serif is light, and anything wider ghosts around the strokes.
@@ -41,7 +41,7 @@ public class TitleScreen : MenuScreen
         TransitionOnTime = FadeTime;
         TransitionOffTime = FadeTime;
 
-        // Amber is the box making an offer; red is saved for the choice that ends things; bone for the one it has no stake in.
+        // Amber is the box making an offer, red is for the choice that ends things, and bone is for the one it doesn't care about.
         var start = new MenuEntry(StartLabel, ButtonSprite.Amber);
         var options = new MenuEntry(OptionsLabel, ButtonSprite.BoneWhite);
         var exit = new MenuEntry(ExitLabel, ButtonSprite.EmberRed);
@@ -55,7 +55,7 @@ public class TitleScreen : MenuScreen
         MenuEntries.Add(exit);
     }
 
-    /// <summary>Loads the fonts and the entries, and centres the row under the box.</summary>
+    /// <summary>Loads the fonts and entries and centres the row under the box.</summary>
     public override void Activate()
     {
         base.Activate();
