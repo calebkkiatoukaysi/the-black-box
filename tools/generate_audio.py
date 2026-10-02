@@ -38,9 +38,9 @@ SFX_RATE = 44100
 # Loudness. Music is normalised to an RMS target and kept under the peak ceiling; sound
 # effects are normalised by peak, grouped by how big the moment is and how often it fires.
 MUSIC_PEAK_DB = -1.0
-TITLE_RMS_DB = -21.0
-LOBBY_RMS_DB = -20.0
-ARENA_RMS_DB = -16.0
+TITLE_RMS_DB = -22.0
+LOBBY_RMS_DB = -21.0
+ARENA_RMS_DB = -17.0
 LIMIT_KNEE = 0.5        # the music limiter only bends samples above this (linear)
 
 PEAK_BIG = -1.0         # slams, shots, hits, the two stingers
@@ -49,9 +49,9 @@ PEAK_MENU = -6.0        # confirm and back
 PEAK_CLICK = -8.0       # UI clicks
 PEAK_REPEAT = -10.0     # footsteps and text blips, which fire constantly
 
-TITLE_BPM, TITLE_BARS = 66, 16
-LOBBY_BPM, LOBBY_BARS = 84, 24
-ARENA_BPM, ARENA_BARS = 124, 32
+TITLE_BPM, TITLE_BARS = 52, 16
+LOBBY_BPM, LOBBY_BARS = 58, 16
+ARENA_BPM, ARENA_BARS = 92, 24
 
 TAU = 2.0 * math.pi
 VERBOSE = False
@@ -363,15 +363,13 @@ def vibrato_time(n, rate, cents, vib_hz, delay_s):
     """Sample times bent by a vibrato that fades in after delay_s, like a singer's. Reading an
     oscillator at these times instead of 0, 1, 2... gives it the vibrato, and the three
     voices of a lead can share one list."""
+    if not cents or n <= 0:
+        return list(range(n))
     w = TAU * vib_hz / rate
     depth = (2.0 ** (cents / 1200.0) - 1.0) / w
-    d0 = int(delay_s * rate)
-    ramp = max(1, int(0.25 * rate))
-    cos = math.cos
-    out = list(range(n))
-    for i in range(d0, n):
-        out[i] = i + depth * min(1.0, (i - d0) / ramp) * (1.0 - cos(w * i))
-    return out
+    swing = lines(((0.0, 0.0), (delay_s, 0.0), (delay_s + 0.25, depth)), n, rate)
+    wobble = [1.0 - z.real for z in accumulate(repeat(cmath.rect(1.0, w), n - 1), mul, initial=1 + 0j)]
+    return list(map(add, range(n), map(mul, swing, wobble)))
 
 
 def osc_at(kind, freq, times, rate, amp=1.0, phase=0.0):
@@ -604,14 +602,15 @@ def music_box_note(freq, rate, rng):
     return fade(out, rate, 0.0003, 0.4)
 
 
-def heartbeat(rate, rng):
-    """Lub-dub: two soft low thumps 0.27 s apart, the second a little higher and quieter."""
+def heartbeat(rate, rng, gap=0.27, pitch=1.0):
+    """Lub-dub: two soft low thumps `gap` s apart (0.33 at most), the second a little higher
+    and quieter. pitch scales both."""
     n = int(0.75 * rate)
     out = silence(n)
-    for t, f0, f1, g in ((0.0, 66.0, 41.0, 1.0), (0.27, 76.0, 47.0, 0.7)):
+    for t, f0, f1, g in ((0.0, 66.0, 41.0, 1.0), (gap, 76.0, 47.0, 0.7)):
         m = int(0.42 * rate)
         e = envelope(m, rate, attack=0.012, tau=0.075)
-        thump = shaped(glide(f0, f1, 0.05, m, rate), e)
+        thump = shaped(glide(f0 * pitch, f1 * pitch, 0.05, m, rate), e)
         flesh = shaped(norm(lowpass(lowpass(noise(m, rng), 220.0, rate), 220.0, rate)), e)
         mix(thump, flesh, 0, 0.25)
         mix(out, thump, int(t * rate), g)
@@ -667,6 +666,22 @@ class Song:
 
     def track(self):
         return silence(self.length)
+
+    def half_at(self, bar, beat=0.0):
+        return self.at(bar, beat) // 2
+
+    def half_track(self):
+        return silence(self.length // 2)
+
+    def add_half(self, track, gain_db=0.0, pan=0.0, send=0.0, label="", right=None):
+        """Adds a layer rendered at half rate, doubled back up and smoothed. With `right` it's
+        a stereo pair."""
+        def up(x):
+            return looped(lambda y: lowpass(y, 7000.0, self.rate), upsample2(x), self.rate, 0.01)
+        if right is None:
+            self.add(up(track), gain_db, pan, send, label)
+        else:
+            self.add_stereo(up(track), up(right), gain_db, send, label)
 
     def add(self, track, gain_db=0.0, pan=0.0, send=0.0, label=""):
         g = undb(gain_db)
@@ -745,79 +760,252 @@ def note_cache(render):
 
 
 # --------------------------------------------------------------------------- #
+# Score instruments
+# --------------------------------------------------------------------------- #
+# Strings, choir and piano render at half rate (16 kHz). Nothing they make goes much past
+# 6 kHz, and it halves the slowest part of the run. Song.add_half doubles them back up.
+
+STEEL = ((1.0, 1.0, 0.5), (1.47, 0.75, 0.4), (2.09, 0.55, 0.3), (2.83, 0.4, 0.22),
+         (3.62, 0.3, 0.15), (4.71, 0.2, 0.1))
+PIANO_STRETCH = 0.0004      # how far a real string's upper partials run sharp
+VOWELS = {                  # (formant Hz, gain), roughly a low wordless choir
+    "oo": ((320.0, 1.0), (800.0, 0.45), (2300.0, 0.15)),
+    "oh": ((480.0, 1.0), (850.0, 0.55), (2500.0, 0.18)),
+    "ah": ((700.0, 1.0), (1100.0, 0.6), (2550.0, 0.22)),
+}
+_BOW_HISS = {}
+
+
+def bow_hiss(n, rate, rng):
+    """Bow noise for one note: a slice cut from one long strip of band-passed noise, so I only
+    filter it once per rate."""
+    if rate not in _BOW_HISS:
+        _BOW_HISS[rate] = norm(biquad(noise(40 * rate, random.Random(rate)), "bp", 2000.0, 0.7, rate))
+    strip = _BOW_HISS[rate]
+    out = []
+    while len(out) < n:
+        start = rng.randrange(len(strip) // 2)
+        out += strip[start:start + n - len(out)]
+    return out
+
+
+def bowed(freqs, dur, rate, rng, attack=1.0, release=1.5, vib_cents=10.0, bow=0.12, bright=1.0):
+    """A bowed section: each note is two saws a few cents apart, all read through one shared
+    vibrato, rolled off by the body, with bow hiss and uneven bow pressure on the same
+    envelope. dur is how long the bow stays on (s)."""
+    n = int((dur + 3.0 * release) * rate)
+    times = vibrato_time(n, rate, vib_cents, rng.uniform(4.3, 5.2), min(attack, 0.8))
+    x = silence(n)
+    for f in freqs:
+        for c in (-4.0, 4.0):
+            mix(x, osc_at("saw", f * 2 ** (c / 1200), times, rate, 0.5, rng.random()))
+    body = min(0.4 * rate, 300.0 + 5.0 * min(freqs) * bright)
+    x = lowpass(lowpass(x, body, rate), body, rate)
+    mix(x, bow_hiss(n, rate, rng), 0, bow * len(freqs))
+    pressure = lines([(0.3 * k, 1.0 + 0.1 * rng.uniform(-1.0, 1.0)) for k in range(int(n / rate / 0.3) + 2)], n, rate)
+    return shaped(shaped(x, envelope(n, rate, attack=attack, gate=dur, release=release)), pressure)
+
+
+def choir(freqs, dur, rate, rng, vowel="oo", attack=3.0, release=2.0, breath=0.35, glide_cents=0.0):
+    """A breathy wordless choir: two saws per voice plus breath noise, all through three vowel
+    formants. glide_cents bends the whole chord up across the note instead of a vibrato."""
+    n = int((dur + 3.0 * release) * rate)
+    if glide_cents:
+        k = math.log(2.0) * glide_cents / 1200.0 / n
+        times = [(math.exp(k * i) - 1.0) / k for i in range(n)]
+    else:
+        times = vibrato_time(n, rate, 8.0, rng.uniform(4.4, 5.0), 0.8)
+    src = silence(n)
+    for f in freqs:
+        for c in (-7.0, 7.0):
+            mix(src, osc_at("saw", f * 2 ** (c / 1200), times, rate, 1.0, rng.random()))
+    src = norm(src)
+    mix(src, noise(n, rng), 0, breath)
+    out = silence(n)
+    for fc, g in VOWELS[vowel]:
+        mix(out, biquad(src, "bp", fc, 5.0, rate), 0, g)
+    return shaped(out, envelope(n, rate, attack=attack, gate=dur, release=release))
+
+
+def felt_piano(freq, rate, rng, vel=0.6, length=4.5, prepared=0.0, detune=3.0):
+    """Felt piano: slightly stretched partials that fall away steeply, each with a quick and a
+    slow decay, a second string a few cents off so the note beats, and the dull knock of the
+    felt. `prepared` mixes in the clangy partials of a bolt wedged between the strings."""
+    n = int(length * rate)
+    slow = 2.4 * (262.0 / freq) ** 0.45
+    parts, second = [], []
+    for k in range(1, 6):
+        r = k * math.sqrt(1.0 + PIANO_STRETCH * k * k)
+        g = vel ** (0.5 * (k - 1)) / k ** 1.7          # a softer touch loses the top first
+        tau = slow / (1.0 + 0.6 * (k - 1))
+        parts += [(r, 0.6 * g, 0.15 * tau), (r, 0.4 * g, tau)]
+        if k <= 2:
+            second.append((r, 0.35 * g, tau))
+    x = modes(parts, n, rate, freq)
+    mix(x, modes(second, n, rate, freq * 2 ** (detune / 1200)))
+    if prepared:
+        mix(x, modes(((2.41, 0.5, 0.18), (3.73, 0.35, 0.11), (5.18, 0.2, 0.06)), n, rate, freq), 0, prepared)
+    m = int(0.012 * rate)
+    knock = shaped(lowpass(noise(m, rng), 700.0, rate), envelope(m, rate, 0.001, 0.003))
+    mix(x, norm(knock), 0, 0.05)
+    return fade(lowpass(x, 1500.0 + 2500.0 * vel, rate), rate, 0.0005, 0.4)
+
+
+def reverse_swell(notes, dur, rate, rng):
+    """A piano chord played backwards into the next downbeat, with a breath of noise rising under
+    it. It ends on the chord's attack, so the last few ms are faded."""
+    n = int(dur * rate)
+    x = silence(n)
+    for m in notes:
+        mix(x, felt_piano(midi_hz(m), rate, rng, 0.7, dur + 0.1))
+    x = norm(x[::-1])
+    air = shaped(norm(lowpass(noise(n, rng), 2500.0, rate)), [(i / n) ** 3 for i in range(n)])
+    mix(x, air, 0, 0.3)
+    return fade(x, rate, 0.05, 0.015)
+
+
+def sub_impact(rate, rng, length=3.5):
+    """A sudden low impact: a sub sine dropping toward 23 Hz, pushed into a tanh, with a rumble
+    of low noise under it."""
+    n = int(length * rate)
+    x = saturate(shaped(glide(54.0, 23.0, 0.4, n, rate), envelope(n, rate, attack=0.003, tau=0.9)), 1.8)
+    rumble = norm(lowpass(lowpass(noise(n, rng), 140.0, rate), 140.0, rate))
+    mix(x, shaped(rumble, envelope(n, rate, attack=0.01, tau=0.5)), 0, 0.3)
+    m = int(0.08 * rate)
+    mix(x, shaped(norm(lowpass(noise(m, rng), 900.0, rate)), envelope(m, rate, 0.001, 0.015)), 0, 0.25)
+    return x
+
+
+def sub_swell(freq, dur, rate, rng):
+    """A distorted sub swell: saw and sine on the root, rising over dur and cut at the end."""
+    n = int(dur * rate)
+    x = list(map(add, osc("saw", freq, n, rate, 0.5, rng.random()), sine(freq, n, rate, 0.8)))
+    x = saturate(norm(lowpass(lowpass(x, 260.0, rate), 260.0, rate)), 2.5)
+    return fade(shaped(x, [(i / n) ** 2 for i in range(n)]), rate, 0.0, 0.03)
+
+
+def heavy_kick(rate, rng):
+    """A distorted sub kick: a long low sweep driven hard into a tanh."""
+    n = int(0.8 * rate)
+    x = shaped(glide(140.0, 36.0, 0.05, n, rate), envelope(n, rate, attack=0.0006, tau=0.3))
+    m = int(0.004 * rate)
+    click = shaped(highpass(noise(m, rng), 1500.0, rate), envelope(m, rate, 0.0002, 0.0012))
+    mix(x, norm(click), 0, 0.3)
+    return lowpass(saturate(x, 3.0), 4000.0, rate)
+
+
+def clang(rate, rng, f0):
+    """Struck sheet steel for the backbeat: two plates' worth of inharmonic partials, a crack of
+    noise and a dull thud, all pushed into a tanh so it grinds."""
+    n = int(1.1 * rate)
+    x = norm(modes([(r, g, t * 1.3) for r, g, t in STEEL], n, rate, f0))
+    mix(x, norm(modes([(r, g, t * 0.8) for r, g, t in STEEL], n, rate, f0 * 1.37)), 0, 0.6)
+    m = int(0.06 * rate)
+    mix(x, shaped(norm(biquad(noise(m, rng), "bp", 2500.0, 0.8, rate)), envelope(m, rate, 0.0003, 0.012)), 0, 0.8)
+    mix(x, shaped(glide(120.0, 60.0, 0.03, n, rate), envelope(n, rate, 0.001, 0.08)), 0, 0.6)
+    return norm(saturate(x, 2.0))
+
+
+def stutter(src, rate, repeats, first_s, shrink):
+    """A skipping buffer: the head of a sound repeated, each repeat a bit shorter, then held and
+    crushed down to a few levels so it grinds."""
+    out = []
+    length = first_s
+    for k in range(repeats):
+        piece = fade(src[:max(32, int(length * rate))], rate, 0.0005, 0.002)
+        out += scale(piece, 1.0 - 0.02 * k)
+        length *= shrink
+    held = 0.0
+    for i in range(len(out)):
+        if i % 4 == 0:
+            held = round(out[i] * 6.0) / 6.0
+        out[i] = held
+    return fade(out, rate, 0.001, 0.004)
+
+
+def clock_tick(rate, rng, high):
+    """The box counting: a dry little escapement click, tick high and tock low."""
+    n = int(0.05 * rate)
+    f0 = 3200.0 if high else 2350.0
+    x = modes(((1.0, 1.0, 0.006), (1.73, 0.5, 0.004), (2.9, 0.3, 0.003)), n, rate, f0)
+    m = int(0.002 * rate)
+    mix(x, shaped(highpass(noise(m, rng), 3000.0, rate), envelope(m, rate, 0.0002, 0.0005)), 0, 0.3)
+    mix(x, sine(f0 / 4.0, n, rate, 0.25, 0.008))
+    return norm(x)
+
+
+# --------------------------------------------------------------------------- #
 # it-is-watching.wav -- title theme
 # --------------------------------------------------------------------------- #
-# D minor at 66 BPM, 16 bars. A slightly broken music box over a low drone that breathes,
-# a heartbeat once a bar, tape hiss and a creak somewhere far off every 8 bars.
+# D minor at 52 BPM, 16 bars (about 74 s), and mostly empty on purpose. A broken music box
+# plays a few notes, then leaves long gaps. Under it: a bowed bass on D with a bow change
+# every four bars, slow string swells that rub a semitone against it, a breathy choir you
+# barely hear, a far-off heartbeat that skips twice, and two deep impacts out of nowhere.
 
-TITLE_DRONE = (        # (first bar, bars, root MIDI): D, Bb, C, D, Bb, the Phrygian Eb, D
-    (15, 4, 38),       # bars 15-16 and 1-2 are one D that runs straight across the loop point
-    (3, 2, 34),
-    (5, 2, 36),
-    (7, 4, 38),
-    (11, 2, 34),
-    (13, 2, 39),
+TITLE_BASS = (         # (first bar, bars, MIDI): root and fifth; the fifth sinks to Bb in 9-12
+    (1, 4, (38, 45)),
+    (5, 4, (38, 45)),
+    (9, 4, (38, 46)),
+    (13, 4, (38, 45)),
 )
-
-TITLE_MELODY = (       # (bar, beat, MIDI, velocity)
-    (1, 0.0, 86, 0.90), (1, 1.0, 81, 0.70), (1, 2.0, 77, 0.75), (1, 3.0, 81, 0.65),
-    (2, 0.0, 79, 0.80), (2, 1.5, 77, 0.60), (2, 2.0, 76, 0.70),
-    (3, 0.0, 86, 0.85), (3, 1.0, 82, 0.70), (3, 2.0, 77, 0.70), (3, 3.0, 82, 0.60),
-    (4, 0.0, 81, 0.80), (4, 1.5, 79, 0.60), (4, 2.0, 77, 0.70),
-    (5, 0.0, 84, 0.85), (5, 1.0, 79, 0.70), (5, 2.0, 76, 0.70), (5, 3.0, 79, 0.60),
-    (6, 0.0, 77, 0.75), (6, 1.5, 76, 0.60), (6, 2.0, 74, 0.70),
-    (7, 0.0, 74, 0.70), (7, 2.0, 69, 0.50), (7, 3.0, 70, 0.45),
-    (8, 0.0, 69, 0.55),
-    (9, 0.0, 86, 0.90), (9, 1.0, 81, 0.70), (9, 2.0, 77, 0.75), (9, 3.0, 81, 0.65),
-    (10, 0.0, 79, 0.80), (10, 1.5, 77, 0.60), (10, 2.0, 75, 0.80),   # Eb over D: the first wrong note
-    (11, 0.0, 86, 0.85), (11, 1.0, 82, 0.70), (11, 2.0, 77, 0.70), (11, 3.0, 86, 0.60),
-    (12, 0.0, 84, 0.75), (12, 1.5, 82, 0.60), (12, 2.0, 81, 0.70),
-    (13, 0.0, 87, 0.90), (13, 1.0, 82, 0.70), (13, 2.0, 79, 0.70), (13, 3.0, 82, 0.60),
-    (14, 0.0, 86, 0.75), (14, 1.5, 82, 0.60), (14, 2.0, 75, 0.85),
-    (15, 0.0, 74, 0.75), (15, 2.0, 77, 0.45), (15, 3.0, 76, 0.40),
-    (16, 0.0, 74, 0.50), (16, 3.0, 69, 0.30),
+TITLE_SWELLS = (       # (bar, bars, MIDI, gain): each one rubs a semitone against the D
+    (3, 2, (50, 51), 0.8),          # D3 + Eb3
+    (7, 2, (49, 50), 0.7),          # C#3 under D3
+    (11, 2, (44, 45), 0.8),         # Ab2 against A2, a tritone over the bass
+    (14, 3, (50, 51, 56), 1.0),     # D3, Eb3, Ab3: still coming as the loop turns over
 )
-
-TITLE_TINES = ((1, 62), (3, 58), (5, 60), (7, 62), (9, 62), (11, 58), (13, 63), (15, 62))
-TITLE_DETUNE = -10.0      # cents; the whole box has sagged flat
-TITLE_CROSSFADE = 2.0     # seconds between drone chords
+TITLE_CHOIR = (        # (first bar, bars, MIDI, vowel)
+    (1, 8, (50, 53, 57), "oo"),
+    (9, 8, (50, 53, 58), "oh"),
+)
+TITLE_MELODY = (       # (bar, beat, MIDI, velocity); bars 3-4, 7-8, 11-12 and 16 are left empty
+    (1, 0.0, 81, 0.85), (1, 1.0, 77, 0.60), (1, 2.0, 76, 0.65), (1, 3.5, 74, 0.55),
+    (2, 1.0, 73, 0.60),                                      # C#, and it never resolves
+    (5, 0.0, 81, 0.80), (5, 1.0, 82, 0.65), (5, 2.5, 81, 0.55),
+    (6, 0.0, 77, 0.60), (6, 2.0, 75, 0.70),                  # Eb, left hanging
+    (9, 0.0, 86, 0.85), (9, 1.0, 81, 0.60), (9, 2.0, 77, 0.65), (9, 3.0, 76, 0.55),
+    (10, 1.0, 74, 0.60), (10, 3.0, 69, 0.45),
+    (13, 0.0, 87, 0.85), (13, 1.0, 86, 0.60), (13, 2.5, 81, 0.60),
+    (14, 0.0, 80, 0.70),                                     # Ab: the tritone
+    (15, 2.0, 77, 0.40),
+)
+TITLE_TINES = ((1, 62), (5, 62), (9, 58), (13, 63))
+TITLE_MISSED_BEATS = (8, 12)    # bars where the heart doesn't come
+TITLE_IMPACTS = ((9, 0.0), (13, 2.5))
+TITLE_DETUNE = -10.0            # cents; the whole box has sagged flat
 
 
 def build_title():
-    rng = random.Random(6601)
+    rng = random.Random(5201)
     s = Song(TITLE_BPM, TITLE_BARS)
-    R, L = s.rate, s.length
+    R, L, H = s.rate, s.length, s.rate // 2
 
-    # Drone: root and fifth as detuned saw pairs, one of each pair per side, plus a sine
-    # under the root so it has weight on small speakers.
-    dl, dr, body = s.track(), s.track(), s.track()
-    xf = int(TITLE_CROSSFADE * R)
-    for first, bars, root in TITLE_DRONE:
-        n = bars * s.bar + xf
-        start = s.at(first) - xf // 2
-        win = [1.0] * n
-        for i in range(xf):
-            win[i] = math.sin(0.5 * math.pi * i / (xf - 1))
-            win[n - 1 - i] = math.sin(0.5 * math.pi * i / (xf - 1))
-        lo, hi = midi_hz(root), midi_hz(root + 7)
-        left = list(map(add, osc("saw", lo * 2 ** (-6 / 1200), n, R, 1.0, rng.random()),
-                        osc("saw", hi * 2 ** (8 / 1200), n, R, 0.55, rng.random())))
-        right = list(map(add, osc("saw", lo * 2 ** (6 / 1200), n, R, 1.0, rng.random()),
-                         osc("saw", hi * 2 ** (-9 / 1200), n, R, 0.55, rng.random())))
-        mix_loop(dl, shaped(left, win), start)
-        mix_loop(dr, shaped(right, win), start)
-        mix_loop(body, shaped(sine(lo, n, R), win), start)
+    # Bowed bass and the swells share one string track. Each bass note starts a second early
+    # and rings a second over, so the bow changes overlap.
+    strings = s.half_track()
+    for first, bars, notes in TITLE_BASS:
+        note = bowed([midi_hz(m) for m in notes], s.secs(4 * bars) + 1.0, H, rng, attack=2.5, release=1.0,
+                     vib_cents=5.0, bow=0.06, bright=0.8)
+        mix_loop(strings, note, s.half_at(first) - H)
+    for bar, bars, notes, g in TITLE_SWELLS:
+        dur = s.secs(4 * bars)
+        note = bowed([midi_hz(m) for m in notes], 0.75 * dur, H, rng, attack=0.6 * dur, release=0.12 * dur,
+                     vib_cents=14.0, bow=0.15)
+        mix_loop(strings, note, s.half_at(bar), 0.6 * g)
+    s.add_half(strings, -14.0, send=0.25, label="strings")
 
-    # The low-pass breathes once every two bars, with a slower drift on top. Both are whole
-    # cycles per loop so the filter is in the same place at the end as at the start.
-    def breath(i):
-        u = (i % L) / L
-        return 170.0 + 460.0 * (0.5 - 0.5 * math.cos(TAU * 8 * u)) + 80.0 * math.sin(TAU * u)
-    pre = preroll(R)
-    dl = looped(lambda x: svf(x, lambda i: breath(i - pre), 1.2, R), dl, R)
-    dr = looped(lambda x: svf(x, lambda i: breath(i - pre), 1.2, R), dr, R)
-    s.add_stereo(dl, dr, -14.0, send=0.12, label="drone")
-    s.add(body, -21.0, label="drone sine")
+    # D1 under everything, nudged to a whole number of cycles per loop, breathing twice a loop.
+    k = round(midi_hz(26) * L / R)
+    w = TAU * 2 / L
+    sub = [v * (0.7 + 0.3 * math.cos(w * i)) for i, v in enumerate(sine(k * R / L, L, R))]
+    s.add(sub, -27.0, label="sub")
+
+    # The choir, barely there.
+    ch = s.half_track()
+    for first, bars, notes, vowel in TITLE_CHOIR:
+        c = choir([midi_hz(m) for m in notes], s.secs(4 * bars), H, rng, vowel, attack=4.0, release=1.5)
+        mix_loop(ch, c, s.half_at(first) - 2 * H)
+    s.add_half(ch, -23.0, pan=0.15, send=0.5, label="choir")
 
     # Music box. Every tine has its own mistuning (seeded), and the whole thing is run
     # through a wobbling delay afterwards for the wow and flutter of an old mechanism.
@@ -826,34 +1014,39 @@ def build_title():
         m, rng.uniform(-7.0, 7.0))), R, rng))
     mb = s.track()
     for bar, beat, m, vel in TITLE_MELODY:
-        jitter = int(rng.gauss(0.0, 0.006) * R)
+        jitter = int(rng.gauss(0.0, 0.008) * R)
         mix_loop(mb, box(m), s.at(bar, beat) + jitter, vel * rng.uniform(0.94, 1.0))
     for bar, m in TITLE_TINES:
-        mix_loop(mb, box(m), s.at(bar), 0.42)
-    mb = wow(mb, R, wow_cycles=32, wow_depth=0.0028, flutter_cycles=361, flutter_depth=0.0005)
-    s.add(mb, -12.0, pan=-0.05, send=0.55, label="music box")
+        mix_loop(mb, box(m), s.at(bar), 0.35)
+    mb = wow(mb, R, wow_cycles=40, wow_depth=0.0032, flutter_cycles=450, flutter_depth=0.0005)
+    s.add(mb, -9.0, pan=-0.05, send=0.6, label="music box")
 
-    # Heartbeat on beat two of every bar, a little harder through the Eb bars.
+    # The heartbeat is further off now: slower, lower, darker, mostly reverb. It skips twice.
+    beat_once = lowpass(lowpass(heartbeat(R, rng, gap=0.33, pitch=0.85), 220.0, R), 220.0, R)
     hb = s.track()
-    beat_once = heartbeat(R, rng)
     for bar in range(1, TITLE_BARS + 1):
-        mix_loop(hb, beat_once, s.at(bar, 1.0), 1.0 if bar in (13, 14) else 0.75)
-    s.add(hb, -8.0, send=0.08, label="heartbeat")
+        if bar not in TITLE_MISSED_BEATS:
+            mix_loop(hb, beat_once, s.at(bar, 2.0))
+    s.add(hb, -12.0, send=0.35, label="heartbeat")
+
+    # Two impacts from nowhere, and something creaking in the building.
+    fx = s.track()
+    for bar, beat in TITLE_IMPACTS:
+        mix_loop(fx, sub_impact(R, rng), s.at(bar, beat))
+    s.add(fx, -11.0, send=0.4, label="impacts")
+    c = creak(1.7, R, rng, ((0.0, 16.0), (0.4, 34.0), (0.75, 22.0), (1.0, 12.0)),
+              ((231.0, 1.0), (517.0, 0.7), (873.0, 0.45), (1420.0, 0.25)))
+    c = shaped(lowpass(c, 1600.0, R), lines(((0, 0), (0.3, 1), (1.2, 0.8), (1.7, 0)), len(c), R))
+    part = s.track()
+    mix_loop(part, norm(c), s.at(6, 2.0))
+    s.add(part, -20.0, pan=-0.6, send=0.9, label="creak")
 
     # Tape hiss on both sides and a low room rumble in the middle.
-    s.add_stereo(hiss(L, rng), hiss(L, rng), -54.0, label="hiss")
+    s.add_stereo(hiss(L, rng), hiss(L, rng), -56.0, label="hiss")
     rumble = looped(lambda x: lowpass(lowpass(x, 90.0, R), 90.0, R), noise(L, rng), R)
     s.add(norm(rumble), -46.0, label="room")
 
-    # A creak somewhere in the building every 8 bars, distant and drenched.
-    for bar, pan in ((5, -0.6), (13, 0.55)):
-        c = creak(1.7, R, rng, ((0.0, 16.0), (0.4, 34.0), (0.75, 22.0), (1.0, 12.0)),
-                  ((231.0, 1.0), (517.0, 0.7), (873.0, 0.45), (1420.0, 0.25)))
-        c = shaped(lowpass(c, 1600.0, R), lines(((0, 0), (0.3, 1), (1.2, 0.8), (1.7, 0)), len(c), R))
-        part = s.track()
-        mix_loop(part, norm(c), s.at(bar, 1.5))
-        s.add(part, -18.0, pan=pan, send=0.9, label="creak")
-    s.add_reverb(rt60=4.8, damp_hz=2200.0, size=1.35, gain_db=-9.5)
+    s.add_reverb(rt60=5.5, damp_hz=2000.0, size=1.4, gain_db=-8.0)
     s.finish("Content/Music/it-is-watching.wav", TITLE_RMS_DB)
 
 
@@ -880,205 +1073,36 @@ def hiss(n, rng):
 # --------------------------------------------------------------------------- #
 # holding.wav -- lobby theme
 # --------------------------------------------------------------------------- #
-# D minor at 84 BPM, 24 bars in three 8-bar passes of Dm9 - Bbmaj9 - Gm9 - A7sus(b9) - A7(b9).
-# Bars 1-8: Rhodes, bass and brushes. 9-16: the vibraphone joins. 17-24: just Rhodes and bass,
-# with the hats creeping back in bar 23, then a brush fill and a vibes pickup to lead into the top.
+# D minor at 58 BPM, 16 bars (about 66 s), two bars a chord:
+# Dm(add9) - Bbmaj7 - Gm(add9) - A7b9 - Dm(maj7) - Ebmaj7(#11) - Gm/D - A7b9.
+# A felt piano with a bolt in it plays the chords slowly and keeps knocking on one high A,
+# like someone waiting. Strings hold the chords underneath, a soft low pulse marks each bar
+# and the tube light hums. The A stops for bars 13-14 and the strings come up into the gap,
+# a reversed chord pulls into bars 9 and 1, and something creaks twice.
 
-LOBBY_CHORDS = (       # one per bar of the 8-bar cycle: (bass root, Rhodes voicing)
-    (38, (53, 57, 60, 64)),   # Dm9
-    (38, (53, 57, 60, 64)),
-    (34, (57, 60, 62, 65)),   # Bbmaj9
-    (34, (57, 60, 62, 65)),
-    (31, (53, 57, 58, 62)),   # Gm9
-    (31, (53, 57, 58, 62)),
-    (33, (55, 58, 62, 64)),   # A7sus b9
-    (33, (55, 58, 61, 64)),   # A7 b9, the C# pulls back home
+LOBBY_CHORDS = (       # one per two bars: (bass MIDI, piano voicing, string voicing)
+    (38, (50, 57, 64, 65), (38, 45, 53)),    # Dm(add9), the E and F rubbing
+    (34, (46, 53, 57, 62), (34, 41, 50)),    # Bbmaj7
+    (31, (43, 50, 57, 58), (31, 38, 46)),    # Gm(add9)
+    (33, (45, 52, 55, 58), (33, 40, 49)),    # A7b9
+    (38, (50, 53, 57, 61), (38, 45, 53)),    # Dm(maj7)
+    (39, (51, 55, 62, 69), (39, 46, 55)),    # Ebmaj7(#11), the Phrygian chord
+    (38, (50, 55, 58, 62), (38, 43, 50)),    # Gm over D
+    (33, (45, 55, 61, 70), (33, 40, 49)),    # A7b9 again, home is next
 )
-
-SWING = 2.0 / 3.0       # where the off-beat eighth lands, in beats
-
-LOBBY_COMP = ((0.0, 2.4, 0.78), (2.0 + SWING, 0.5, 0.5), (4.0 + SWING, 1.6, 0.62), (6.0 + SWING, 1.1, 0.5))
-LOBBY_COMP_THIN = ((0.0, 3.8, 0.7), (4.0 + SWING, 4.0 - SWING, 0.5))   # held right up to the next chord
-
-LOBBY_BASS = (         # (beat in the 2-bar chord, interval, beats, velocity); None = approach note
-    (0.0, 0, 1.4, 0.95), (1.0 + SWING, 12, 0.3, 0.45), (2.0, 7, 0.9, 0.75), (3.0 + SWING, 0, 0.3, 0.5),
-    (4.0, 0, 1.4, 0.85), (5.0 + SWING, 10, 0.3, 0.45), (6.0, 7, 0.9, 0.7), (7.0, None, 1.0, 0.75),
-)
-
-LOBBY_VIBES = (        # (bar, beat, MIDI, beats)
-    (9, SWING, 76, 0.33), (9, 1.0, 77, 1.0), (9, 2.0, 81, 2.0),
-    (10, 0.0, 79, 1.0), (10, 1.0, 77, SWING), (10, 1.0 + SWING, 76, 2.33),
-    (11, SWING, 74, 0.33), (11, 1.0, 77, 1.0), (11, 2.0, 81, 1.0), (11, 3.0, 84, 1.0),
-    (12, 0.0, 82, 1.0 + SWING), (12, 1.0 + SWING, 81, 2.33),
-    (13, SWING, 79, 0.33), (13, 1.0, 82, 1.0), (13, 2.0, 86, 2.0),
-    (14, 0.0, 84, 1.0), (14, 1.0, 82, SWING), (14, 1.0 + SWING, 81, 2.33),
-    (15, 0.0, 79, 1.0), (15, 1.0, 77, 1.0), (15, 2.0, 75, 1.0), (15, 3.0, 74, 1.0),
-    (16, 0.0, 73, 2.0), (16, 2.0 + SWING, 76, 1.33),
-    (24, 3.0, 76, SWING), (24, 3.0 + SWING, 73, 0.33),   # the pickup that leads back to the top
-    (1, 0.0, 74, 2.0),                                   # ...and lands on D as the loop comes round
-)
-
-LOBBY_HATS = ((0.0, 0.5), (SWING, 0.3), (1.0, 0.6), (1.0 + SWING, 0.3),
-              (2.0, 0.5), (2.0 + SWING, 0.3), (3.0, 0.6), (3.0 + SWING, 0.35))
-LOBBY_FLICKERS = ((6, 2.3), (14, 0.7), (21, 3.1))
+LOBBY_OSTINATO = ((0.0, 0.55), (0.75, 0.35), (2.0, 0.5), (2.75, 0.3))   # (beat, velocity), every bar
+LOBBY_OSTINATO_NOTE = 81        # A5
+LOBBY_SIGHS = (10, 12)          # bars whose last knock slips up to Bb
+LOBBY_GAP = (13, 14)            # bars where it stops
+LOBBY_CREAKS = ((6, 1.0, -0.7), (12, 2.5, 0.6))
+LOBBY_FLICKERS = ((5, 2.3), (11, 0.7))
 
 
-def ep_note(freq, dur, vel, rate):
-    """FM electric piano: carrier and modulator both at the note's pitch, the index falling
-    away after the strike (bright bark, then the round tone), plus a quick tine ping."""
-    n = int((dur + 0.4) * rate)
-    w = TAU * freq / rate
-    lo, hi = 0.3 + 0.2 * vel, 1.4 * vel
-    sin = math.sin
-    body = [sin(w * i + (lo + hi * d) * sin(w * i)) for i, d in enumerate(decay(n, 0.22, rate))]
-    ratio = 14.0 if freq * 14.0 < 0.4 * rate else 7.0
-    mix(body, sine(freq * ratio, int(0.1 * rate), rate, 0.07 * vel, 0.012))
-    tau = 1.6 * (220.0 / freq) ** 0.35
-    return shaped(body, envelope(n, rate, attack=0.003, tau=tau, gate=dur, release=0.09))
-
-
-def round_bass(freq, dur, vel, rate, rng):
-    """Muted electric bass: sine plus a little octave, warmed by a tanh and rolled off."""
-    n = int((dur + 0.12) * rate)
-    x = list(map(add, sine(freq, n, rate), sine(2.0 * freq, n, rate, 0.22)))
-    x = saturate(x, 1.0 + 0.8 * vel)
-    x = shaped(x, envelope(n, rate, attack=0.006, tau=0.55, gate=dur, release=0.05))
-    m = int(0.015 * rate)
-    thump = shaped(lowpass(noise(m, rng), 500.0, rate), envelope(m, rate, 0.001, 0.005))
-    mix(x, norm(thump), 0, 0.12 * vel)
-    return lowpass(x, 1100.0, rate)
-
-
-VIBES = ((1.0, 1.0, 2.2), (4.0, 0.22, 0.45), (9.92, 0.05, 0.12))
-
-
-def vibes_note(freq, dur, rate, rng):
-    n = int((dur + 1.2) * rate)
-    x = modes(VIBES, n, rate, freq)
-    m = int(0.004 * rate)
-    mallet = shaped(lowpass(noise(m, rng), 2500.0, rate), envelope(m, rate, 0.0005, 0.0012))
-    mix(x, mallet, 0, 0.05)
-    # Pedal comes up half a second after the written length.
-    return shaped(x, envelope(n, rate, attack=0.001, gate=dur + 0.5, release=0.18))
-
-
-def brush_snare(rate, rng):
-    n = int(0.45 * rate)
-    x = biquad(noise(n, rng), "bp", 2600.0, 0.55, rate)
-    x = lowpass(x, 7000.0, rate)
-    x = shaped(norm(x), envelope(n, rate, attack=0.012, tau=0.09))
-    mix(x, sine(205.0, int(0.2 * rate), rate, 0.12, 0.03))
-    return x
-
-
-def brush_swish(rate, rng, beats_s):
-    """The circular brush stroke between hits: a quiet band of noise that swells and fades."""
-    n = int(beats_s * rate)
-    x = biquad(noise(n, rng), "bp", 3200.0, 0.5, rate)
-    e = [math.sin(math.pi * i / n) ** 2 for i in range(n)]
-    return shaped(norm(x), e)
-
-
-def soft_hat(rate, rng):
-    n = int(0.08 * rate)
-    x = biquad(biquad(noise(n, rng), "hp", 7000.0, 0.7, rate), "hp", 7000.0, 0.7, rate)
-    return shaped(norm(x), envelope(n, rate, attack=0.0005, tau=0.018))
-
-
-def soft_kick(rate):
-    n = int(0.35 * rate)
-    x = shaped(glide(82.0, 50.0, 0.04, n, rate), envelope(n, rate, attack=0.004, tau=0.12))
-    return lowpass(x, 300.0, rate)
-
-
-def build_holding():
-    rng = random.Random(8401)
-    s = Song(LOBBY_BPM, LOBBY_BARS)
+def fluorescent(s, rng, flickers):
+    """The tube light: 60 Hz and its family with a buzzy 120, nudged so a whole number of
+    cycles fits in the loop, plus a few flickers with a zap of noise each. Returns (hum, zaps)."""
     R, L = s.rate, s.length
-
-    def chord(bar):
-        return LOBBY_CHORDS[(bar - 1) % 8]
-
-    # Rhodes: chords comped on the swung eighths, rolled a few ms from the bottom up.
-    ep = note_cache(lambda m, beats, v: ep_note(midi_hz(m), s.secs(beats), v, R))
-    keys = s.track()
-    for first in range(1, LOBBY_BARS + 1, 2):
-        pattern = LOBBY_COMP_THIN if first >= 17 else LOBBY_COMP
-        for beat, beats, vel in pattern:
-            bar = first + int(beat // 4)
-            start = s.at(first, beat) + int(rng.gauss(0.0, 0.004) * R)
-            for k, m in enumerate(chord(bar)[1]):
-                v = round(vel * rng.uniform(0.88, 1.0), 1)
-                mix_loop(keys, ep(m, beats, v), start + int(k * 0.007 * R), v)
-    # Suitcase tremolo: the two sides swap level a little over 4 times a second.
-    w = TAU * 288 / L
-    sin = math.sin
-    trem_l = [1.0 - 0.28 * (0.5 + 0.5 * sin(w * i)) for i in range(L)]
-    trem_r = [1.0 - 0.28 * (0.5 - 0.5 * sin(w * i)) for i in range(L)]
-    s.add_stereo(shaped(keys, trem_l), shaped(keys, trem_r), -17.0, send=0.25, label="rhodes")
-
-    # Bass.
-    bass_note = note_cache(lambda m, beats, v: round_bass(midi_hz(m), s.secs(beats), v, R, rng))
-    bass = s.track()
-    for first in range(1, LOBBY_BARS + 1, 2):
-        root = chord(first)[0]
-        nxt = chord(first + 2)[0]
-        for beat, interval, beats, vel in LOBBY_BASS:
-            if first >= 17 and vel < 0.5:
-                continue        # no ghost notes in the thin section
-            m = (nxt - 1 if nxt > root else nxt + 1) if interval is None else root + interval
-            if interval is None and nxt == root:
-                m = root + 7
-            at = s.at(first, beat) + int(rng.gauss(0.0, 0.003) * R)
-            mix_loop(bass, bass_note(m, beats, vel), at, vel)
-    s.add(bass, -12.0, send=0.04, label="bass")
-
-    # Brushes. Out for bars 17-22, hats creep back in 23, a fill in 24.
-    snare_hits = [brush_snare(R, rng) for _ in range(4)]
-    hat_hits = [soft_hat(R, rng) for _ in range(4)]
-    kick = soft_kick(R)
-    swish = brush_swish(R, rng, s.secs(0.9))
-    sn, hh, kk, sw = s.track(), s.track(), s.track(), s.track()
-    for bar in range(1, LOBBY_BARS + 1):
-        full = bar <= 16
-        if full:
-            for beat in (1.0, 3.0):
-                mix_loop(sn, rng.choice(snare_hits), s.at(bar, beat) + int(rng.gauss(0, 0.003) * R),
-                         rng.uniform(0.65, 0.8))
-            for beat in range(4):
-                mix_loop(sw, swish, s.at(bar, beat), 0.8 if beat % 2 else 0.5)
-            mix_loop(kk, kick, s.at(bar), 0.8)
-            mix_loop(kk, kick, s.at(bar, 2.0 + SWING), 0.45)
-        if full or bar >= 23:
-            fade_in = 0.5 if bar == 23 else 1.0
-            for beat, vel in LOBBY_HATS:
-                mix_loop(hh, rng.choice(hat_hits), s.at(bar, beat) + int(rng.gauss(0, 0.002) * R),
-                         vel * fade_in * rng.uniform(0.85, 1.0))
-        if bar == 24:
-            # The fill: brush triplets getting louder, the swirl coming back under them.
-            for k, beat in enumerate((2.0, 2.33, 2.67, 3.0, 3.33, 3.67)):
-                mix_loop(sn, rng.choice(snare_hits), s.at(bar, beat), 0.3 + 0.08 * k)
-            for beat in (2.0, 3.0):
-                mix_loop(sw, swish, s.at(bar, beat), 0.8)
-            mix_loop(kk, kick, s.at(bar, 3.0 + SWING), 0.5)
-    s.add(sn, -11.0, pan=-0.2, send=0.3, label="brush snare")
-    s.add(sw, -25.0, pan=-0.1, send=0.2, label="brush swish")
-    s.add(hh, -16.0, pan=0.3, send=0.12, label="hats")
-    s.add(kk, -12.0, label="kick")
-
-    # Vibraphone lead, bars 9-16, with the motor's slow tremolo.
-    vib = s.track()
-    for bar, beat, m, beats in LOBBY_VIBES:
-        note = vibes_note(midi_hz(m), s.secs(beats), R, rng)
-        mix_loop(vib, note, s.at(bar, beat), rng.uniform(0.75, 0.9))
-    w = TAU * 357 / L
-    vib = [v * (1.0 - 0.3 * (0.5 + 0.5 * sin(w * i))) for i, v in enumerate(vib)]
-    s.add(vib, -16.0, pan=0.25, send=0.4, label="vibes")
-
-    # Fluorescent tube: 60 Hz family, a buzzy 120, and three flickers. The frequency is nudged
-    # so a whole number of cycles fits in the loop.
-    k = round(60.0 * L / R)
-    f = k * R / L
+    f = round(60.0 * L / R) * R / L
     hum = silence(L)
     for h, g in ((1, 0.35), (2, 1.0), (3, 0.45), (4, 0.2), (6, 0.08)):
         mix(hum, sine(f * h, L, R, g))
@@ -1086,7 +1110,7 @@ def build_holding():
     mix(hum, buzz, 0, 0.12)
     flick = [1.0] * L
     zaps = s.track()
-    for bar, beat in LOBBY_FLICKERS:
+    for bar, beat in flickers:
         start = s.at(bar, beat)
         for _ in range(rng.randint(3, 5)):
             off = start + int(rng.uniform(0.0, 0.35) * R)
@@ -1097,278 +1121,155 @@ def build_holding():
             z = int(0.004 * R)
             zap = shaped(highpass(noise(z, rng), 1500.0, R), envelope(z, R, 0.0005, 0.001))
             mix_loop(zaps, zap, off, 0.5)
-    s.add(shaped(hum, flick), -46.0, pan=0.1, label="hum")
+    return shaped(hum, flick), zaps
+
+
+def build_holding():
+    rng = random.Random(5801)
+    s = Song(LOBBY_BPM, LOBBY_BARS)
+    R, H = s.rate, s.rate // 2
+    cents = {}
+    piano = note_cache(lambda m, v: felt_piano(midi_hz(m, cents.setdefault(m, rng.uniform(-6.0, 6.0))),
+                                               H, rng, v, 5.0, prepared=0.12))
+
+    # Piano: each chord rolled slowly up from the bass, a quieter touch on its top two notes
+    # in the second bar, and the A knocking through all of it.
+    keys = s.half_track()
+    for i, (bass, voicing, _) in enumerate(LOBBY_CHORDS):
+        first = 1 + 2 * i
+        start = s.half_at(first) + int(rng.gauss(0.0, 0.004) * H)
+        for k, m in enumerate((bass,) + voicing):
+            mix_loop(keys, piano(m, 0.6), start + int(k * 0.035 * H), 0.55 if k == 0 else 0.36)
+        for k, m in enumerate(voicing[-2:]):
+            mix_loop(keys, piano(m, 0.4), s.half_at(first + 1, 2.0) + int(k * 0.05 * H), 0.3)
+    for bar in range(1, LOBBY_BARS + 1):
+        if bar in LOBBY_GAP:
+            continue
+        back = 0.7 if bar == LOBBY_GAP[-1] + 1 else 1.0
+        for j, (beat, vel) in enumerate(LOBBY_OSTINATO):
+            m = LOBBY_OSTINATO_NOTE + (1 if bar in LOBBY_SIGHS and j == 3 else 0)
+            v = round(vel * rng.uniform(0.85, 1.0), 1)
+            mix_loop(keys, piano(m, v), s.half_at(bar, beat) + int(rng.gauss(0.0, 0.006) * H), v * back)
+    s.add_half(keys, -7.0, pan=-0.1, send=0.35, label="piano")
+
+    # Strings under each chord, louder into the gap where the A stops.
+    strings = s.half_track()
+    for i, (_, _, voicing) in enumerate(LOBBY_CHORDS):
+        first = 1 + 2 * i
+        note = bowed([midi_hz(m) for m in voicing], s.secs(8) + 0.5, H, rng, attack=2.5, release=1.2,
+                     vib_cents=8.0, bow=0.08)
+        mix_loop(strings, note, s.half_at(first) - H // 2, 1.5 if first in LOBBY_GAP else 1.0)
+    s.add_half(strings, -18.0, pan=0.1, send=0.3, label="strings")
+
+    # A soft low pulse on every bar, every other one weaker.
+    pulse = shaped(glide(58.0, 40.0, 0.04, int(1.2 * R), R), envelope(int(1.2 * R), R, attack=0.006, tau=0.35))
+    pulse = lowpass(pulse, 200.0, R)
+    pl = s.track()
+    for bar in range(1, LOBBY_BARS + 1):
+        mix_loop(pl, pulse, s.at(bar), 1.0 if bar % 2 else 0.55)
+    s.add(pl, -15.0, label="pulse")
+
+    # Reversed chords pulling into bars 9 and 1, and two creaks somewhere in the building.
+    fl, fr = s.track(), s.track()
+    for bar in (9, 1):
+        voicing = LOBBY_CHORDS[(bar - 1) // 2][1]
+        rev = upsample2(reverse_swell(voicing, s.secs(2.0), H, rng))
+        mix_loop(fl, rev, s.at(bar) - len(rev), 0.6)
+        mix_loop(fr, rev, s.at(bar) - len(rev), 0.6)
+    for bar, beat, pan in LOBBY_CREAKS:
+        c = creak(1.4, R, rng, ((0.0, 18.0), (0.5, 30.0), (1.0, 14.0)),
+                  ((260.0, 1.0), (590.0, 0.6), (1010.0, 0.35)))
+        c = shaped(lowpass(norm(c), 1400.0, R), lines(((0, 0), (0.25, 1), (1.0, 0.7), (1.4, 0)), len(c), R))
+        gl, gr = pan_gains(pan)
+        mix_loop(fl, c, s.at(bar, beat), 0.35 * gl)
+        mix_loop(fr, c, s.at(bar, beat), 0.35 * gr)
+    s.add_stereo(fl, fr, -14.0, send=0.5, label="swells/creaks")
+
+    hum, zaps = fluorescent(s, rng, LOBBY_FLICKERS)
+    s.add(hum, -45.0, pan=0.1, label="hum")
     s.add(zaps, -30.0, pan=0.1, label="flicker")
 
-    s.add_reverb(rt60=1.9, damp_hz=3500.0, size=1.0, gain_db=-6.0)
+    s.add_reverb(rt60=3.0, damp_hz=3000.0, size=1.2, gain_db=-8.5)
     s.finish("Content/Music/holding.wav", LOBBY_RMS_DB)
 
 
 # --------------------------------------------------------------------------- #
 # place-your-hand.wav -- table theme
 # --------------------------------------------------------------------------- #
-# D minor / Phrygian at 124 BPM, 32 bars over a D - D - Bb - A cycle.
-#  1-8   full groove: kick, clap + steel clank, hats, the box's clock, rolling bass, ostinato
-#  9-16  the same with the lead hook on top
-#  17-24 breakdown: no kick, sustained pads, ostinato filter opening, the clock still counting
-#  25-30 rebuild with a noise riser
-#  31-32 snare roll into the loop point, so bar 1 lands as the full groove again
+# D Phrygian at 92 BPM in half time, 24 bars (about 63 s). Heavier rather than faster.
+#  1-8   distorted sub kick, steel clanging on the backbeat, the box's clock, low strings
+#        sawing a tritone figure in eighths, sub swells into every fourth bar, glitches
+#  9-12  the same, with a choir cluster and two high strings a semitone apart
+#  13-18 breakdown: the heavy parts drop out for a detuned prepared piano over a held tritone,
+#        the clock still counting
+#  19-22 build: the kick comes back as a pulse, then the strings, while a choir cluster rises a
+#        semitone and a noise riser climbs under it
+#  23-24 eighth-note kicks, then a skipping-buffer roll into the loop point, so bar 1 lands heavy
 
-ARENA_ROOTS = (38, 38, 34, 33)          # D2, D2, Bb1, A1
-ARENA_BASS_STEPS = (1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15)   # every 16th the kick doesn't take
-ARENA_BASS_LINES = (                   # intervals on those steps, one row per bar of the cycle
-    (0, 0, 12, 0, 0, 1, 0, 0, 12, 0, 3, 1),
-    (0, 0, 12, 0, 0, 1, 0, 0, 12, 0, 7, 6),
-    (0, 0, 12, 0, 0, -1, 0, 0, 12, 0, -2, -1),
-    (0, 0, 12, 0, 0, 1, 0, 0, 12, 0, 6, 4),
+ARENA_OSTINATO = (     # low strings in eighths over two bars: D, the tritone Ab, the Phrygian Eb
+    (38, 38, 44, 38, 38, 39, 38, 44),
+    (38, 38, 44, 38, 50, 44, 39, 38),
 )
-ARENA_OSTINATO = (62, 65, 68, 67) * 4   # D F Ab G
-ARENA_PADS = (
-    (50, 57, 62, 65),     # Dm
-    (50, 57, 62, 65),
-    (46, 53, 58, 62),     # Bb
-    (45, 52, 58, 61),     # A with the b9 on top
+ARENA_PIANO = (        # (bar, beat, MIDI, velocity) for the breakdown
+    (13, 0.0, 74, 0.7), (13, 1.0, 75, 0.5), (13, 2.5, 69, 0.55),
+    (14, 0.0, 73, 0.6),
+    (15, 0.0, 74, 0.7), (15, 1.0, 75, 0.5), (15, 2.5, 70, 0.55),
+    (16, 0.0, 69, 0.6),
+    (17, 0.0, 74, 0.7), (17, 0.5, 75, 0.5), (17, 1.0, 80, 0.65),
+    (18, 0.0, 79, 0.5), (18, 2.0, 77, 0.45),
 )
-ARENA_LEAD = (            # (bar, beat, MIDI, beats)
-    (9, 0.0, 74, 1.5), (9, 1.5, 77, 0.5), (9, 2.0, 75, 1.0), (9, 3.0, 74, 0.5), (9, 3.5, 72, 0.5),
-    (10, 0.0, 74, 2.5), (10, 3.0, 69, 1.0),
-    (11, 0.0, 77, 1.5), (11, 1.5, 79, 0.5), (11, 2.0, 80, 1.0), (11, 3.0, 79, 1.0),
-    (12, 0.0, 76, 1.0), (12, 1.0, 77, 0.5), (12, 1.5, 76, 0.5), (12, 2.0, 73, 2.0),
-    (13, 0.0, 81, 1.5), (13, 1.5, 79, 0.5), (13, 2.0, 77, 1.0), (13, 3.0, 75, 1.0),
-    (14, 0.0, 74, 1.5), (14, 1.5, 77, 0.5), (14, 2.0, 75, 2.0),
-    (15, 0.0, 74, 1.0), (15, 1.0, 77, 1.0), (15, 2.0, 82, 1.5), (15, 3.5, 81, 0.5),
-    (16, 0.0, 80, 1.0), (16, 1.0, 79, 0.5), (16, 1.5, 77, 0.5), (16, 2.0, 76, 2.0),
-)
-STEEL = ((1.0, 1.0, 0.5), (1.47, 0.75, 0.4), (2.09, 0.55, 0.3), (2.83, 0.4, 0.22),
-         (3.62, 0.3, 0.15), (4.71, 0.2, 0.1))
-HAT_FREQS = (205.3, 304.4, 369.6, 522.7, 540.0, 800.0)   # the 808's six square waves
+ARENA_IMPACTS = (1, 13, 19)
+ARENA_SUB_SWELLS = (3, 7, 11, 23)     # each one rises over two bars into the next phrase
+ARENA_STUTTERS = ((4, 3.0, 8, 0.7), (8, 3.0, 8, 0.7), (12, 2.5, 12, 0.8), (16, 3.0, 6, 0.4))
 
 
-def kick(rate, rng):
-    n = int(0.42 * rate)
-    x = shaped(glide(170.0, 47.0, 0.032, n, rate), envelope(n, rate, attack=0.0008, tau=0.16))
-    m = int(0.004 * rate)
-    click = shaped(highpass(noise(m, rng), 1500.0, rate), envelope(m, rate, 0.0002, 0.0012))
-    mix(x, norm(click), 0, 0.25)
-    return saturate(x, 1.6)
-
-
-def clap(rate, rng, clank_hz, clank=0.6):
-    """Industrial snare: three quick clap bursts and a tail, a snare body, and a struck piece
-    of steel on top."""
-    n = int(0.5 * rate)
-    band = biquad(noise(n, rng), "bp", 1300.0, 0.9, rate)
-    e = silence(n)
-    for t in (0.0, 0.008, 0.017):
-        mix(e, envelope(int(0.03 * rate), rate, 0.0003, 0.004), int(t * rate))
-    mix(e, envelope(n - int(0.024 * rate), rate, 0.001, 0.09), int(0.024 * rate), 0.7)
-    x = shaped(norm(band), e)
-    snap = shaped(biquad(noise(n, rng), "hp", 1800.0, 0.7, rate), envelope(n, rate, 0.0005, 0.11))
-    mix(x, norm(snap), 0, 0.45)
-    mix(x, shaped(glide(240.0, 185.0, 0.02, n, rate), envelope(n, rate, 0.0005, 0.05)), 0, 0.35)
-    if clank:
-        steel = modes([(r, g, t * 0.45) for r, g, t in STEEL], n, rate, clank_hz)
-        mix(x, saturate(norm(steel), 1.5), 0, clank)
-    return norm(x)
-
-
-def metal_hat(rate, rng, open_=False):
-    n = int((0.42 if open_ else 0.07) * rate)
-    metal = silence(n)
-    for f in HAT_FREQS:
-        mix(metal, osc("square", f * 1.7, n, rate, 1.0, rng.random()))
-    x = list(map(add, scale(norm(metal), 0.7), noise(n, rng)))
-    x = biquad(biquad(x, "hp", 7000.0, 0.7, rate), "hp", 7000.0, 0.7, rate)
-    return norm(shaped(x, envelope(n, rate, attack=0.0004, tau=0.11 if open_ else 0.016)))
-
-
-def clock_tick(rate, rng, high):
-    """The box counting: a dry little escapement click, tick high and tock low."""
-    n = int(0.05 * rate)
-    f0 = 3200.0 if high else 2350.0
-    x = modes(((1.0, 1.0, 0.006), (1.73, 0.5, 0.004), (2.9, 0.3, 0.003)), n, rate, f0)
-    m = int(0.002 * rate)
-    mix(x, shaped(highpass(noise(m, rng), 3000.0, rate), envelope(m, rate, 0.0002, 0.0005)), 0, 0.3)
-    mix(x, sine(f0 / 4.0, n, rate, 0.25, 0.008))
-    return norm(x)
-
-
-def crash(rate, rng):
-    n = int(2.6 * rate)
-    metal = silence(n)
-    for f in HAT_FREQS:
-        mix(metal, osc("square", f * 2.3, n, rate, 1.0, rng.random()))
-    x = list(map(add, scale(norm(metal), 0.5), noise(n, rng)))
-    x = biquad(x, "hp", 4500.0, 0.6, rate)
-    return norm(shaped(x, envelope(n, rate, attack=0.001, tau=0.75)))
-
-
-def rolling_bass(freq, beats_s, accent, rate):
-    """Two detuned saws and a sine sub through a resonant low-pass with a fast pluck on the
-    cutoff. Accented notes open further."""
-    n = int((beats_s + 0.02) * rate)
-    x = list(map(add, osc("saw", freq * 2 ** (-7 / 1200), n, rate, 0.5),
-                 osc("saw", freq * 2 ** (7 / 1200), n, rate, 0.5, 0.37)))
-    top = 1300.0 if accent else 800.0
-    x = svf(x, lambda i: 170.0 + top * math.exp(-i / (0.05 * rate)), 1.6, rate, block=8)
-    mix(x, sine(freq, n, rate, 0.6))
-    x = saturate(x, 1.8)
-    return shaped(x, envelope(n, rate, attack=0.002, gate=beats_s * 0.9, release=0.012))
-
-
-def pluck(freq, cutoff, rate):
-    """The ostinato voice: square and saw, plucked through a low-pass that starts bright."""
-    n = int(0.3 * rate)
-    x = list(map(add, osc("square", freq, n, rate, 0.6), osc("saw", freq * 1.004, n, rate, 0.4)))
-    x = svf(x, lambda i: cutoff * (1.0 + 2.5 * math.exp(-i / (0.025 * rate))), 1.3, rate)
-    return shaped(x, envelope(n, rate, attack=0.002, tau=0.11))
-
-
-def pad_chord(notes, length_s, attack, release, cutoff, rate, rng):
-    n = int((length_s + release * 3) * rate)
-    x = silence(n)
-    for m in notes:
-        f = midi_hz(m)
-        for c in (-10.0, 0.0, 9.0):
-            mix(x, osc("saw", f * 2 ** (c / 1200), n, rate, 0.33, rng.random()))
-    x = svf(x, cutoff, 0.8, rate)
-    return shaped(x, envelope(n, rate, attack=attack, gate=length_s, release=release))
-
-
-def lead_note(freq, beats_s, rate, rng):
-    n = int((beats_s + 0.35) * rate)
-    x = silence(n)
-    times = vibrato_time(n, rate, 28.0, 5.6, 0.18)
-    for c in (-8.0, 0.0, 8.0):
-        mix(x, osc_at("saw", freq * 2 ** (c / 1200), times, rate, 0.33, rng.random()))
-    x = svf(x, 2600.0, 0.9, rate)
-    return shaped(x, envelope(n, rate, attack=0.008, gate=beats_s * 0.95, release=0.1))
+def arena_kicks(bar):
+    """(beat, velocity) of the kicks in a bar."""
+    if bar <= 12:
+        return ((0.0, 1.0), (1.5, 0.6)) if bar % 2 else ((0.0, 1.0), (2.75, 0.55))
+    if bar <= 18:
+        return ()
+    if bar <= 20:
+        return tuple((b, 0.55) for b in range(4))
+    if bar <= 22:
+        return tuple((b, 0.75) for b in range(4)) + ((3.5, 0.5),)
+    if bar == 23:
+        return tuple((0.5 * b, 0.8) for b in range(8))
+    return ((0.0, 0.9), (0.5, 0.85))      # bar 24: two, then the roll takes over
 
 
 def build_arena():
-    rng = random.Random(12401)
+    rng = random.Random(9201)
     s = Song(ARENA_BPM, ARENA_BARS)
-    R, L = s.rate, s.length
-    step = s.beat // 4
+    R, L, H = s.rate, s.length, s.rate // 2
 
-    def at_step(bar, k):
-        return s.at(bar) + k * step
+    def heavy(bar):
+        return bar <= 12 or bar >= 21
 
-    def groove(bar):
-        return bar <= 16 or 25 <= bar <= 31
-
-    # Kick on every beat of the groove, only the first half of bar 32 so the roll hangs.
-    kick_at = []
-    for bar in range(1, ARENA_BARS + 1):
-        beats = range(4) if groove(bar) else (0, 1) if bar == 32 else ()
-        kick_at += [s.at(bar, b) for b in beats]
-    k = kick(R, rng)
+    kick_at = [(s.at(bar, beat), vel) for bar in range(1, ARENA_BARS + 1) for beat, vel in arena_kicks(bar)]
+    k = heavy_kick(R, rng)
     kk = s.track()
-    for p in kick_at:
-        mix_loop(kk, k, p)
-    s.add(kk, -5.0, send=0.02, label="kick")
+    for p, vel in kick_at:
+        mix_loop(kk, k, p, vel)
+    s.add(kk, -4.0, send=0.03, label="kick")
 
-    # Side-chain: everything sustained ducks under each kick and swells back.
-    duck_shape = shaped(decay(int(0.4 * R), 0.075, R), envelope(int(0.4 * R), R, attack=0.003))
+    # Side-chain: the strings and sub swells duck under each kick. Eighth-note kicks can stack
+    # their dips, so it has a floor.
+    duck_shape = shaped(decay(int(0.5 * R), 0.1, R), envelope(int(0.5 * R), R, attack=0.004))
     reduction = s.track()
-    for p in kick_at:
-        mix_loop(reduction, duck_shape, p)
-    duck = [1.0 - 0.75 * v for v in reduction]       # kicks are a beat apart, so dips never stack
-    soft_duck = [1.0 - 0.35 * (1.0 - d) for d in duck]
+    for p, vel in kick_at:
+        mix_loop(reduction, duck_shape, p, vel)
+    duck = [max(0.2, 1.0 - 0.7 * v) for v in reduction]
 
-    # Bass.
-    bass_note = note_cache(lambda m, acc: rolling_bass(midi_hz(m), s.secs(0.25), acc, R))
-    bass = s.track()
+    # Steel on the backbeat (beat 3 of the half-time bar), with a ghost before some phrase ends.
+    clangs = [clang(R, rng, rng.uniform(170.0, 210.0)) for _ in range(3)]
+    cl = s.track()
     for bar in range(1, ARENA_BARS + 1):
-        if not groove(bar) and bar != 32:
-            continue
-        cyc = (bar - 1) % 4
-        for st, iv in zip(ARENA_BASS_STEPS, ARENA_BASS_LINES[cyc]):
-            if bar == 32 and st >= 8:
-                break
-            accent = st % 4 == 3      # the last 16th before each kick leans forward
-            note = bass_note(ARENA_ROOTS[cyc] + iv, accent)
-            mix_loop(bass, note, at_step(bar, st), 1.0 if accent else 0.85)
-    s.add(shaped(bass, duck), -9.0, send=0.02, label="bass")
-
-    # Ostinato. The filter sits at 2.4 kHz, drops to nothing at the breakdown and opens back up
-    # over those 8 bars. Notes are cached by pitch and a semitone-wide cutoff bucket.
-    def ost_cutoff(bar, st):
-        if 17 <= bar <= 24:
-            u = ((bar - 17) * 16 + st) / 128.0
-            return 380.0 * (3600.0 / 380.0) ** u
-        return 2400.0 if bar <= 16 else 3600.0
-    ost_note = note_cache(lambda m, bucket: pluck(midi_hz(m), 2 ** (bucket / 12.0), R))
-    ost = s.track()
-    for bar in range(1, ARENA_BARS + 1):
-        for st, m in enumerate(ARENA_OSTINATO):
-            if st == 8:
-                m = 74
-            elif st == 15:
-                m = 70
-            bucket = round(12 * math.log2(ost_cutoff(bar, st)))
-            vel = 1.0 if st % 4 == 0 else 0.72
-            if 9 <= bar <= 16:
-                vel *= 0.75        # sits back under the lead
-            mix_loop(ost, ost_note(m, bucket), at_step(bar, st), vel)
-    ost = shaped(ost, soft_duck)
-    s.add(ost, -17.0, pan=-0.15, send=0.2, label="ostinato")
-
-    # Pads: stabs pushed onto the "and" of 4 every other bar in the groove; held chords in the
-    # breakdown.
-    stab = note_cache(lambda i: pad_chord(ARENA_PADS[i], s.secs(0.5), 0.005, 0.2,
-                                          lambda j: 500.0 + 1500.0 * math.exp(-j / (0.06 * R)), R, rng))
-    pads = s.track()
-    for bar in range(2, ARENA_BARS + 1, 2):
-        if groove(bar) and bar != 16:
-            mix_loop(pads, stab(bar % 4), s.at(bar, 3.5))
-    for bar in range(17, 25):
-        cyc = (bar - 1) % 4
-        held = pad_chord(ARENA_PADS[cyc], s.secs(4.0), 0.5, 0.6, 700.0 + 120.0 * (bar - 17), R, rng)
-        mix_loop(pads, held, s.at(bar), 0.9)
-    s.add(shaped(pads, duck), -15.0, pan=0.1, send=0.35, label="pads")
-
-    # Lead hook, bars 9-16.
-    lead = s.track()
-    for bar, beat, m, beats in ARENA_LEAD:
-        mix_loop(lead, lead_note(midi_hz(m), s.secs(beats), R, rng), s.at(bar, beat))
-    s.add(lead, -8.0, pan=0.05, send=0.3, label="lead")
-
-    # Both go into one dotted-eighth ping-pong.
-    echo_l, echo_r = pingpong(list(map(add, scale(ost, undb(-17.0)), scale(lead, undb(-9.0)))),
-                              R, 3 * step, 0.35, 2800.0)
-    s.add_stereo(echo_l, echo_r, -8.0, send=0.3, label="echoes")
-
-    # Clap + steel on 2 and 4 (back from bar 27), then the roll across 31-32.
-    claps = [clap(R, rng, rng.uniform(360.0, 420.0)) for _ in range(4)]
-    roll_hit = clap(R, rng, 400.0, clank=0.25)
-    sn = s.track()
-    for bar in range(1, 31):
-        if bar <= 16 or bar >= 27:
-            for beat in (1, 3):
-                mix_loop(sn, rng.choice(claps), s.at(bar, beat))
-    roll = [(31, b * 0.5) for b in range(4)] + [(31, 2.0 + b * 0.25) for b in range(8)]
-    roll += [(32, b * 0.25) for b in range(8)] + [(32, 2.0 + b * 0.125) for b in range(16)]
-    for i, (bar, beat) in enumerate(roll):
-        mix_loop(sn, roll_hit, s.at(bar, beat), 0.3 + 0.7 * (i / (len(roll) - 1)) ** 1.5)
-    s.add(sn, -5.0, pan=-0.05, send=0.28, label="clap")
-
-    # Hats: 16ths with open hats on the off-beats; eighths only while it rebuilds.
-    closed = [metal_hat(R, rng) for _ in range(4)]
-    choked = fade(metal_hat(R, rng, open_=True)[:2 * step], R, 0.0, 0.004)   # the next closed hat cuts it
-    hats = s.track()
-    for bar in range(1, ARENA_BARS + 1):
-        full = bar <= 16 or 27 <= bar <= 31
-        sparse = bar in (25, 26)
-        opens = bar <= 16 or 29 <= bar <= 31
-        for st in range(16):
-            p = at_step(bar, st)
-            if opens and st % 4 == 2:
-                mix_loop(hats, choked, p, 0.55)
-            elif full or (sparse and st % 4 == 2):
-                vel = (0.9, 0.45, 0.7, 0.45)[st % 4] * rng.uniform(0.85, 1.0)
-                mix_loop(hats, rng.choice(closed), p, vel)
-    s.add(hats, -15.0, pan=0.25, send=0.06, label="hats")
+        if bar <= 12 or 21 <= bar <= 23:
+            mix_loop(cl, rng.choice(clangs), s.at(bar, 2.0))
+        if bar in (4, 8, 22):
+            mix_loop(cl, rng.choice(clangs), s.at(bar, 3.5), 0.35)
+    s.add(cl, -5.0, pan=0.1, send=0.3, label="clang")
 
     # The clock never stops.
     tick, tock = clock_tick(R, rng, True), clock_tick(R, rng, False)
@@ -1376,29 +1277,72 @@ def build_arena():
     for bar in range(1, ARENA_BARS + 1):
         for e in range(8):
             on_beat = e % 2 == 0
-            mix_loop(clock, tick if on_beat else tock, s.at(bar, e * 0.5), 1.0 if on_beat else 0.8)
-    s.add(clock, -15.0, pan=-0.3, send=0.15, label="clock")
+            mix_loop(clock, tick if on_beat else tock, s.at(bar, e * 0.5), 1.0 if on_beat else 0.75)
+    s.add(clock, -14.0, pan=-0.3, send=0.15, label="clock")
 
-    # Crashes where sections land, a sub boom for the breakdown, and the riser.
-    cymbal = crash(R, rng)
+    # Strings: the tritone ostinato (ducked), the held tritone under the breakdown and the
+    # high semitone rub in 9-12, all in one half-rate track.
+    marcato = note_cache(lambda m, variant: bowed([midi_hz(m)], s.secs(0.42), H, rng, attack=0.012,
+                                                  release=0.07, vib_cents=0.0, bow=0.35, bright=2.2))
+    ost = s.half_track()
+    for bar in range(1, ARENA_BARS + 1):
+        if not heavy(bar):
+            continue
+        for e, m in enumerate(ARENA_OSTINATO[(bar - 1) % 2]):
+            mix_loop(ost, marcato(m, rng.randrange(3)), s.half_at(bar, 0.5 * e), 1.0 if e % 2 == 0 else 0.75)
+    strings = shaped(ost, duck[0::2])
+    held = bowed([midi_hz(38), midi_hz(44)], s.secs(24), H, rng, attack=2.0, release=1.5, vib_cents=6.0,
+                 bow=0.1, bright=0.8)
+    mix_loop(strings, held, s.half_at(13), 0.8)
+    rub = bowed([midi_hz(68), midi_hz(69)], s.secs(16), H, rng, attack=3.0, release=1.2, vib_cents=12.0, bow=0.12)
+    mix_loop(strings, rub, s.half_at(9), 0.25)
+    s.add_half(strings, -9.0, pan=-0.1, send=0.2, label="strings")
+
+    # Distorted sub swells, each cut off by the next phrase's first kick.
+    sw = s.track()
+    for bar in ARENA_SUB_SWELLS:
+        mix_loop(sw, sub_swell(midi_hz(26), s.secs(8), R, rng), s.at(bar))
+    s.add(shaped(sw, duck), -12.0, send=0.05, label="sub swells")
+
+    # Choir: a held cluster in 9-12, then one that rises a semitone through the build.
+    ch = s.half_track()
+    cluster = choir([midi_hz(m) for m in (50, 51, 56)], s.secs(16), H, rng, "oo", attack=3.0, release=1.0)
+    mix_loop(ch, cluster, s.half_at(9))
+    rise = choir([midi_hz(m) for m in (50, 51, 56, 57)], s.secs(24), H, rng, "ah", attack=s.secs(20),
+                 release=0.3, glide_cents=100.0)
+    mix_loop(ch, rise, s.half_at(19), 1.3)
+    s.add_half(ch, -9.0, pan=0.15, send=0.4, label="choir")
+
+    # The breakdown piano, detuned and prepared, with a dotted-eighth echo.
+    pc = {}
+    keys = s.half_track()
+    for bar, beat, m, vel in ARENA_PIANO:
+        f = midi_hz(m, pc.setdefault(m, rng.uniform(-12.0, 12.0)))
+        mix_loop(keys, felt_piano(f, H, rng, vel, 4.0, prepared=0.35, detune=7.0), s.half_at(bar, beat), vel)
+    s.add_half(keys, -8.0, pan=-0.05, send=0.4, label="piano")
+    el, er = pingpong(keys, H, 3 * s.beat // 8, 0.4, 2500.0)
+    s.add_half(el, -14.0, send=0.3, label="piano echo", right=er)
+
+    # Glitches at the phrase ends, and the roll that skips its way into the loop point.
+    gl = s.track()
+    for bar, beat, reps, g in ARENA_STUTTERS:
+        mix_loop(gl, stutter(clangs[0], R, reps, 0.09, 0.85), s.at(bar, beat), g)
+    roll = stutter(clangs[1], R, 26, 0.16, 0.9)
+    mix_loop(gl, roll, L - len(roll))
+    s.add(gl, -11.0, pan=0.2, send=0.2, label="glitch")
+
+    # Impacts where sections land, and the riser through the last four bars.
     fx = s.track()
-    for bar in (1, 9, 17, 25):
-        mix_loop(fx, cymbal, s.at(bar), 0.8 if bar != 17 else 0.6)
-    n = int(2.5 * R)
-    boom = shaped(glide(90.0, 30.0, 0.3, n, R), envelope(n, R, attack=0.002, tau=0.6))
-    mix_loop(fx, saturate(boom, 1.5), s.at(17), 1.4)
-    s.add(fx, -11.0, send=0.25, label="crash/boom")
-
-    start, end = s.at(25), L
-    n = end - start
+    for bar in ARENA_IMPACTS:
+        mix_loop(fx, sub_impact(R, rng), s.at(bar))
+    start = s.at(21)
+    n = L - start
     riser = svf(noise(n, rng), lambda i: 250.0 * (6500.0 / 250.0) ** (i / n), 2.0, R, "bp")
-    ramp = [(i / n) ** 2.5 for i in range(n)]
-    riser = fade(shaped(norm(riser), ramp), R, 0.0, 0.012)
-    rs = s.track()
-    mix_loop(rs, riser, start)
-    s.add(rs, -9.0, send=0.2, label="riser")
+    riser = fade(shaped(norm(riser), [(i / n) ** 2.5 for i in range(n)]), R, 0.0, 0.012)
+    mix_loop(fx, riser, start, 0.4)
+    s.add(fx, -7.0, send=0.3, label="impacts/riser")
 
-    s.add_reverb(rt60=2.3, damp_hz=3000.0, size=1.15, gain_db=-6.0)
+    s.add_reverb(rt60=2.6, damp_hz=2500.0, size=1.2, gain_db=-6.0)
     s.finish("Content/Music/place-your-hand.wav", ARENA_RMS_DB)
 
 
