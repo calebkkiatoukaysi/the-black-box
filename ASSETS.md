@@ -1,8 +1,10 @@
 # Assets
 
-Every asset the game ships, and where it came from. Nothing here was downloaded: the art is
-drawn by `tools/generate_assets.py` at build time, the two pictures it reads instead of drawing
-are mine, and the only outside work is the font and the MonoGame template files.
+Every asset the game ships, and where it came from. Nothing here was downloaded or recorded:
+the art is drawn by `tools/generate_assets.py`, `tools/generate_characters.py` and
+`tools/generate_lobby.py`, the music and sound effects are synthesised by
+`tools/generate_audio.py`, the two pictures the art script reads instead of drawing are mine,
+and the only outside work is the font and the MonoGame template files.
 
 ## Sprites
 
@@ -39,6 +41,142 @@ Content/steady-bar.png - created by Caleb Kiatoukaysi for The Black Box, drawn p
 Content/hearts.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
 
 Content/box-lid.png - created by Caleb Kiatoukaysi for The Black Box, drawn procedurally by tools/generate_assets.py, released under public domain
+
+## The people in the lobby
+
+Content/conscript-first.png - created by Caleb Kiatoukaysi for The Black Box, the jacket conscript's walking sheet, painted in key colours for the palette swap, drawn procedurally by tools/generate_characters.py, released under public domain
+
+Content/conscript-second.png - created by Caleb Kiatoukaysi for The Black Box, the coat conscript's walking sheet, painted in key colours for the palette swap, drawn procedurally by tools/generate_characters.py, released under public domain
+
+Content/character-palettes.png - created by Caleb Kiatoukaysi for The Black Box, every hair, outfit and accent preset the customization screen offers, drawn procedurally by tools/generate_characters.py, released under public domain
+
+Content/serenity-walker.png - created by Caleb Kiatoukaysi for The Black Box, Serenity's walking sheet for the lobby, drawn to her picture, drawn procedurally by tools/generate_characters.py, released under public domain
+
+Content/opponent-walker.png - created by Caleb Kiatoukaysi for The Black Box, the chapter-two opponent's walking sheet for the lobby, drawn to her character sheet, drawn procedurally by tools/generate_characters.py, released under public domain
+
+## The lobby
+
+Content/lobby-tiles.png - created by Caleb Kiatoukaysi for The Black Box, the lobby's floor and wall tiles, drawn procedurally by tools/generate_lobby.py, released under public domain
+
+Content/Lobby/arena-door.png - created by Caleb Kiatoukaysi for The Black Box, a lobby prop, drawn procedurally by tools/generate_lobby.py, released under public domain
+
+Content/Lobby/bench.png - created by Caleb Kiatoukaysi for The Black Box, a lobby prop, drawn procedurally by tools/generate_lobby.py, released under public domain
+
+Content/Lobby/bucket.png - created by Caleb Kiatoukaysi for The Black Box, a lobby prop, drawn procedurally by tools/generate_lobby.py, released under public domain
+
+Content/Lobby/camera.png - created by Caleb Kiatoukaysi for The Black Box, a lobby prop, drawn procedurally by tools/generate_lobby.py, released under public domain
+
+Content/Lobby/chair.png - created by Caleb Kiatoukaysi for The Black Box, a lobby prop, drawn procedurally by tools/generate_lobby.py, released under public domain
+
+Content/Lobby/cot.png - created by Caleb Kiatoukaysi for The Black Box, a lobby prop, drawn procedurally by tools/generate_lobby.py, released under public domain
+
+Content/Lobby/crates.png - created by Caleb Kiatoukaysi for The Black Box, a lobby prop, drawn procedurally by tools/generate_lobby.py, released under public domain
+
+Content/Lobby/locker.png - created by Caleb Kiatoukaysi for The Black Box, a lobby prop, drawn procedurally by tools/generate_lobby.py, released under public domain
+
+Content/Lobby/pillar.png - created by Caleb Kiatoukaysi for The Black Box, a lobby prop, drawn procedurally by tools/generate_lobby.py, released under public domain
+
+Content/Lobby/sink.png - created by Caleb Kiatoukaysi for The Black Box, a lobby prop, drawn procedurally by tools/generate_lobby.py, released under public domain
+
+## Music
+
+Content/Music/it-is-watching.wav - created by Caleb Kiatoukaysi for The Black Box, "It Is Watching", the title theme, composed and synthesised by tools/generate_audio.py, released under public domain
+
+Content/Music/holding.wav - created by Caleb Kiatoukaysi for The Black Box, "Holding", the lobby theme, composed and synthesised by tools/generate_audio.py, released under public domain
+
+Content/Music/place-your-hand.wav - created by Caleb Kiatoukaysi for The Black Box, "Place Your Hand", the table theme, composed and synthesised by tools/generate_audio.py, released under public domain
+
+## Sound effects
+
+Content/Sfx/box-open.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/catch.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/check-bad.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/check-good.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/damage.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/door-locked.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/door-open.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/drop.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/enter-arena.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/footstep.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/guard.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/hand-in.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/heal.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/hit.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/lose.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/menu-back.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/menu-confirm.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/menu-move.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/option-change.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/pause.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/payout.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/pockets-full.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/text-blip.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/type.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/win.wav - created by Caleb Kiatoukaysi for The Black Box, a sound effect, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/ash-veil.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/cinder.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/confession.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/high-card.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/last-call.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/lens.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/levy.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/marked-deck.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/mirror.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/pact.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/revolver.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/rotgut.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/second-hand.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/spent-shell.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/tally.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/tourniquet.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/wager.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+Content/Sfx/Items/wild-card.wav - created by Caleb Kiatoukaysi for The Black Box, an item's sound, synthesised by tools/generate_audio.py, released under public domain
+
+## The scripts
+
+tools/generate_assets.py, tools/generate_characters.py, tools/generate_lobby.py, tools/generate_audio.py - the four scripts every asset above that says "drawn procedurally" or "synthesised" comes out of; they need nothing but CPython, and every one is seeded, so a rerun gives the same files
 
 ## The two opponents
 

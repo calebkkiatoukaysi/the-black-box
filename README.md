@@ -16,23 +16,149 @@ and `BlackBoxSprite.DrawScale` together to keep the pixel art crisp.
 dotnet run
 ```
 
-**START GAME** opens the save form. A slot that has never been named asks what you are
-called before it lets you sit down; a slot that has been picks up where it was -- including
-mid-decision, if you left with something in your hand. **EXIT** and **Esc** close the game.
-Esc means "back" rather than "quit" once you are past the title screen -- it closes the form,
-and it saves and leaves a run. The eyes follow your mouse cursor; leave it alone for a couple
-of seconds and the box goes back to looking around the room on its own.
+**START GAME** opens the save form. A slot that has never been named goes to the
+customization screen first, where you pick who you are, dress them and name them; a slot that
+has been picks up where it was -- in the lobby between tables, or back at the table, mid-decision
+if you left with something in your hand. **OPTIONS** has the three volumes. **EXIT** and **Esc**
+close the game. Past the title screen, Esc is "back" on a form and the pause menu everywhere else.
+The eyes follow your mouse cursor; leave it alone for a couple of seconds and the box goes back
+to looking around the room on its own.
+
+### Controls
+
+| Where | Keys |
+| --- | --- |
+| Menus and forms | **Arrows** or **WASD** to move, **Enter** or **Space** to pick, **Esc** to go back. The mouse works too |
+| Options | **Left** and **right** turn the selected volume down or up |
+| Customization | **Up** and **down** to move between rows, **left** and **right** to change a row, type on the name row (only the arrows leave it), **Enter** on SIT DOWN |
+| The lobby | **WASD** or the **arrows** to walk, **E**, **Space** or **Enter** to talk, to turn a page of dialogue, and to try the door, **Esc** to pause |
+| The table | The mouse, as before; the checks also take the keyboard and a pad. **Esc** to pause |
+
+A gamepad works anywhere the keyboard does: the d-pad or left stick, A, B, and Start to pause.
 
 Two switches exist for working on the game, and neither is the game:
 
 ```
 dotnet run -- --simulate 5000     # play the table headless and print who wins
-dotnet run -- --proof shots       # render the table to shots/*.png and quit
+dotnet run -- --proof shots       # play every screen, save a picture of each to shots/, and quit
 ```
 
 The first is how the numbers in `RoundRules` were chosen (see [A round](#a-round)). The second
-is how the layout is checked after any change to the sheet, the plate or the pockets, and how
-the pictures for a release get taken. It opens a scratch run that never touches a save slot.
+is how the layout is checked after a change, and how the pictures for a release get taken. It
+goes the whole way round the way a player would -- title, options, save form, customization,
+the lobby (walking, talking to all three, picking something up, the door), the table, both
+verdicts, back to the lobby, and out through the pause menu -- on a scratch run that never
+touches a save slot. It is silent: every sound it would have played is written to
+`shots/audio.log` with the frame it was asked for on, which is how the sound cues are checked.
+
+## Screens
+
+Every screen is a `GameScreen` on a `ScreenManager`, the way the game state management tutorial
+does it (`StateManagement/` is that tutorial's code, adapted). Each has its own
+`TransitionOnTime` and `TransitionOffTime`, so everything fades instead of cutting.
+
+| Screen | What it is |
+| --- | --- |
+| `BoxBackgroundScreen` | The box in the dead sky, under the title and every form. It never transitions off for being covered, so it keeps watching through all of them |
+| `TitleScreen` | The title, with START GAME, OPTIONS and EXIT |
+| `OptionsScreen` | Master, music and sound volume, on a form over the title. Saved to `settings.json` |
+| `SaveSlotScreen` | The save form, over the title |
+| `CustomizationScreen` | Who you are, your colours, what you wear, and your name, with a preview walking in place |
+| `LobbyScreen` | The room the players wait in between tables |
+| `TableScreen` | The table: the Black Box arena. Everything under [The table](#the-table) |
+| `PauseMenuScreen` | RESUME or RETURN TO TITLE, over the lobby or the table. Nothing under it moves while it is up |
+| `ResultsScreen` | The verdict, how the run went, and RETURN TO THE LOBBY or RETURN TO TITLE |
+| `LoadingScreen` | The tutorial's: waits for everything to fade out, then brings the next screens in. Going through the door puts a line on the black in between |
+
+A run goes title -> save form -> customization (new slots only) -> lobby -> through the door ->
+the table -> results -> the lobby again, a chapter on if you got up, or the title.
+
+## Customization
+
+You are one of two conscripts: the one in the jacket, or the one in the long coat. Each has
+three colour channels -- hair, outfit, and an accent that colours the shirt, the belt, the
+collar and whatever is worn on top -- with six presets each, and three things to wear on top
+(nothing, a scarf, a cap). The preview turns through all four directions while it walks, so a
+change is seen from every side.
+
+The recolouring is a palette swap. `tools/generate_characters.py` paints the two player sheets in
+key colours (the first preset of each channel) and writes every preset into
+`character-palettes.png`, one row each. `CharacterPalettes.Recolour` reads the keys out of that
+PNG, swaps each one for the same shade of the chosen ramp with `GetData`/`SetData`, and hands
+back a new texture. It runs once per change, not per frame. A shader would have been the other
+way to do it, but nothing in the course has used one yet, and pre-baking every combination would
+have been 2 x 6 x 6 x 6 x 3 sheets.
+
+The choice is kept on the save (`SaveData.Look`), and the lobby dresses the player from it.
+
+## The lobby
+
+The lobby is the room the players wait in between tables, seen from slightly above. It is
+2304x1440 on screen, bigger than the window both ways, and a `Camera2D` follows the player: it
+eases after them, stops at the walls so it never shows past the edge of the room, and rounds its
+translation to whole pixels. Its `Transform` is what `SpriteBatch.Begin` gets, the same way the
+parallax tutorial scrolls.
+
+- **The room** is an ASCII map in `LobbyMap`, tiles off `lobby-tiles.png`, with the furniture
+  (lockers, cots, a bench, columns, crates, a sink, two cameras) placed by hand in the same file.
+  The light is not painted in: `LobbyMap` builds a texture of the dark with the lamps' pools cut
+  out of it and lays it over the whole room, so somebody walking out of the light goes dark too.
+- **Walking** is WASD or the arrows, with four-direction walk cycles. The feet are a
+  `BoundingRectangle` (the collision tutorial's), moved one axis at a time and pushed back out of
+  walls, furniture and people, so a wall stops you one way and lets you slide along it the other.
+  Everything on the floor is sorted by how far down the room it stands.
+- **People.** Serenity, the one from the character sheet, and whichever conscript you did not
+  pick are waiting in here. Walk up to one and press E: the dialogue box types their lines out
+  a letter at a time, with a blip pitched for their voice, their picture (the two opponents use
+  their table pictures; the conscript gets a close crop of their walking sheet) and their name.
+  Everything they say is in `LobbyLines`.
+- **The challenge.** Whoever the chapter seats across from you asks you to the table. Until
+  they have, the red door at the far end does not open, and the box says so. Once they have, the
+  lamp over the door comes on, the floor in front of it is painted, and walking into it -- or
+  pressing E at it -- goes through. The door shuts behind you and the table comes up.
+- **Things on the floor.** A few items are left lying about each chapter. Walk over one and it
+  goes in your pockets, with its sound, and it comes with you to the table. Four of them and
+  three pockets, so not everything can be taken; none of them takes a life. What has been
+  picked up is kept on the save (`SaveData.LobbyTaken`) until the table is cleared.
+
+## Music and sound
+
+None of it was recorded or downloaded. `tools/generate_audio.py` builds every song and sound
+from sines, wavetables, noise and a few filters, in CPython (3.12 or newer) and nothing else:
+
+```
+python tools/generate_audio.py                 # everything (about two minutes)
+python tools/generate_audio.py music           # the three songs
+python tools/generate_audio.py sfx             # every sound effect
+python tools/generate_audio.py holding revolver
+```
+
+Three songs, all in D minor with its flat second, so they sound like one score. Each one is an
+exact number of bars long and wraps its own echoes back round to the start, so it loops under
+`MediaPlayer.IsRepeating` without a seam.
+
+| Song | Where | What it is |
+| --- | --- | --- |
+| *It Is Watching* | Title, options, customization | 66 BPM. A detuned music box over a low drone that breathes, a heartbeat once a bar, tape hiss, a creak somewhere far off |
+| *Holding* | The lobby | 84 BPM. An electric piano comping minor ninths, a round bass, brushed drums, a vibraphone in the middle, and the hum of a fluorescent tube under all of it |
+| *Place Your Hand* | The table | 124 BPM. A driving bass, industrial drums with a clank of steel on the backbeat, a clock ticking the eighths, a tritone ostinato, a lead in the second section, a breakdown and a roll back into the top |
+
+Sound effects are `SoundEffect`s, balanced against each other in the script so the game plays
+them all at one volume. Every item has its own, heard when it is picked up in the lobby and
+when it is used at the table (a revolver's cylinder and shot, a mirror's shimmer, a tally of
+five chalk strokes, a rotgut's glugs...). Beyond those: menu move, confirm and back, a value
+being changed, a key typed, the pause menu; footsteps, tied to the frames a foot lands on so
+they cannot come faster than the feet; the dialogue blip; the door rattling shut, unlocking,
+and slamming behind you; and at the table, the box's jaws, the hand going in, the tag being
+thrown out, caught or dropped, a check done well or badly, a hit, a wound, a life given back,
+a guard stopping something, and the two verdicts.
+
+`Audio/AudioManager` is where all of it lives: the same `Content.Load<Song>`, `MediaPlayer` and
+`SoundEffect.Play` calls as the audio tutorial, in one game service any screen can reach, with
+a master, a music and a sound volume. Each screen asks for its song as it comes on, and the
+manager fades the old one out and the new one in. At the table, sounds go with the reading of
+the round, not the rules: the opponent's revolver is heard when THEY USED REVOLVER comes up
+(`TableCues`), not when the player clicked the button before it.
 
 ## What is on screen
 
@@ -45,7 +171,7 @@ the pictures for a release get taken. It opens a scratch run that never touches 
 | `glow.png` | `EyeSprite` | Additive red light bleeding out of the opening |
 | `mote.png` | `AshSprite` | Ash spiralling into the mouth, accelerating as it is consumed |
 | `button.png` | `ButtonSprite` | Nine-sliced plate; idle smoulder, kindles on hover, sinks on press |
-| `panel.png` | `SaveSlotMenu`, `NameEntry` | Nine-sliced slab the forms are built on |
+| `panel.png` | `FormPanel` | Nine-sliced slab the forms are built on: the save form, the options, the pause menu and the customization screen |
 | `room.png` | `TableScreen` | The room, drawn at twice the resolution of the rest of the table so it reads as a photograph: poured concrete under three sizes of noise, damp streaks and bloom, a rusting steel door, pipes, a vent, a camera, tally marks, and the one lamp with its haze. `ROOM_HORIZON` is where the opponent is cut off |
 | `opponent-second-sheet.png` | `OpponentSprite` | The default opponent, chapter one: her picture cleaned up, paled and sampled to art pixels at 4x, five columns of the one still |
 | `opponent-sheet.png` | `OpponentSprite` | The opponent from the character sheet, chapter two: 5 poses across, one row. Static |
@@ -58,6 +184,11 @@ the pictures for a release get taken. It opens a scratch run that never touches 
 | `ember-sheet.png` | `SteadyCheck` | 4 frames of the ember breathing; blown along the groove and pushed back |
 | `steady-bar.png` | `SteadyCheck` | The groove and the band of light the ember has to be held in |
 | `button.png` again | `PocketStrip` | Three pocket plates a side, live on your turn |
+| `conscript-first.png`, `conscript-second.png` | `WalkerSprite` | The two people you can be, 32x48: five frames across (standing, four steps) and four directions down, three times over (nothing on top, a scarf, a cap). Painted in key colours and recoloured to your choices |
+| `character-palettes.png` | `CharacterPalettes` | Every hair, outfit and accent preset, one ramp a row. The first of each is the key the sheets are painted in |
+| `serenity-walker.png`, `opponent-walker.png` | `WalkerSprite` | The two opponents as they stand around the lobby, same layout. Not recoloured |
+| `lobby-tiles.png` | `LobbyMap` | The lobby's floor, walls and the painted threshold, 16x16 tiles at 3x |
+| `Lobby/*.png` | `LobbyProp` | The furniture, one picture each: lockers, cots, a bench, a chair, columns, crates, a bucket, a sink, two blinking cameras, and the door to the box (locked, lit, open) |
 
 Text is drawn with `spectral-title` (Spectral Light, 92pt), `spectral-ui` (Spectral Medium,
 26pt), `spectral-detail` (Spectral Light, 17pt, for the line under a save slot) and
@@ -74,8 +205,16 @@ centre, the near ones large and bright out by the mouth.
 Every PNG in `Content/` is produced by a script rather than painted by hand:
 
 ```
-python tools/generate_assets.py
+python tools/generate_assets.py       # the box, the table, the opponents, the items
+python tools/generate_characters.py   # the walking sheets and character-palettes.png
+python tools/generate_lobby.py        # lobby-tiles.png and everything in Content/Lobby
 ```
+
+The walking sheets are 32x48 frames, five across (standing, then four steps) and one row per
+direction, the same five columns Serenity's table sheet has. Every figure is built out of
+rounded shapes, lit from the lamp's side, and cut down to pixels with a dark edge on the shadow
+side. The two opponents' walking sheets are drawn to their pictures: Serenity's hair, knit,
+strap and pendant; the other's black hair, dark knit and gold hoop.
 
 It needs nothing but CPython - the PNG encoder is built into the script, and so is the decoder
 for the two pictures it reads rather than draws (the opponents' portraits, see below). Every
@@ -100,7 +239,9 @@ instant the fingers cross the rim would make the box a vending machine.
 Two endings and one screen. When somebody is out of lives the round closes on the log as it
 always did, and then a veil comes down over the table and the verdict is set large across it:
 **YOU ADVANCE** if the player is still standing, **YOU HAVE BEEN CONSUMED BY THE BOX** if they
-are not, with one line under it and the one plate, LEAVE THE TABLE. Leaving is what turns the
+are not, with one line under it, how the run went, and two plates: RETURN TO THE LOBBY and
+RETURN TO TITLE. That is `ResultsScreen`, which came down over the table where the one plate,
+LEAVE THE TABLE, used to be. Leaving either way is what turns the
 page: a run that has ended is written back to its slot ready to be played again
 (`SaveData.Advance` if the player got up, which turns the chapter; `SaveData.Restart` if they
 did not, which clears the same table), so the slot opens on a table and not on a verdict. What
@@ -273,10 +414,21 @@ Three decisions worth knowing about:
 The save form itself is `SaveSlotMenu`, drawn over the title screen rather than replacing it, so
 the box is still watching while you pick a slot.
 
+The lobby added two fields, `Look` (who you are and what you are wearing) and `LobbyTaken` (which
+items have been picked up), both with defaults, so an older save just opens with the default look
+and the floor full, and no version bump was needed. The volumes are not in a slot at all: they
+are in `%LOCALAPPDATA%\TheBlackBox\settings.json`, since turning the music down should not depend
+on which run is loaded.
+
 ## Where things are
 
-- `BlackBoxGame.cs` is the title screen, the forms and the sprite batches. `BlackBoxGame.Proof.cs` takes the proof shots.
-- `Table/` is the run: `TableScreen` split by phase (the discussion, the hand, the turn, and its part of the proof schedule), and the plate, the heading and the ending veil it draws with.
+- `BlackBoxGame.cs` sets up the window, the screen manager, the box and the sound, and puts the title up. `BlackBoxGame.Proof.cs` takes the proof shots.
+- `StateManagement/` is the game state management tutorial: `GameScreen`, `ScreenManager`, `MenuScreen` and `MenuEntry`, `LoadingScreen`, and the input classes from the advanced input tutorial.
+- `Screens/` is every screen but the table, one per file (the lobby and customization screens have their part of the proof schedule beside them).
+- `Table/` is the table: `TableScreen` split by phase (the discussion, the hand, the turn, and its part of the proof schedule), and the plate, the heading, the ending veil and the sound cues it draws and plays with.
+- `Lobby/` is the lobby's pieces: the map, the camera, the props, the people, the items on the floor, the dialogue box and what is said in it.
+- `Characters/` is the walking sprite, the saved look and the palette swap.
+- `Audio/` is the `AudioManager`.
 - `Components/` is every sprite and screen element, each with `LoadContent`, `Update` and `Draw` the way the tutorials do it. `Components/Checks/` is the three skill checks.
 - `Enums/` is every enum in the game, one file each. `Opponents/` is the roster, one type each.
 - `Dialogue/`, `Items/`, `Round/` and `Save/` are the rules: talking, what the box deals, how a round plays, and the save file.
@@ -285,7 +437,10 @@ the box is still watching while you pick a slot.
 
 ## Assets
 
-See [ASSETS.md](ASSETS.md).
+Every picture, song and sound in the game is original: drawn or synthesised by the three
+`tools/` scripts and `tools/generate_audio.py`, or (the opponents' two pictures) supplied by me.
+The only outside work is the Spectral font and the MonoGame template files. See
+[ASSETS.md](ASSETS.md) for every file.
 
 ## Author's Note:
 I am extremely excited to be building this game this semester. I believe it will be a fun and interactive game. The inspiration behind this game is Buckshot Roulette and No I'm Not a Human. Please give me feed back on the current work as this may become a passion project. 
