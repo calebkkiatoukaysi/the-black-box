@@ -83,4 +83,22 @@ public static class Layers
 
     /// <summary>Foreground text.</summary>
     public const float Text = 0.10f;
+
+    // The lobby, which is one world-space batch sorted by how far down the room things stand.
+
+    /// <summary>Things fixed to the north wall: the door, the cameras, the sink. Behind every figure.</summary>
+    public const float WorldWall = 0.96f;
+
+    /// <summary>The far end and the near end of the band the figures and props sort in.</summary>
+    private const float WorldFar = 0.90f;
+    private const float WorldNear = 0.12f;
+
+    /// <summary>The south wall and the lamp shades, between the viewer and the room.</summary>
+    public const float WorldFront = 0.06f;
+
+    /// <summary>Where something standing on the lobby floor sorts: further down the room is nearer, so in front.</summary>
+    /// <param name="footY">How far down the room its feet are, in world pixels.</param>
+    /// <param name="roomHeight">How tall the room is, in world pixels.</param>
+    public static float OnFloor(float footY, float roomHeight) =>
+        WorldFar - (WorldFar - WorldNear) * System.Math.Clamp(footY / roomHeight, 0f, 1f);
 }
